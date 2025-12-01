@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moonrise Defense - Alien Shooter</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="ui-overlay">
+            <div id="score">Score: 0</div>
+            <div id="health">Health: 100</div>
+            <div id="wave">Wave: 1</div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="start-screen" class="screen">
+            <h1>MOONRISE DEFENSE</h1>
+            <p>Defend the moonrise base from alien invaders!</p>
+            <div class="controls-info">
+                <p><strong>Controls:</strong></p>
+                <p>← → Arrow Keys: Move</p>
+                <p>SPACE: Shoot</p>
+            </div>
+            <button id="start-btn">START GAME</button>
+        </div>
+        <div id="game-over-screen" class="screen hidden">
+            <h1>GAME OVER</h1>
+            <p id="final-score">Score: 0</p>
+            <button id="restart-btn">PLAY AGAIN</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
