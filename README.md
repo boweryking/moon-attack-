@@ -1,36 +1,33 @@
-# Moonrise Defense - Alien Shooter Game
+# GrassRoots — The Uncensored Cannabis Community
 
-A fast-paced space shooter game where you defend the Moonrise base from waves of alien invaders!
+A Reddit-style community site for cannabis growers, patients and enthusiasts. Currently a front-end prototype: it runs entirely in the browser with built-in sample data, no backend and no database.
 
-## How to Play
+## Run it
 
-1. Open `index.html` in a web browser
-2. Click "START GAME" to begin
-3. Use **Arrow Keys** (← →) to move your spaceship left and right
-4. Press **SPACE** to shoot at enemies
-5. Survive waves of increasingly difficult alien attacks
-6. Don't let your health reach zero!
+Open `index.html` in a browser. No build step.
 
-## Features
+## What works today
 
-- **Wave System**: Each wave brings more enemies
-- **Health System**: Start with 100 health, lose 10 per hit, lose 50 if an enemy crashes into you
-- **Scoring**: Earn 10 points per enemy destroyed
-- **Enemy AI**: Aliens move horizontally and shoot back at you
-- **Visual Effects**: Particle explosions, glowing effects, and animated starfield
-- **Responsive Controls**: Smooth spaceship movement
+- **Communities** (`g/cultivation`, `g/strains`, `g/edibles`, `g/extracts`, `g/medical`, `g/CannabisNews`, `g/WeedMemes`, `g/trees`) with join/leave
+- **Feed and posts** with Hot / New / Top style sorting
+- **Voting** (requires login)
+- **Nested comments** on each post
+- **Create post** page (text / image / link / poll tabs)
+- **Login / sign-up modal and profile page**, with a mock login: any username works
 
-## Game Mechanics
+## What is fake (next steps)
 
-- **Player Ship**: Cyan spaceship that shoots upward
-- **Enemies**: Purple/magenta alien ships that shoot red projectiles
-- **Collision**: Bullets destroy enemies, enemy bullets damage you
-- **Progression**: Waves get harder with more enemies spawning
+- All posts, comments and member counts are hard-coded in `app.js`
+- Login is simulated and nothing is saved; a refresh resets everything
+- The image, link and poll post types are UI only
+- Needs a real backend: accounts, a database, moderation, age (21+) gating
 
-## Technologies
+## Files
 
-- HTML5 Canvas for rendering
-- Pure JavaScript for game logic
-- CSS3 for UI styling and animations
+- `index.html`: page shell
+- `app.js`: all app logic, routing, rendering and sample data
+- `style.css`: styling
 
-Enjoy defending Moonrise!
+## History
+
+This repo began as *Moonrise Defense*, an alien shooter game. That game is preserved in git history at commit `b9ca31c`.
