@@ -193,6 +193,7 @@ const App = (() => {
           </div>
         </div>
         <div class="header-nav">
+          <button class="btn btn-ghost btn-sm" onclick="App.navigate('line')">The Green Line</button>
           ${state.user ? `
             <button class="btn btn-ghost btn-sm" onclick="App.navigate('create')">+ Create Post</button>
             <div class="user-pill" onclick="App.navigate('profile')">
@@ -559,6 +560,145 @@ const App = (() => {
     };
   }
 
+  // ── The Green Line (GreenEvent NYC) ───────────────────────────────────────
+  function pageLine() {
+    const stop = (c, letter, label, name, where) => `
+      <div class="gl-stop-card">
+        <div class="gl-stop-head"><span class="gl-badge gl-${c}">${letter}</span><span class="gl-mono">${label}</span></div>
+        <div class="gl-stop-name">${name}</div>
+        <div class="gl-stop-where">${where}</div>
+      </div>`;
+    const step = (n, title, text) => `
+      <div class="gl-step"><div class="gl-mono">${n}</div><div class="gl-step-title">${title}</div><div class="gl-step-text">${text}</div></div>`;
+    const tonight = (name, meta, last) => `
+      <div class="gl-tonight-row">
+        <div class="gl-track"><span class="gl-dot${last ? ' gl-dot-last' : ''}"></span>${last ? '' : '<span class="gl-bar"></span>'}</div>
+        <div class="gl-tonight-text${last ? ' gl-last' : ''}"><div class="gl-tonight-name">${name}</div><div class="gl-tonight-meta">${meta}</div></div>
+      </div>`;
+    return {
+      main: `
+      <div class="gl">
+        <div class="gl-notice">21+ ONLY · LOWER MANHATTAN · <a href="https://greeneventsnyc.com/es/">EN ESPAÑOL</a></div>
+
+        <header class="gl-header gl-wrap">
+          <a class="gl-brand" href="#top"><span class="gl-logo">G</span>GreenEvent NYC</a>
+          <nav class="gl-nav" aria-label="GreenEvent NYC">
+            <a href="#line" onclick="App.glScroll(event,'gl-line')">This week</a>
+            <a href="#pass" onclick="App.glScroll(event,'gl-pass')">Tour Pass</a>
+            <a href="#operators" onclick="App.glScroll(event,'gl-operators')">For operators</a>
+            <a href="#dave" onclick="App.glScroll(event,'gl-dave')">Rasta Dave</a>
+            <a class="gl-pill gl-pill-ink" href="#pass" onclick="App.glScroll(event,'gl-pass')">Get the Tour Pass</a>
+          </nav>
+        </header>
+
+        <section class="gl-hero gl-wrap" id="gl-top">
+          <div class="gl-hero-copy">
+            <div class="gl-mono gl-eyebrow">Micro events · walking tours · pop-ups</div>
+            <h1 class="gl-display gl-h1">Ride the<br>Green Line.</h1>
+            <p class="gl-lede">A neighborhood network of small showcase events, partner shops and pop-ups across Lower Manhattan. A place for ideas and connections.</p>
+            <div class="gl-actions">
+              <a class="gl-pill gl-pill-green" href="#line" onclick="App.glScroll(event,'gl-line')">See this week’s stops</a>
+              <a class="gl-pill gl-pill-outline" href="#operators" onclick="App.glScroll(event,'gl-operators')">Run your own event</a>
+            </div>
+          </div>
+          <div class="gl-tonight">
+            <div class="gl-mono gl-tonight-label">TONIGHT ON THE LINE</div>
+            ${tonight('[POP-UP NAME]', '[STREET] · [TIME]')}
+            ${tonight('[PARTNER SHOP]', 'Tour Pass perk · [PERK]')}
+            ${tonight('[MICRO SHOWCASE]', '[VENUE] · [TIME] · 21+', true)}
+          </div>
+        </section>
+
+        <div class="gl-stripe"></div>
+
+        <section class="gl-section gl-wrap" id="gl-line">
+          <div class="gl-section-head">
+            <h2 class="gl-display gl-h2">This week’s stops</h2>
+            <a class="gl-link" href="#line">Full schedule →</a>
+          </div>
+          <div class="gl-grid gl-grid-stops">
+            ${stop('social','S','[DAY] · [TIME]','[Micro showcase name]','[Venue], [Neighborhood]')}
+            ${stop('wellness','W','[DAY] · [TIME]','[Walking tour name]','Meets at [Corner]')}
+            ${stop('education','E','[DAY] · [TIME]','[Operator workshop]','[Venue]')}
+            ${stop('community','C','[DAY] · [TIME]','[Pop-up / small shop]','[Street]')}
+          </div>
+        </section>
+
+        <section class="gl-dark" id="gl-pass">
+          <div class="gl-wrap gl-pass-inner">
+            <div class="gl-pass-copy">
+              <div class="gl-mono gl-eyebrow gl-mint">THE TOUR PASS</div>
+              <h2 class="gl-display gl-h2 gl-h2-lg">One pass.<br>The whole line.</h2>
+              <p class="gl-pass-text">A membership on your phone. It unlocks walking tours, member perks at local partner shops, and pop-up alerts for the spots most people walk past. No plastic cards.</p>
+              <ul class="gl-checks">
+                <li>Member-only walking tours</li>
+                <li>Perks at partner shops along the route</li>
+                <li>Pop-up discovery, live</li>
+              </ul>
+              <div class="gl-actions gl-center">
+                <a class="gl-pill gl-pill-paper" href="#pass" onclick="App.glScroll(event,'gl-pass')">Join for [PRICE]/mo</a>
+                <span class="gl-small">Shop owner? <a href="#operators" onclick="App.glScroll(event,'gl-operators')">Become a stop</a></span>
+              </div>
+            </div>
+            <div class="gl-pass-card-wrap">
+              <div class="gl-pass-card">
+                <div class="gl-pass-top"><strong>GreenEvent NYC</strong><span class="gl-mono">MEMBER</span></div>
+                <div class="gl-display gl-pass-title">Tour<br>Pass</div>
+                <div class="gl-pass-rule"></div>
+                <div class="gl-pass-bottom gl-mono"><span>[MEMBER NAME]</span><span>No. [0000]</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="gl-section gl-wrap gl-ops" id="gl-operators">
+          <div class="gl-ops-copy">
+            <div class="gl-mono gl-eyebrow gl-blue">FOR OPERATORS &amp; DISPENSARIES</div>
+            <h2 class="gl-display gl-h2">Run your own stop.</h2>
+            <p class="gl-ops-text">We produce micro showcase events first-hand, then help licensed operators run their own. Permitting, venue planning and on-site compliance under the NYS OCM Part 117 framework.</p>
+          </div>
+          <div class="gl-grid gl-grid-steps">
+            ${step('01','Ride along','See a GreenEvent micro showcase from setup to close.')}
+            ${step('02','Plan + permit','Showcase Event permit prep, venue fit, timelines.')}
+            ${step('03','Run it','Day-of compliance checklist, staffing, follow-up.')}
+            ${step('04','Resource hub','The systems you already use — Dutchie, Metrc and more — in one place.')}
+          </div>
+        </section>
+
+        <section class="gl-wrap gl-dave-wrap" id="gl-dave">
+          <div class="gl-dave">
+            <div class="gl-dave-copy">
+              <h2 class="gl-display gl-h2 gl-h2-sm">Not sure where to start?</h2>
+              <p>Rasta Dave tends the bar here. Ask him what’s on the line tonight, how the Tour Pass works, or how to host a stop.</p>
+            </div>
+            <button type="button" class="gl-pill gl-pill-ink gl-pill-btn" onclick="App.toast('Rasta Dave is on his way — coming soon!')">Talk to Rasta Dave</button>
+          </div>
+        </section>
+
+        <footer class="gl-footer">
+          <div class="gl-wrap gl-footer-inner">
+            <div class="gl-footer-brand">
+              <div class="gl-brand gl-brand-sm"><span class="gl-logo">G</span>GreenEvent NYC</div>
+              <div>A place for ideas and connections.</div>
+            </div>
+            <div class="gl-footer-links">
+              <a href="mailto:nycgreenevents@gmail.com">nycgreenevents@gmail.com</a>
+              <a href="https://greeneventsnyc.com/es/">Español</a>
+            </div>
+            <div class="gl-mono gl-legal">21+ only. Cannabis events are produced under applicable NYS OCM rules. Partner-shop perks are offered by non-cannabis businesses. Not affiliated with NYS OCM.</div>
+          </div>
+        </footer>
+      </div>`,
+      rail: ''
+    };
+  }
+
+  function glScroll(e, id) {
+    e.preventDefault();
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function pageNotFound() {
     return {
       main: `
@@ -616,9 +756,11 @@ const App = (() => {
       case 'post':      view = pagePost(params.id);          break;
       case 'create':    view = pageCreate();                 break;
       case 'profile':   view = pageProfile();                break;
+      case 'line':      view = pageLine();                   break;
       default:          view = pageNotFound();
     }
 
+    document.getElementById('app').classList.toggle('full-bleed', page === 'line');
     document.getElementById('content').innerHTML = view.main;
     document.getElementById('right-rail').innerHTML = view.rail;
   }
@@ -631,7 +773,7 @@ const App = (() => {
     render();
   }
 
-  return { navigate, vote, showModal, closeModal, submitLogin, logout, setSort, toggleJoin, setActiveTab, submitPost, toast, init };
+  return { navigate, vote, showModal, closeModal, submitLogin, logout, setSort, toggleJoin, glScroll, setActiveTab, submitPost, toast, init };
 })();
 
 document.addEventListener('DOMContentLoaded', App.init);

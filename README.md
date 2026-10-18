@@ -13,6 +13,7 @@ Open `index.html` in a browser. No build step.
 - **Voting** (requires login)
 - **Nested comments** on each post
 - **Create post** page (text / image / link / poll tabs)
+- **The Green Line**: a GreenEvent NYC landing page (header button), implementing the Green Line design
 - **Login / sign-up modal and profile page**, with a mock login: any username works
 
 ## What is fake (next steps)
