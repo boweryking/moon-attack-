@@ -49,11 +49,12 @@ const synth = {
 // ---------- Recorded audio (ElevenLabs) with synth fallback ----------
 // Files live in ./audio/sfx and ./audio/voice. Anything missing quietly falls back to the synth.
 const SFX_FILES = ['laser','thrust','boom_large','boom_medium','boom_small','ship_boom','ufo_loop','ufo_fire','ufo_boom',
-  'hyperspace','extra_life','alarm','coin','game_over','shield','radio','space_ambience','shield_loop','shield_hit','shield_break'];
+  'hyperspace','extra_life','alarm','coin','game_over','shield','radio','space_ambience','shield_loop','shield_hit','shield_break','hull_hit','upgrade','grenade'];
 const VOICE_FILES = ['story1','story2','story3','story4','ctrl_contact','ctrl_ship_lost','ctrl_last_ship','ctrl_cleared',
   'ctrl_unidentified','ctrl_extra_ship','ctrl_all_lost','ann_title','ann_incoming','ann_extra_life','ann_game_over',
   'ann_insert_coin','ann_high_score','ann_hyperspace','ann_accelerating','ann_pilot_down',
-  'alien_world_ends','alien_we_see_you','alien_earth_ours','alien_impossible','ann_shields_up','ann_shields_down'];
+  'alien_world_ends','alien_we_see_you','alien_earth_ours','alien_impossible','ann_shields_up','ann_shields_down','ann_upgrade','ann_grenade',
+  'fld_standard','fld_dense','fld_ice','fld_iron','fld_volatile','fld_gravity','fld_mother'];
 const clips = {};
 for (const [dir, list] of [['sfx', SFX_FILES], ['voice', VOICE_FILES]]) for (const n of list) {
   const a = new Audio(`audio/${dir}/${n}.mp3`); a.preload = 'auto';
@@ -74,7 +75,7 @@ function loopSet(name, on, vol = 0.5) {
 const sfx = {
   fire: () => playClip('laser', 0.45) || synth.fire(),
   ufoFire: () => playClip('ufo_fire', 0.6) || synth.ufoFire(),
-  boom: s => playClip(s === 3 ? 'boom_large' : s === 2 ? 'boom_medium' : 'boom_small', 0.8) || synth.boom(s),
+  boom: s => playClip(s >= 3 ? 'boom_large' : s === 2 ? 'boom_medium' : 'boom_small', 0.8) || synth.boom(s),
   ufoBoom: () => playClip('ufo_boom', 0.8) || synth.boom(2),
   shipBoom: () => playClip('ship_boom', 1) || synth.shipBoom(),
   extra: () => playClip('extra_life', 0.8) || synth.extra(),
@@ -82,6 +83,9 @@ const sfx = {
   alarm: () => playClip('alarm', 0.5),
   shield: () => playClip('shield', 0.5),
   shieldHit: () => playClip('shield_hit', 0.6) || tone(700, 0.12, 'sine', 0.08, -300),
+  hullHit: () => playClip('hull_hit', 0.8) || synth.boom(1),
+  upgrade: () => playClip('upgrade', 0.7) || synth.extra(),
+  grenadeBlast: () => playClip('grenade', 0.9) || synth.boom(3),
   shieldBreak: () => playClip('shield_break', 0.8) || tone(400, 0.5, 'sawtooth', 0.08, -300),
   coin: () => playClip('coin', 0.8),
   gameOver: () => playClip('game_over', 0.8),
@@ -198,6 +202,7 @@ function onPress(code) {
   }
   if (state === 'play' && ship.alive) {
     if (code === 'Space') fire();
+    if (code === 'KeyB' || code === 'KeyG') grenade();
     if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyH') hyperspace();
   }
 }
@@ -217,44 +222,118 @@ try { hi = +(localStorage.getItem('asteroids-hi') || 0); } catch (e) {} // stora
 let nextExtra = 10000, ship, rocks = [], bullets = [], ufoBullets = [], ufo = null, ufoTimer = 0, particles = [], debris = [];
 let waveDelay = 0, respawnT = 0, startHi = 0, ufoSeen = 0, fromRestart = false;
 
+// Upgrades are earned by clearing fields and persist across lives.
+const freshUp = () => ({ maxPower: 100, recharge: 15, turn: 4.2, thrust: 260, maxSpeed: 420, maxBullets: 4, shots: 1, grenades: 2, n: 0 });
+let up = freshUp();
+const tier = () => Math.min(3, Math.floor(up.n / 3));
+const shipCol = () => ['#bff', '#7ff', '#9f9', '#fd6'][tier()];
 function makeShip() {
   return { x: W / 2, y: H / 2, vx: 0, vy: 0, a: -Math.PI / 2, alive: true, inv: 3, cool: 0, thrusting: false, r: 12,
-    energy: 100, shield: false, locked: false, rechargeDelay: 0, hitFlash: 0 };
+    energy: up.maxPower, shield: false, locked: false, rechargeDelay: 0, hitFlash: 0 };
 }
 function newGame() {
   score = 0; lives = 3; wave = 0; nextExtra = 10000;
   rocks = []; bullets = []; ufoBullets = []; ufo = null; particles = []; debris = [];
   startHi = hi; ufoSeen = 0; waveDelay = 0; voice = null; subT = 0;
+  up = freshUp(); blasts.length = 0; well = null; field = 'standard'; banner.t = 0; upBanner.t = 0;
   ship = makeShip(); state = 'play'; startWave();
 }
+// ---------- Fields: every wave is a named field with its own rules ----------
+const FIELDS = {
+  standard: { name: 'STANDARD FIELD', say: 'Standard field. Engage.' },
+  dense:    { name: 'DENSE BELT', col: '#fa3', say: 'Dense belt ahead. Small, fast rocks.' },
+  ice:      { name: 'ICE FIELD', col: '#9ef', say: 'Ice field. Rocks will shatter into fragments.' },
+  iron:     { name: 'IRON FIELD', col: '#e96', say: 'Iron field. Hardened rock. Expect multiple hits.' },
+  volatile: { name: 'VOLATILE FIELD', col: '#f54', say: 'Volatile field. These rocks explode. Keep your distance.' },
+  gravity:  { name: 'GRAVITY FIELD', col: '#c7f', say: 'Gravity field. Mind the well.' },
+  mother:   { name: 'MOTHER ROCK', col: '#fc4', say: 'Warning. Mother rock detected. All power to weapons.' },
+};
+const FIELD_ORDER = ['standard', 'dense', 'ice', 'iron', 'volatile', 'gravity'];
+const fieldFor = w => w % 5 === 0 ? 'mother' : FIELD_ORDER[(w - Math.floor(w / 5) - 1) % FIELD_ORDER.length];
+let field = 'standard', well = null, banner = { text: '', t: 0 }, upBanner = { text: '', t: 0 };
+const blasts = [];
 function startWave() {
-  wave++; const n = Math.min(4 + (wave - 1) * 2, 14);
+  wave++; field = fieldFor(wave); const F = FIELDS[field];
+  let n = Math.min(4 + (wave - 1) * 2, 14); if (field === 'dense') n = Math.min(Math.round(n * 1.6), 20);
+  well = field === 'gravity' ? { x: rand(W * 0.3, W * 0.7), y: rand(H * 0.3, H * 0.7), t: 0 } : null;
+  banner = { text: `FIELD ${wave}  -  ${F.name}`, t: 3.4 };
   if (wave === 1) {
     if (fromRestart) say('ann_title', 'Asteroids. Survive the field.', 1);
     else say('ctrl_contact', 'CONTROL: Swarm contact in sixty seconds. Good hunting, pilot.', 1);
     fromRestart = false; }
-  else { sfx.alarm();
-    if (wave === 5 || wave === 8) say('ann_accelerating', 'Warning. The swarm is accelerating.', 1);
-    else if (wave % 2 === 0) say('ann_incoming', 'Incoming. Brace yourself.', 1); }
-  for (let i = 0; i < n; i++) {
+  else { sfx.alarm(); say('fld_' + field, F.say, 2); }
+  if (field === 'mother') rocks.push(makeRock(Math.random() < 0.5 ? 70 : W - 70, rand(120, H - 120), 4));
+  else for (let i = 0; i < n; i++) {
     let x, y; do { x = rand(0, W); y = rand(0, H); } while (Math.hypot(x - W / 2, y - H / 2) < 180);
-    rocks.push(makeRock(x, y, 3));
+    rocks.push(makeRock(x, y, field === 'dense' && Math.random() < 0.7 ? 2 : 3));
   }
   ufoTimer = rand(12, 20);
 }
-function makeRock(x, y, size) {
-  const R = [0, 14, 28, 50][size], pts = [], n = 11;
+function makeRock(x, y, size, kind = field) {
+  const R = [0, 14, 28, 50, 90][size], pts = [], n = size === 4 ? 18 : 11;
   for (let i = 0; i < n; i++) pts.push([i / n * TAU, rand(0.7, 1.15) * R]);
-  const sp = rand(30, 60) * (1 + (4 - size) * 0.35) * (1 + wave * 0.04), dir = rand(0, TAU);
-  return { x, y, vx: Math.cos(dir) * sp, vy: Math.sin(dir) * sp, a: rand(0, TAU), spin: rand(-1, 1), size, r: R, pts };
+  let sp = rand(30, 60) * (1 + (4 - size) * 0.35) * (1 + wave * 0.04), dir = rand(0, TAU);
+  if (kind === 'dense') sp *= 1.5; if (size === 4) sp = rand(18, 30);
+  const hp = size === 4 ? 14 : kind === 'iron' ? size : 1;
+  return { x, y, vx: Math.cos(dir) * sp, vy: Math.sin(dir) * sp, a: rand(0, TAU), spin: rand(-1, 1), size, r: R, pts, kind, hp, flash: 0, col: FIELDS[kind].col || null };
+}
+const UPGRADES = [
+  ['POWER CELL +25', () => up.maxPower = Math.min(200, up.maxPower + 25)],
+  ['DOUBLE SHOT', () => up.shots = 2],
+  ['FASTER RECHARGE', () => up.recharge += 8],
+  ['ENGINE BOOST', () => { up.turn += 0.8; up.thrust += 60; up.maxSpeed += 60; }],
+  ['RAPID FIRE', () => up.maxBullets = Math.min(10, up.maxBullets + 2)],
+  ['GRENADES +2', () => up.grenades += 2],
+  ['SPREAD SHOT', () => up.shots = 3],
+  ['POWER CELL +25', () => up.maxPower = Math.min(200, up.maxPower + 25)],
+  ['RAPID FIRE', () => up.maxBullets = Math.min(10, up.maxBullets + 2)],
+  ['GRENADES +2', () => up.grenades += 2],
+];
+function grantUpgrade() { // after each cleared field: the next upgrade is installed automatically
+  const [name, fn] = UPGRADES[up.n < UPGRADES.length ? up.n : 7 + (up.n - UPGRADES.length) % 3];
+  const before = tier(); fn(); up.n++;
+  upBanner = { text: 'UPGRADE: ' + name + (tier() > before ? '   -   NEW HULL' : ''), t: 4.2 };
+  sfx.upgrade(); say('ann_upgrade', 'Upgrade installed: ' + name.toLowerCase() + '.', 2);
+  if (ship.alive) { ring(ship.x, ship.y, 90, shipCol()); burst(ship.x, ship.y, 24, 150, shipCol()); }
+}
+function applyWell(o, dt, k) { // pull toward the gravity well, with a soft core so nothing gets stuck
+  const dx = well.x - o.x, dy = well.y - o.y, d = Math.hypot(dx, dy) || 1;
+  const acc = (d < 40 ? -140 : 24000 / (d + 140)) * k;
+  o.vx += dx / d * acc * dt; o.vy += dy / d * acc * dt;
 }
 
 // ---------- Actions ----------
 function fire() {
-  if (bullets.length >= 4 || ship.shield) return; // can't fire with the shield up
-  bullets.push({ x: ship.x + Math.cos(ship.a) * 14, y: ship.y + Math.sin(ship.a) * 14,
-    vx: ship.vx + Math.cos(ship.a) * 520, vy: ship.vy + Math.sin(ship.a) * 520, life: 0.95 });
+  if (bullets.length >= up.maxBullets * up.shots || ship.shield) return; // no firing with the shield up
+  const angles = up.shots === 3 ? [-0.2, 0, 0.2] : [0], offs = up.shots === 2 ? [-6, 6] : [0];
+  for (const da of angles) for (const off of offs) { const ang = ship.a + da;
+    bullets.push({ x: ship.x + Math.cos(ship.a) * 14 - Math.sin(ship.a) * off, y: ship.y + Math.sin(ship.a) * 14 + Math.cos(ship.a) * off,
+      vx: ship.vx + Math.cos(ang) * 520, vy: ship.vy + Math.sin(ang) * 520, life: 0.95 }); }
   sfx.fire();
+}
+function grenade() { // local blast around the ship, not the whole screen
+  if (up.grenades <= 0 || !ship.alive) return;
+  up.grenades--; const R = 190;
+  sfx.grenadeBlast(); say('ann_grenade', 'Grenade away.', 1);
+  ring(ship.x, ship.y, R, '#fff'); ring(ship.x, ship.y, R * 0.6, '#ff6'); burst(ship.x, ship.y, 60, 320, '#ff6'); shake = 16; flash = 0.6;
+  for (let j = rocks.length - 1; j >= 0; j--) if (wdist(ship, rocks[j]) < R + rocks[j].r) {
+    if (rocks[j].size === 4) { rocks[j].hp -= 6; if (rocks[j].hp <= 0) breakRock(j); } else breakRock(j); }
+  if (ufo && wdist(ship, ufo) < R) killUfo();
+  for (let i = ufoBullets.length - 1; i >= 0; i--) if (wdist(ship, ufoBullets[i]) < R) ufoBullets.splice(i, 1);
+}
+function hurtShip(frac) { // a hit costs a fraction of max power; with too little power left it destroys the ship
+  const cost = up.maxPower * frac;
+  if (ship.energy < cost) { killShip(); return; }
+  ship.energy -= cost; ship.inv = 1.5; ship.rechargeDelay = 2; shake = Math.max(shake, 12); flash = 0.4;
+  ring(ship.x, ship.y, 70, '#f55'); burst(ship.x, ship.y, 18, 140, '#fa4'); sfx.hullHit();
+}
+function killUfo() {
+  addScore(ufo.small ? 1000 : 200); sfx.ufoBoom(); say('alien_impossible', 'Impossible...', 2);
+  burst(ufo.x, ufo.y, 30, 170, '#f4a'); burst(ufo.x, ufo.y, 12, 110, '#ff6'); shake = Math.max(shake, 10); ring(ufo.x, ufo.y, 100, '#f4a'); ufo = null;
+}
+function hitRock(j, b) { // iron rocks and the mother rock take several hits
+  const r = rocks[j]; r.hp--;
+  if (r.hp > 0) { r.flash = 0.15; sfx.shieldHit(); burst(b.x, b.y, 6, 90, '#fff'); shake = Math.max(shake, 2); } else breakRock(j);
 }
 function hyperspace() {
   sfx.hyper(); say('ann_hyperspace', 'Hyperspace engaged.', 1); burst(ship.x, ship.y, 10, 120, '#fff');
@@ -285,10 +364,13 @@ function killShip() {
   else say('ctrl_ship_lost', 'CONTROL: Ship destroyed! Deploying your backup. Stay sharp out there.', 2);
 }
 function breakRock(i) {
-  const r = rocks[i]; rocks.splice(i, 1);
-  addScore([0, 100, 50, 20][r.size]); sfx.boom(r.size); burst(r.x, r.y, 8 + r.size * 5, 80 + r.size * 25, rockColor());
-  shake = Math.max(shake, [0, 2, 5, 9][r.size]); if (r.size >= 2) ring(r.x, r.y, 30 + r.size * 22, rockColor());
-  if (r.size > 1) for (let k = 0; k < 2; k++) { const c = makeRock(r.x, r.y, r.size - 1); rocks.push(c); }
+  const r = rocks[i]; rocks.splice(i, 1); const col = r.col || rockColor();
+  addScore([0, 100, 50, 20, 500][r.size]); sfx.boom(r.size); burst(r.x, r.y, 8 + r.size * 5, 80 + r.size * 25, col);
+  shake = Math.max(shake, [0, 2, 5, 9, 24][r.size]); if (r.size >= 2) ring(r.x, r.y, 30 + r.size * 22, col);
+  if (r.size === 4) { flash = 0.6; ring(r.x, r.y, 260, '#fff'); }
+  const kids = r.size === 4 ? 3 : r.size > 1 ? (r.kind === 'ice' ? 3 : 2) : 0, ks = r.size === 4 ? 3 : r.size - 1;
+  for (let k = 0; k < kids; k++) rocks.push(makeRock(r.x, r.y, ks, r.kind));
+  if (r.kind === 'volatile') blasts.push({ x: r.x, y: r.y, t: 0.12, r: 40 + r.size * 22 }); // chain explosion
 }
 function spawnUfo() {
   const small = score > 3000 && Math.random() < Math.min(0.9, 0.3 + score / 40000);
@@ -329,7 +411,7 @@ function shieldCollisions() { // rocks bounce off, saucer shots are absorbed; ea
     if (vn < 0) {
       r.vx = ship.vx + (rvx - 2 * vn * nx) * 0.9; r.vy = ship.vy + (rvy - 2 * vn * ny) * 0.9;
       ship.vx -= nx * 40 * r.size; ship.vy -= ny * 40 * r.size; // knock-back
-      shieldHit([0, 6, 12, 22][r.size], ship.x + nx * SHIELD_R, ship.y + ny * SHIELD_R);
+      shieldHit([0, 6, 12, 22, 40][r.size], ship.x + nx * SHIELD_R, ship.y + ny * SHIELD_R);
       if (!ship.shield) return;
     }
     r.x += nx * (min - d + 1); r.y += ny * (min - d + 1); wrap(r);
@@ -345,14 +427,14 @@ function shieldCollisions() { // rocks bounce off, saucer shots are absorbed; ea
 function update(dt) {
   // ship
   if (ship.alive) {
-    if (keys.ArrowLeft) ship.a -= 4.2 * dt;
-    if (keys.ArrowRight) ship.a += 4.2 * dt;
+    if (keys.ArrowLeft) ship.a -= up.turn * dt;
+    if (keys.ArrowRight) ship.a += up.turn * dt;
     ship.thrusting = !!keys.ArrowUp;
-    if (ship.thrusting) { ship.vx += Math.cos(ship.a) * 260 * dt; ship.vy += Math.sin(ship.a) * 260 * dt;
+    if (ship.thrusting) { ship.vx += Math.cos(ship.a) * up.thrust * dt; ship.vy += Math.sin(ship.a) * up.thrust * dt;
       particles.push({ x: ship.x - Math.cos(ship.a) * 10, y: ship.y - Math.sin(ship.a) * 10,
         vx: -Math.cos(ship.a) * 90 + rand(-25, 25), vy: -Math.sin(ship.a) * 90 + rand(-25, 25), life: 0.3, color: '#fa4' }); }
     const drag = Math.pow(0.6, dt); ship.vx *= drag; ship.vy *= drag; // gentle friction
-    const sp = Math.hypot(ship.vx, ship.vy); if (sp > 420) { ship.vx *= 420 / sp; ship.vy *= 420 / sp; }
+    const sp = Math.hypot(ship.vx, ship.vy); if (sp > up.maxSpeed) { ship.vx *= up.maxSpeed / sp; ship.vy *= up.maxSpeed / sp; }
     ship.x += ship.vx * dt; ship.y += ship.vy * dt; wrap(ship);
     if (ship.inv > 0) ship.inv -= dt;
     // force field: hold S (or Down). Drains energy while up, recharges when down.
@@ -361,8 +443,8 @@ function update(dt) {
     if (want && !ship.shield && !ship.locked && !ship.needRelease && ship.energy > 8) raiseShield();
     else if (!want && ship.shield) lowerShield(false);
     if (ship.shield) { ship.energy -= 24 * dt; if (ship.energy <= 0) { ship.energy = 0; lowerShield(true); } }
-    else { ship.rechargeDelay -= dt; if (ship.rechargeDelay <= 0) ship.energy = Math.min(100, ship.energy + 15 * dt); }
-    if (ship.locked && ship.energy >= 30) ship.locked = false;
+    else { ship.rechargeDelay -= dt; if (ship.rechargeDelay <= 0) ship.energy = Math.min(up.maxPower, ship.energy + up.recharge * dt); }
+    if (ship.locked && ship.energy >= Math.min(30, up.maxPower)) ship.locked = false;
     if (ship.hitFlash > 0) ship.hitFlash -= dt;
   } else if (respawnT > 0) {
     respawnT -= dt;
@@ -372,8 +454,15 @@ function update(dt) {
       else respawnT = 0.1; // wait for safe space
     }
   }
+  if (well) { well.t += dt;
+    for (const r of rocks) { applyWell(r, dt, 1); const v = Math.hypot(r.vx, r.vy); if (v > 170) { r.vx *= 170 / v; r.vy *= 170 / v; } }
+    if (ship.alive) applyWell(ship, dt, 0.8); }
+  for (let i = blasts.length - 1; i >= 0; i--) { const bl = blasts[i]; bl.t -= dt; if (bl.t > 0) continue; blasts.splice(i, 1);
+    ring(bl.x, bl.y, bl.r, '#f54'); burst(bl.x, bl.y, 22, 210, '#fa4'); shake = Math.max(shake, 6); sfx.boom(2);
+    for (let j = rocks.length - 1; j >= 0; j--) if (rocks[j].size < 4 && wdist(bl, rocks[j]) < bl.r + rocks[j].r * 0.5) breakRock(j);
+    if (ship.alive && ship.inv <= 0 && wdist(bl, ship) < bl.r) { if (ship.shield) shieldHit(12, ship.x, ship.y); else hurtShip(1 / 3); } }
   // rocks
-  for (const r of rocks) { r.x += r.vx * dt; r.y += r.vy * dt; r.a += r.spin * dt; wrap(r); }
+  for (const r of rocks) { if (r.flash > 0) r.flash -= dt; r.x += r.vx * dt; r.y += r.vy * dt; r.a += r.spin * dt; wrap(r); }
   // bullets
   for (let i = bullets.length - 1; i >= 0; i--) { const b = bullets[i];
     b.x += b.vx * dt; b.y += b.vy * dt; wrap(b); b.life -= dt; if (b.life <= 0) bullets.splice(i, 1); }
@@ -394,8 +483,8 @@ function update(dt) {
   }
   // collisions: bullets vs rocks / ufo
   for (let i = bullets.length - 1; i >= 0; i--) { const b = bullets[i]; let hit = false;
-    for (let j = rocks.length - 1; j >= 0; j--) if (wdist(b, rocks[j]) < rocks[j].r) { breakRock(j); hit = true; break; }
-    if (!hit && ufo && wdist(b, ufo) < ufo.r + 3) { addScore(ufo.small ? 1000 : 200); sfx.ufoBoom(); say('alien_impossible', 'Impossible...', 2); burst(ufo.x, ufo.y, 30, 170, '#f4a'); burst(ufo.x, ufo.y, 12, 110, '#ff6'); shake = Math.max(shake, 10); ring(ufo.x, ufo.y, 100, '#f4a'); ufo = null; hit = true; }
+    for (let j = rocks.length - 1; j >= 0; j--) if (wdist(b, rocks[j]) < rocks[j].r) { hitRock(j, b); hit = true; break; }
+    if (!hit && ufo && wdist(b, ufo) < ufo.r + 3) { killUfo(); hit = true; }
     if (hit) bullets.splice(i, 1); }
   // ufo bullets / ufo vs rocks
   if (ufo) for (let j = rocks.length - 1; j >= 0; j--) if (wdist(ufo, rocks[j]) < rocks[j].r + ufo.r) { breakRock(j); burst(ufo.x, ufo.y, 18, 130); ufo = null; break; }
@@ -404,9 +493,12 @@ function update(dt) {
   // ship collisions
   if (ship.alive && ship.shield) shieldCollisions();
   else if (ship.alive && ship.inv <= 0) {
-    for (let j = rocks.length - 1; j >= 0; j--) if (wdist(ship, rocks[j]) < rocks[j].r + ship.r * 0.7) { breakRock(j); killShip(); break; }
-    if (ship.alive && ufo && wdist(ship, ufo) < ufo.r + ship.r) { burst(ufo.x, ufo.y, 18, 130); ufo = null; killShip(); }
-    if (ship.alive) for (let i = ufoBullets.length - 1; i >= 0; i--) if (wdist(ship, ufoBullets[i]) < ship.r) { ufoBullets.splice(i, 1); killShip(); break; }
+    for (let j = rocks.length - 1; j >= 0; j--) if (wdist(ship, rocks[j]) < rocks[j].r + ship.r * 0.7) {
+      const sz = rocks[j].size; // small rock: -1/3 power, medium: -2/3, large or mother rock: destroyed
+      if (sz >= 3) { if (sz === 3) breakRock(j); killShip(); } else { breakRock(j); hurtShip(sz === 1 ? 1 / 3 : 2 / 3); }
+      break; }
+    if (ship.alive && ship.inv <= 0 && ufo && wdist(ship, ufo) < ufo.r + ship.r) { burst(ufo.x, ufo.y, 18, 130); ufo = null; hurtShip(2 / 3); }
+    if (ship.alive && ship.inv <= 0) for (let i = ufoBullets.length - 1; i >= 0; i--) if (wdist(ship, ufoBullets[i]) < ship.r) { ufoBullets.splice(i, 1); hurtShip(1 / 3); break; }
   }
   // particles / debris
   for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i];
@@ -415,8 +507,8 @@ function update(dt) {
     d.x += d.vx * dt; d.y += d.vy * dt; d.a += d.spin * dt; d.life -= dt; if (d.life <= 0) debris.splice(i, 1); }
   // next wave
   if (!rocks.length && !ufo) {
-    if (waveDelay === 0 && ship.alive) say('ctrl_cleared', 'CONTROL: Field cleared. Nice shooting. Stand by for the next contact.', 1);
-    waveDelay += dt; if (waveDelay > 3.5) { waveDelay = 0; startWave(); } }
+    if (waveDelay === 0) { grantUpgrade(); if (ship.alive) ship.energy = up.maxPower; } // field cleared: upgrade + full power
+    waveDelay += dt; if (waveDelay > 4.5) { waveDelay = 0; startWave(); } }
   loopSet('thrust', ship.alive && ship.thrusting, 0.4);
   loopSet('shield_loop', ship.alive && ship.shield, 0.3);
   loopSet('ufo_loop', !!ufo, 0.25);
@@ -434,7 +526,14 @@ function ghosted(o, rad, fn) {
     ctx.save(); ctx.translate(x, y); fn(); ctx.restore();
   }
 }
-function shipPath() { return [[16, 0], [-12, -10], [-7, 0], [-12, 10]]; }
+function shipPath() { // the hull changes shape every three upgrades
+  switch (tier()) {
+    case 0: return [[16, 0], [-12, -10], [-7, 0], [-12, 10]];
+    case 1: return [[18, 0], [2, -6], [-8, -14], [-12, -10], [-7, 0], [-12, 10], [-8, 14], [2, 6]];
+    case 2: return [[20, 0], [6, -5], [-2, -16], [-10, -16], [-8, -6], [-14, -8], [-9, 0], [-14, 8], [-8, 6], [-10, 16], [-2, 16], [6, 5]];
+    default: return [[22, 0], [8, -6], [0, -18], [-8, -20], [-10, -8], [-16, -10], [-11, 0], [-16, 10], [-10, 8], [-8, 20], [0, 18], [8, 6]];
+  }
+}
 function drawShip(x, y, a, thrust) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(a); poly(shipPath());
   if (thrust && Math.random() < 0.7) poly([[-8, -5], [-18 - Math.random() * 8, 0], [-8, 5]], false);
@@ -452,7 +551,7 @@ function starsTick(dt) {
   const vx = state === 'play' && ship.alive ? ship.vx : 0, vy = state === 'play' && ship.alive ? ship.vy : 0;
   for (const s of stars) { s.x = (s.x - vx * s.z * 0.12 * dt - s.z * 6 * dt + W) % W; s.y = (s.y - vy * s.z * 0.12 * dt + H) % H; s.tw += dt * (1 + s.z * 2); }
   for (let i = rings.length - 1; i >= 0; i--) { const g = rings[i]; g.r += (g.max - g.r) * Math.min(1, dt * 5) + dt * 30; g.life -= dt * 1.6; if (g.life <= 0) rings.splice(i, 1); }
-  shake = Math.max(0, shake - 45 * dt); flash = Math.max(0, flash - dt * 1.8);
+  shake = Math.max(0, shake - 45 * dt); flash = Math.max(0, flash - dt * 1.8); banner.t -= dt; upBanner.t -= dt;
 }
 // pre-rendered scanlines + vignette
 const crt = document.createElement('canvas'); crt.width = W; crt.height = H;
@@ -463,7 +562,7 @@ const crt = document.createElement('canvas'); crt.width = W; crt.height = H;
   g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.6)'); c.fillStyle = g; c.fillRect(0, 0, W, H);
 })();
 function neon(color, blur) { ctx.strokeStyle = ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = fx ? blur : 0; }
-const rockColor = () => `hsl(${(wave * 47 + 190) % 360},100%,66%)`; // each wave gets its own hue
+const rockColor = () => FIELDS[field].col || `hsl(${(wave * 47 + 190) % 360},100%,66%)`; // each field has its own color
 
 function render() {
   const t = performance.now() / 1000, rc = rockColor();
@@ -479,13 +578,21 @@ function render() {
     neon('#9ef', 10);
     text(String(score).padStart(2, '0'), 120, 46, 36, 'right');
     neon('#fc6', 8); text(String(hi).padStart(2, '0'), W / 2, 30, 18);
-    neon('#bff', 10); for (let i = 0; i < Math.min(lives, 10); i++) drawShip(100 - i * 26 + 26, 76, -Math.PI / 2, false);
-    const en = ship.energy / 100, ecol = ship.locked ? '#f55' : en > 0.5 ? '#6cf' : en > 0.25 ? '#fc4' : '#f55';
-    neon(ecol, 8); ctx.lineWidth = 1.5; ctx.strokeRect(61, 100, 100, 8); ctx.fillRect(61, 100, 100 * en, 8); ctx.lineWidth = 2;
-    neon('#9ef', 4); text(ship.locked ? 'SHIELD RECHARGING' : ship.shield ? 'SHIELD UP' : 'SHIELD [S]', 61, 124, 11, 'left');
+    neon(shipCol(), 10); for (let i = 0; i < Math.min(lives, 10); i++) drawShip(100 - i * 26 + 26, 76, -Math.PI / 2, false);
+    const en = ship.energy / up.maxPower, bw = Math.min(190, up.maxPower), ecol = ship.locked ? '#f55' : en > 0.5 ? '#6cf' : en > 0.25 ? '#fc4' : '#f55';
+    neon(ecol, 8); ctx.lineWidth = 1.5; ctx.strokeRect(61, 100, bw, 8); ctx.fillRect(61, 100, bw * en, 8);
+    ctx.globalAlpha = 0.6; for (const f of [1 / 3, 2 / 3]) { ctx.beginPath(); ctx.moveTo(61 + bw * f, 98); ctx.lineTo(61 + bw * f, 110); ctx.stroke(); } ctx.globalAlpha = 1; ctx.lineWidth = 2;
+    neon('#9ef', 4); text(ship.locked ? 'POWER LOW - SHIELD RECHARGING' : ship.shield ? 'SHIELD UP' : 'POWER   [S] SHIELD', 61, 124, 11, 'left');
+    neon('#ff7', 6); text('GRENADES ' + up.grenades + '   [B]', 61, 142, 11, 'left');
   }
-  neon(rc, 12);
-  for (const r of rocks) ghosted(r, r.r * 1.2, () => { ctx.rotate(r.a); poly(r.pts.map(([a, d]) => [Math.cos(a) * d, Math.sin(a) * d])); });
+  if (well) { neon('#c7f', 22); for (let k = 0; k < 4; k++) { const ph = t * 1.6 + k * 1.57, rad = 14 + k * 9 + 3 * Math.sin(t * 3 + k);
+      ctx.globalAlpha = 0.9 - k * 0.18; ctx.beginPath(); ctx.arc(well.x, well.y, rad, ph, ph + 3.6); ctx.stroke(); } ctx.globalAlpha = 1; }
+  for (const r of rocks) ghosted(r, r.r * 1.2, () => {
+    const pulse = r.kind === 'volatile' && Math.sin(t * 9 + r.a * 3) > 0.3;
+    neon(r.flash > 0 || pulse ? '#fff' : (r.col || rc), r.kind === 'volatile' ? 20 : 12);
+    ctx.lineWidth = r.kind === 'iron' ? 3.2 : r.size === 4 ? 3.5 : 2;
+    ctx.rotate(r.a); poly(r.pts.map(([a, d]) => [Math.cos(a) * d, Math.sin(a) * d])); ctx.lineWidth = 2; });
+  for (const r of rocks) if (r.size === 4) { neon('#fc4', 10); ctx.lineWidth = 1.5; ctx.strokeRect(W / 2 - 150, 54, 300, 8); ctx.fillRect(W / 2 - 150, 54, 300 * Math.max(0, r.hp) / 14, 8); ctx.lineWidth = 2; }
   neon('#ff7', 14);
   for (const b of bullets) ghosted(b, 12, () => { ctx.fillRect(-2, -2, 4, 4); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-b.vx * 0.025, -b.vy * 0.025); ctx.stroke(); });
   neon('#f55', 12);
@@ -496,7 +603,7 @@ function render() {
     poly([[-8, -4], [-5, -12], [5, -12], [8, -4]]);
     for (let k = -1; k <= 1; k++) { ctx.fillStyle = (Math.floor(t * 6) + k) % 2 ? '#ff6' : '#f4a'; ctx.fillRect(k * 9 - 1.5, 5, 3, 3); } });
   if (ship.alive && (ship.inv <= 0 || Math.floor(ship.inv * 10) % 2 === 0)) ghosted(ship, 30, () => {
-    ctx.rotate(ship.a); neon('#bff', 16); poly(shipPath());
+    ctx.rotate(ship.a); neon(shipCol(), 16); poly(shipPath());
     if (ship.thrusting && Math.random() < 0.8) { neon('#fa3', 18); poly([[-8, -5], [-18 - Math.random() * 10, 0], [-8, 5]], false); } });
   if (ship.alive && ship.shield) { // force field bubble, color shows remaining energy
     const e = ship.energy, col = e > 50 ? '#6cf' : e > 25 ? '#fc4' : '#f55', flick = e < 25 && Math.random() < 0.4;
@@ -520,14 +627,16 @@ function render() {
   if (state === 'title') {
     neon(title, 24); text('ASTEROIDS', W / 2, H / 2 - 60, 76);
     neon('#fff', 10); text('PRESS ENTER OR SPACE TO START', W / 2, H / 2 + 10, 22);
-    neon('#9ef', 6); text('← → ROTATE   ↑ THRUST   SPACE FIRE   S SHIELD   SHIFT HYPERSPACE', W / 2, H / 2 + 60, 16);
+    neon('#9ef', 6); text('← → ROTATE   ↑ THRUST   SPACE FIRE   S SHIELD   B GRENADE   SHIFT HYPERSPACE', W / 2, H / 2 + 60, 16);
     text('P PAUSE   M MUTE   C CRT EFFECTS', W / 2, H / 2 + 86, 16);
   } else if (state === 'over') {
     neon('#f55', 24); text('GAME OVER', W / 2, H / 2 - 10, 64);
     neon('#fff', 8); text('PRESS ENTER TO PLAY AGAIN', W / 2, H / 2 + 40, 20);
   } else if (state === 'story') { neon('#dff', 10); drawStory(); }
   else if (state === 'pause') { neon('#fff', 14); text('PAUSED', W / 2, H / 2, 48); }
-  else if (!rocks.length && !ufo && waveDelay > 0) { neon(rc, 18); text('WAVE ' + (wave + 1), W / 2, H / 2, 40); }
+  else if (!rocks.length && !ufo && waveDelay > 0) { const nf = fieldFor(wave + 1); neon(FIELDS[nf].col || rc, 18); text('FIELD ' + (wave + 1) + '  -  ' + FIELDS[nf].name, W / 2, H / 2 + 40, 34); }
+  if (state === 'play' && banner.t > 0) { ctx.globalAlpha = Math.min(1, banner.t); neon(FIELDS[field].col || rc, 16); text(banner.text, W / 2, 110, 26); ctx.globalAlpha = 1; }
+  if (state === 'play' && upBanner.t > 0) { ctx.globalAlpha = Math.min(1, upBanner.t); neon('#fd6', 18); text(upBanner.text, W / 2, H / 2 - 20, 30); ctx.globalAlpha = 1; }
   if (subT > 0 && state !== 'story') { // voice subtitles
     ctx.globalAlpha = Math.min(1, subT * 2); neon('#9fd', 8);
     wrapText(subText, W / 2, H - 70, W - 200, 26, 20); ctx.globalAlpha = 1; }

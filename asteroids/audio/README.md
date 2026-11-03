@@ -16,7 +16,7 @@ extra_life, alarm, coin, game_over, shield, radio, space_ambience  (all `.mp3`)
 - Announcer: ann_title, ann_incoming, ann_extra_life, ann_game_over, ann_insert_coin, ann_high_score, ann_hyperspace, ann_accelerating, ann_pilot_down
 - Alien saucer: alien_world_ends, alien_we_see_you, alien_earth_ours, alien_impossible
 
-All voice lines are now used in the game.
+Field announcements (fld_*) use a second voice; upgrade, grenade and shield lines use the announcer.
 
 ## `music/` (ElevenLabs Music, instrumental)
 title (story intro), wave_early (waves 1-3), gameplay (waves 4-5), boss (wave 6+), between_waves (while the field is clear),
