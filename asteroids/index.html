@@ -184,6 +184,7 @@ addEventListener('keyup', e => keys[e.code] = false);
 function onPress(code) {
   audio();
   if (code === 'KeyM') muted = !muted;
+  if (code === 'KeyC') fx = !fx;
   if (code === 'KeyP' && (state === 'play' || state === 'pause')) state = state === 'play' ? 'pause' : 'play';
   if (code === 'Enter' || code === 'Space') {
     if (state === 'title') { sfx.coin(); startStory(); }
@@ -266,7 +267,8 @@ function addScore(p) {
 }
 function killShip() {
   if (!ship.alive) return;
-  ship.alive = false; sfx.shipBoom(); burst(ship.x, ship.y, 24, 180);
+  ship.alive = false; sfx.shipBoom(); burst(ship.x, ship.y, 40, 220, '#bff'); burst(ship.x, ship.y, 20, 140, '#fa4');
+  shake = 22; flash = 0.8; ring(ship.x, ship.y, 160, '#bff'); ring(ship.x, ship.y, 90, '#fa4');
   for (let i = 0; i < 5; i++) { const d = rand(0, TAU);
     debris.push({ x: ship.x, y: ship.y, vx: Math.cos(d) * rand(20, 80) + ship.vx * 0.3, vy: Math.sin(d) * rand(20, 80) + ship.vy * 0.3,
       a: d, spin: rand(-6, 6), len: rand(8, 14), life: 2.2 }); }
@@ -277,7 +279,8 @@ function killShip() {
 }
 function breakRock(i) {
   const r = rocks[i]; rocks.splice(i, 1);
-  addScore([0, 100, 50, 20][r.size]); sfx.boom(r.size); burst(r.x, r.y, 6 + r.size * 3, 70 + r.size * 20);
+  addScore([0, 100, 50, 20][r.size]); sfx.boom(r.size); burst(r.x, r.y, 8 + r.size * 5, 80 + r.size * 25, rockColor());
+  shake = Math.max(shake, [0, 2, 5, 9][r.size]); if (r.size >= 2) ring(r.x, r.y, 30 + r.size * 22, rockColor());
   if (r.size > 1) for (let k = 0; k < 2; k++) { const c = makeRock(r.x, r.y, r.size - 1); rocks.push(c); }
 }
 function spawnUfo() {
@@ -300,7 +303,7 @@ function update(dt) {
     ship.thrusting = !!keys.ArrowUp;
     if (ship.thrusting) { ship.vx += Math.cos(ship.a) * 260 * dt; ship.vy += Math.sin(ship.a) * 260 * dt;
       particles.push({ x: ship.x - Math.cos(ship.a) * 10, y: ship.y - Math.sin(ship.a) * 10,
-        vx: -Math.cos(ship.a) * 90 + rand(-25, 25), vy: -Math.sin(ship.a) * 90 + rand(-25, 25), life: 0.3, color: '#fff' }); }
+        vx: -Math.cos(ship.a) * 90 + rand(-25, 25), vy: -Math.sin(ship.a) * 90 + rand(-25, 25), life: 0.3, color: '#fa4' }); }
     const drag = Math.pow(0.6, dt); ship.vx *= drag; ship.vy *= drag; // gentle friction
     const sp = Math.hypot(ship.vx, ship.vy); if (sp > 420) { ship.vx *= 420 / sp; ship.vy *= 420 / sp; }
     ship.x += ship.vx * dt; ship.y += ship.vy * dt; wrap(ship);
@@ -336,7 +339,7 @@ function update(dt) {
   // collisions: bullets vs rocks / ufo
   for (let i = bullets.length - 1; i >= 0; i--) { const b = bullets[i]; let hit = false;
     for (let j = rocks.length - 1; j >= 0; j--) if (wdist(b, rocks[j]) < rocks[j].r) { breakRock(j); hit = true; break; }
-    if (!hit && ufo && wdist(b, ufo) < ufo.r + 3) { addScore(ufo.small ? 1000 : 200); sfx.ufoBoom(); say('alien_impossible', 'Impossible...', 2); burst(ufo.x, ufo.y, 18, 130); ufo = null; hit = true; }
+    if (!hit && ufo && wdist(b, ufo) < ufo.r + 3) { addScore(ufo.small ? 1000 : 200); sfx.ufoBoom(); say('alien_impossible', 'Impossible...', 2); burst(ufo.x, ufo.y, 30, 170, '#f4a'); burst(ufo.x, ufo.y, 12, 110, '#ff6'); shake = Math.max(shake, 10); ring(ufo.x, ufo.y, 100, '#f4a'); ufo = null; hit = true; }
     if (hit) bullets.splice(i, 1); }
   // ufo bullets / ufo vs rocks
   if (ufo) for (let j = rocks.length - 1; j >= 0; j--) if (wdist(ufo, rocks[j]) < rocks[j].r + ufo.r) { breakRock(j); burst(ufo.x, ufo.y, 18, 130); ufo = null; break; }
@@ -381,45 +384,96 @@ function drawShip(x, y, a, thrust) {
 }
 function text(s, x, y, size, align = 'center') { ctx.font = `${size}px "Courier New", monospace`; ctx.textAlign = align; ctx.fillText(s, x, y); }
 
-function render() {
-  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = ctx.fillStyle = '#fff'; ctx.lineWidth = 1.8; ctx.lineJoin = 'round';
-  if (state !== 'story') { // HUD
-    text(String(score).padStart(2, '0'), 120, 46, 36, 'right');
-    text(String(hi).padStart(2, '0'), W / 2, 30, 18);
-    for (let i = 0; i < Math.min(lives, 10); i++) drawShip(100 - i * 26 + 26, 76, -Math.PI / 2, false);
-  }
+// ---------- Visual FX ----------
+// Neon glow, parallax stars, shockwave rings, screen shake and CRT scanlines. Press C to toggle the effects.
+let fx = true, shake = 0, flash = 0;
+const rings = [];
+function ring(x, y, max, color) { rings.push({ x, y, r: 4, max, color, life: 1 }); }
+const stars = Array.from({ length: 150 }, () => ({ x: Math.random() * W, y: Math.random() * H, z: 0.2 + Math.random() * 0.8, tw: Math.random() * TAU }));
+function starsTick(dt) {
+  const vx = state === 'play' && ship.alive ? ship.vx : 0, vy = state === 'play' && ship.alive ? ship.vy : 0;
+  for (const s of stars) { s.x = (s.x - vx * s.z * 0.12 * dt - s.z * 6 * dt + W) % W; s.y = (s.y - vy * s.z * 0.12 * dt + H) % H; s.tw += dt * (1 + s.z * 2); }
+  for (let i = rings.length - 1; i >= 0; i--) { const g = rings[i]; g.r += (g.max - g.r) * Math.min(1, dt * 5) + dt * 30; g.life -= dt * 1.6; if (g.life <= 0) rings.splice(i, 1); }
+  shake = Math.max(0, shake - 45 * dt); flash = Math.max(0, flash - dt * 1.8);
+}
+// pre-rendered scanlines + vignette
+const crt = document.createElement('canvas'); crt.width = W; crt.height = H;
+(() => {
+  const c = crt.getContext('2d');
+  c.fillStyle = 'rgba(0,0,0,0.22)'; for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+  const g = c.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 0.9);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.6)'); c.fillStyle = g; c.fillRect(0, 0, W, H);
+})();
+function neon(color, blur) { ctx.strokeStyle = ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = fx ? blur : 0; }
+const rockColor = () => `hsl(${(wave * 47 + 190) % 360},100%,66%)`; // each wave gets its own hue
 
-  for (const r of rocks) ghosted(r, r.r * 1.2, () => { ctx.rotate(r.a); poly(r.pts.map(([a, d]) => [Math.cos(a) * d, Math.sin(a) * d])); });
-  for (const b of bullets) ghosted(b, 4, () => ctx.fillRect(-1.5, -1.5, 3, 3));
-  ctx.fillStyle = '#fff';
-  for (const b of ufoBullets) ghosted(b, 4, () => ctx.fillRect(-1.5, -1.5, 3, 3));
-  if (ufo) ghosted(ufo, 30, () => { const s = ufo.small ? 0.55 : 1;
-    ctx.scale(s, s);
-    poly([[-18, 4], [-8, 12], [8, 12], [18, 4]]); poly([[-18, 4], [-8, -4], [8, -4], [18, 4]]);
-    poly([[-8, -4], [-5, -12], [5, -12], [8, -4]]); });
-  if (ship.alive && (ship.inv <= 0 || Math.floor(ship.inv * 10) % 2 === 0)) ghosted(ship, 30, () => { ctx.rotate(ship.a); poly(shipPath());
-    if (ship.thrusting && Math.random() < 0.7) poly([[-8, -5], [-18 - Math.random() * 8, 0], [-8, 5]], false); });
-  for (const d of debris) { ctx.globalAlpha = Math.min(1, d.life);
-    ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.a); ctx.beginPath(); ctx.moveTo(-d.len / 2, 0); ctx.lineTo(d.len / 2, 0); ctx.stroke(); ctx.restore(); }
-  for (const p of particles) { ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 2)); ctx.fillRect(p.x, p.y, 2, 2); }
+function render() {
+  const t = performance.now() / 1000, rc = rockColor();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+  ctx.fillStyle = fx ? '#03040d' : '#000'; ctx.fillRect(0, 0, W, H);
+  if (fx) for (const s of stars) { ctx.globalAlpha = (0.35 + 0.35 * Math.sin(s.tw)) * s.z; ctx.fillStyle = '#cfe'; ctx.fillRect(s.x, s.y, s.z * 2, s.z * 2); }
   ctx.globalAlpha = 1;
 
-  ctx.fillStyle = '#fff';
+  ctx.save();
+  if (fx && shake > 0.3) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+  ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (state !== 'story') { // HUD
+    neon('#9ef', 10);
+    text(String(score).padStart(2, '0'), 120, 46, 36, 'right');
+    neon('#fc6', 8); text(String(hi).padStart(2, '0'), W / 2, 30, 18);
+    neon('#bff', 10); for (let i = 0; i < Math.min(lives, 10); i++) drawShip(100 - i * 26 + 26, 76, -Math.PI / 2, false);
+  }
+  neon(rc, 12);
+  for (const r of rocks) ghosted(r, r.r * 1.2, () => { ctx.rotate(r.a); poly(r.pts.map(([a, d]) => [Math.cos(a) * d, Math.sin(a) * d])); });
+  neon('#ff7', 14);
+  for (const b of bullets) ghosted(b, 12, () => { ctx.fillRect(-2, -2, 4, 4); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-b.vx * 0.025, -b.vy * 0.025); ctx.stroke(); });
+  neon('#f55', 12);
+  for (const b of ufoBullets) ghosted(b, 8, () => ctx.fillRect(-2, -2, 4, 4));
+  if (ufo) ghosted(ufo, 30, () => { const s = ufo.small ? 0.55 : 1; ctx.scale(s, s);
+    neon('#f4a', 16);
+    poly([[-18, 4], [-8, 12], [8, 12], [18, 4]]); poly([[-18, 4], [-8, -4], [8, -4], [18, 4]]);
+    poly([[-8, -4], [-5, -12], [5, -12], [8, -4]]);
+    for (let k = -1; k <= 1; k++) { ctx.fillStyle = (Math.floor(t * 6) + k) % 2 ? '#ff6' : '#f4a'; ctx.fillRect(k * 9 - 1.5, 5, 3, 3); } });
+  if (ship.alive && (ship.inv <= 0 || Math.floor(ship.inv * 10) % 2 === 0)) ghosted(ship, 30, () => {
+    ctx.rotate(ship.a); neon('#bff', 16); poly(shipPath());
+    if (ship.thrusting && Math.random() < 0.8) { neon('#fa3', 18); poly([[-8, -5], [-18 - Math.random() * 10, 0], [-8, 5]], false); } });
+  if (ship.alive && ship.inv > 0) { neon('#6cf', 14); ctx.globalAlpha = Math.min(1, ship.inv) * 0.6;
+    ghosted(ship, 30, () => { ctx.beginPath(); ctx.arc(0, 0, 22, 0, TAU); ctx.stroke(); }); ctx.globalAlpha = 1; }
+  neon('#bff', 8);
+  for (const d of debris) { ctx.globalAlpha = Math.min(1, d.life);
+    ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.a); ctx.beginPath(); ctx.moveTo(-d.len / 2, 0); ctx.lineTo(d.len / 2, 0); ctx.stroke(); ctx.restore(); }
+  for (const g of rings) { ctx.globalAlpha = Math.max(0, g.life) * 0.8; neon(g.color, 14); ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, TAU); ctx.stroke(); }
+  ctx.shadowBlur = 0; ctx.globalCompositeOperation = 'lighter';
+  for (const p of particles) { ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 2)); ctx.fillStyle = p.color; ctx.fillRect(p.x - 1, p.y - 1, 3, 3); }
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // screens and messages (not shaken)
+  const hue = (t * 40) % 360, title = `hsl(${hue},100%,72%)`;
   if (state === 'title') {
-    text('ASTEROIDS', W / 2, H / 2 - 60, 72);
-    text('PRESS ENTER OR SPACE TO START', W / 2, H / 2 + 10, 22);
-    text('← → ROTATE   ↑ THRUST   SPACE FIRE   SHIFT HYPERSPACE', W / 2, H / 2 + 60, 16);
-    text('P PAUSE   M MUTE', W / 2, H / 2 + 86, 16);
+    neon(title, 24); text('ASTEROIDS', W / 2, H / 2 - 60, 76);
+    neon('#fff', 10); text('PRESS ENTER OR SPACE TO START', W / 2, H / 2 + 10, 22);
+    neon('#9ef', 6); text('← → ROTATE   ↑ THRUST   SPACE FIRE   SHIFT HYPERSPACE', W / 2, H / 2 + 60, 16);
+    text('P PAUSE   M MUTE   C CRT EFFECTS', W / 2, H / 2 + 86, 16);
   } else if (state === 'over') {
-    text('GAME OVER', W / 2, H / 2 - 10, 60);
-    text('PRESS ENTER TO PLAY AGAIN', W / 2, H / 2 + 40, 20);
-  } else if (state === 'story') drawStory();
-  else if (state === 'pause') text('PAUSED', W / 2, H / 2, 48);
-  else if (!rocks.length && !ufo && waveDelay > 0) text('WAVE ' + (wave + 1), W / 2, H / 2, 36);
+    neon('#f55', 24); text('GAME OVER', W / 2, H / 2 - 10, 64);
+    neon('#fff', 8); text('PRESS ENTER TO PLAY AGAIN', W / 2, H / 2 + 40, 20);
+  } else if (state === 'story') { neon('#dff', 10); drawStory(); }
+  else if (state === 'pause') { neon('#fff', 14); text('PAUSED', W / 2, H / 2, 48); }
+  else if (!rocks.length && !ufo && waveDelay > 0) { neon(rc, 18); text('WAVE ' + (wave + 1), W / 2, H / 2, 40); }
   if (subT > 0 && state !== 'story') { // voice subtitles
-    ctx.globalAlpha = Math.min(1, subT * 2); ctx.fillStyle = '#9fd';
-    wrapText(subText, W / 2, H - 70, W - 200, 26, 20); ctx.globalAlpha = 1; ctx.fillStyle = '#fff'; }
+    ctx.globalAlpha = Math.min(1, subT * 2); neon('#9fd', 8);
+    wrapText(subText, W / 2, H - 70, W - 200, 26, 20); ctx.globalAlpha = 1; }
+  ctx.shadowBlur = 0; ctx.fillStyle = '#fff';
+
+  if (fx) {
+    if (flash > 0) { ctx.globalAlpha = flash * 0.5; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    const band = ((t * 70) % (H + 240)) - 120; // slow rolling scan band
+    const g = ctx.createLinearGradient(0, band - 60, 0, band + 60);
+    g.addColorStop(0, 'rgba(160,220,255,0)'); g.addColorStop(0.5, 'rgba(160,220,255,0.035)'); g.addColorStop(1, 'rgba(160,220,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, band - 60, W, 120);
+    ctx.drawImage(crt, 0, 0);
+  }
 }
 
 // ---------- Loop ----------
@@ -435,7 +489,7 @@ function frame(t) {
     if (state !== 'pause') { loopSet('thrust', false); loopSet('ufo_loop', false); }
   }
   if (subT > 0 && subT < 50) subT -= dt;
-  musicSet(musicPick()); musicTick(dt);
+  musicSet(musicPick()); musicTick(dt); starsTick(dt);
   render(); requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
