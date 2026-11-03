@@ -17,3 +17,8 @@ extra_life, alarm, coin, game_over, shield, radio, space_ambience  (all `.mp3`)
 - Alien saucer: alien_world_ends, alien_we_see_you, alien_earth_ours, alien_impossible
 
 All voice lines are now used in the game.
+
+## `music/` (ElevenLabs Music, instrumental)
+title (story intro), wave_early (waves 1-3), gameplay (waves 4-5), boss (wave 6+), between_waves (while the field is clear),
+gameover (stinger), victory (stinger on a new high score). Flow: "Asteroids – Music".
+Music crossfades between tracks and ducks under voice lines. Regenerate any track in ElevenLabs and replace the file.

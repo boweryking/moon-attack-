@@ -126,18 +126,48 @@ function drawStory() {
   ctx.globalAlpha = 1; text('SPACE / ENTER TO SKIP', W / 2, H - 40, 14);
 }
 function gameOverSeq() {
-  state = 'over'; sfx.gameOver(); say('ann_game_over', 'Game over. The field claims another.', 3);
+  state = 'over'; playClip('m_gameover', 0.7) || sfx.gameOver(); say('ann_game_over', 'Game over. The field claims another.', 3);
   const newHigh = score > 0 && score > startHi;
   setTimeout(() => { if (state !== 'over') return;
-    if (newHigh) say('ann_high_score', 'New high score!', 2);
+    if (newHigh) { playClip('m_victory', 0.7); say('ann_high_score', 'New high score!', 2); }
     else say('ctrl_all_lost', 'CONTROL: All ships lost. Control signing off. Goodbye, pilot.', 2); }, 3200);
   setTimeout(() => { if (state === 'over') say('ann_insert_coin', 'Insert coin.', 1); }, 11000);
+}
+
+// ---------- Music (ElevenLabs) — crossfades by wave, ducks under voices ----------
+for (const n of ['title', 'wave_early', 'gameplay', 'between_waves', 'boss', 'gameover', 'victory']) {
+  const a = new Audio(`audio/music/${n}.mp3`); a.preload = 'auto';
+  a.addEventListener('canplaythrough', () => a._ok = true); a.addEventListener('error', () => a._bad = true);
+  clips['m_' + n] = a;
+}
+let musicCur = null; const musicEls = {};
+function musicPick() {
+  if (state === 'story') return 'title';
+  if (state === 'play' || state === 'pause') {
+    if (!rocks.length && !ufo) return 'between_waves';
+    return wave >= 6 ? 'boss' : wave >= 4 ? 'gameplay' : 'wave_early';
+  }
+  return null;
+}
+function musicSet(name) {
+  if (name === musicCur) return; musicCur = name;
+  const a = name && clips['m_' + name]; if (!a || !a._ok) return;
+  const e = musicEls[name] || (musicEls[name] = Object.assign(a.cloneNode(), { loop: true, volume: 0 }));
+  if (e.paused) e.play().catch(() => {});
+}
+function musicTick(dt) {
+  const talking = (voice && !voice.paused && !voice.ended) || (state === 'story' && st.clip && !st.clip.ended);
+  for (const [name, e] of Object.entries(musicEls)) {
+    const target = name === musicCur && !muted ? (talking ? 0.12 : 0.32) : 0;
+    e.volume = Math.max(0, Math.min(1, e.volume + Math.max(-dt * 0.5, Math.min(dt * 0.5, target - e.volume))));
+    if (target === 0 && e.volume === 0 && !e.paused) e.pause();
+  }
 }
 
 // Classic two-note heartbeat that speeds up as asteroids dwindle
 let beatT = 0, beatHi = false;
 function heartbeat(dt) {
-  if (state !== 'play' || !ship.alive) return;
+  if (state !== 'play' || !ship.alive || (musicCur && musicEls[musicCur])) return; // recorded music replaces the synth beat
   const total = rocks.length, interval = Math.max(0.28, 1.0 - (wave * 0.02) - Math.max(0, (12 - total)) * 0.04);
   beatT -= dt;
   if (beatT <= 0) { beatT = interval; beatHi = !beatHi; tone(beatHi ? 55 : 49, 0.12, 'triangle', 0.18); }
@@ -405,6 +435,7 @@ function frame(t) {
     if (state !== 'pause') { loopSet('thrust', false); loopSet('ufo_loop', false); }
   }
   if (subT > 0 && subT < 50) subT -= dt;
+  musicSet(musicPick()); musicTick(dt);
   render(); requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
