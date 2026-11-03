@@ -102,7 +102,7 @@ const STORY = [
 ];
 let st = { i: 0, t: 0, phase: 'gap', clip: null };
 function startStory() { state = 'story'; st = { i: 0, t: 0, phase: 'gap', clip: null, min: 0 }; loopSet('space_ambience', true, 0.35); }
-function endStory() { if (st.clip) st.clip.pause(); loopSet('space_ambience', false); newGame(); }
+function endStory() { if (st.clip) st.clip.pause(); loopSet('space_ambience', false); fromRestart = false; newGame(); }
 function updateStory(dt) {
   st.t += dt;
   if (st.phase === 'gap') {
@@ -131,6 +131,7 @@ function gameOverSeq() {
   setTimeout(() => { if (state !== 'over') return;
     if (newHigh) say('ann_high_score', 'New high score!', 2);
     else say('ctrl_all_lost', 'CONTROL: All ships lost. Control signing off. Goodbye, pilot.', 2); }, 3200);
+  setTimeout(() => { if (state === 'over') say('ann_insert_coin', 'Insert coin.', 1); }, 11000);
 }
 
 // Classic two-note heartbeat that speeds up as asteroids dwindle
@@ -156,7 +157,7 @@ function onPress(code) {
   if (code === 'KeyP' && (state === 'play' || state === 'pause')) state = state === 'play' ? 'pause' : 'play';
   if (code === 'Enter' || code === 'Space') {
     if (state === 'title') { sfx.coin(); startStory(); }
-    else if (state === 'over') { sfx.coin(); newGame(); }
+    else if (state === 'over') { sfx.coin(); fromRestart = true; newGame(); }
     else if (state === 'story') endStory();
   }
   if (state === 'play' && ship.alive) {
@@ -177,7 +178,7 @@ function wdist(a, b) { // shortest wrapped distance
 // ---------- Game state ----------
 let state = 'title', score = 0, lives = 3, wave = 0, hi = +(localStorage.getItem('asteroids-hi') || 0);
 let nextExtra = 10000, ship, rocks = [], bullets = [], ufoBullets = [], ufo = null, ufoTimer = 0, particles = [], debris = [];
-let waveDelay = 0, respawnT = 0, startHi = 0, ufoSeen = 0;
+let waveDelay = 0, respawnT = 0, startHi = 0, ufoSeen = 0, fromRestart = false;
 
 function makeShip() {
   return { x: W / 2, y: H / 2, vx: 0, vy: 0, a: -Math.PI / 2, alive: true, inv: 3, cool: 0, thrusting: false, r: 12 };
@@ -190,7 +191,10 @@ function newGame() {
 }
 function startWave() {
   wave++; const n = Math.min(4 + (wave - 1) * 2, 14);
-  if (wave === 1) say('ctrl_contact', 'CONTROL: Swarm contact in sixty seconds. Good hunting, pilot.', 1);
+  if (wave === 1) {
+    if (fromRestart) say('ann_title', 'Asteroids. Survive the field.', 1);
+    else say('ctrl_contact', 'CONTROL: Swarm contact in sixty seconds. Good hunting, pilot.', 1);
+    fromRestart = false; }
   else { sfx.alarm();
     if (wave === 5 || wave === 8) say('ann_accelerating', 'Warning. The swarm is accelerating.', 1);
     else if (wave % 2 === 0) say('ann_incoming', 'Incoming. Brace yourself.', 1); }
@@ -225,7 +229,9 @@ function burst(x, y, n, speed, color = '#fff') {
 }
 function addScore(p) {
   score += p;
-  if (score >= nextExtra) { nextExtra += 10000; lives++; sfx.extra(); say('ctrl_extra_ship', 'CONTROL: Extra ship authorized. Earth thanks you.', 2); }
+  if (score >= nextExtra) { nextExtra += 10000; lives++; sfx.extra();
+    if (Math.random() < 0.5) say('ctrl_extra_ship', 'CONTROL: Extra ship authorized. Earth thanks you.', 2);
+    else say('ann_extra_life', 'Extra life. Well played, pilot.', 2); }
   if (score > hi) { hi = score; try { localStorage.setItem('asteroids-hi', hi); } catch (e) {} }
 }
 function killShip() {

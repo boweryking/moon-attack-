@@ -16,4 +16,4 @@ extra_life, alarm, coin, game_over, shield, radio, space_ambience  (all `.mp3`)
 - Announcer: ann_title, ann_incoming, ann_extra_life, ann_game_over, ann_insert_coin, ann_high_score, ann_hyperspace, ann_accelerating, ann_pilot_down
 - Alien saucer: alien_world_ends, alien_we_see_you, alien_earth_ours, alien_impossible
 
-Not used yet: `ann_title`, `ann_extra_life`, `ann_insert_coin`.
+All voice lines are now used in the game.
