@@ -37,7 +37,7 @@ function noise(dur, vol = 0.15, freq = 800) {
   s.buffer = buf; f.type = 'lowpass'; f.frequency.value = freq; g.gain.value = vol;
   s.connect(f).connect(g).connect(a.destination); s.start();
 }
-const sfx = {
+const synth = {
   fire: () => tone(880, 0.12, 'square', 0.06, -600),
   ufoFire: () => tone(500, 0.15, 'sawtooth', 0.05, -300),
   boom: size => noise(size === 3 ? 0.5 : size === 2 ? 0.3 : 0.18, 0.2, size === 3 ? 400 : size === 2 ? 800 : 1500),
@@ -46,6 +46,93 @@ const sfx = {
   extra: () => { tone(660, 0.1); setTimeout(() => tone(990, 0.2), 100); },
   hyper: () => tone(200, 0.3, 'sine', 0.1, 800),
 };
+// ---------- Recorded audio (ElevenLabs) with synth fallback ----------
+// Files live in ./audio/sfx and ./audio/voice. Anything missing quietly falls back to the synth.
+const SFX_FILES = ['laser','thrust','boom_large','boom_medium','boom_small','ship_boom','ufo_loop','ufo_fire','ufo_boom',
+  'hyperspace','extra_life','alarm','coin','game_over','shield','radio','space_ambience'];
+const VOICE_FILES = ['story1','story2','story3','story4','ctrl_contact','ctrl_ship_lost','ctrl_last_ship','ctrl_cleared',
+  'ctrl_unidentified','ctrl_extra_ship','ctrl_all_lost','ann_title','ann_incoming','ann_extra_life','ann_game_over',
+  'ann_insert_coin','ann_high_score','ann_hyperspace','ann_accelerating','ann_pilot_down',
+  'alien_world_ends','alien_we_see_you','alien_earth_ours','alien_impossible'];
+const clips = {};
+for (const [dir, list] of [['sfx', SFX_FILES], ['voice', VOICE_FILES]]) for (const n of list) {
+  const a = new Audio(`audio/${dir}/${n}.mp3`); a.preload = 'auto';
+  a.addEventListener('canplaythrough', () => a._ok = true); a.addEventListener('error', () => a._bad = true);
+  clips[n] = a;
+}
+function playClip(name, vol = 1) {
+  const a = clips[name]; if (!a || !a._ok || muted) return false;
+  const c = a.cloneNode(); c.volume = vol; c.play().catch(() => {}); return c;
+}
+const loops = {};
+function loopSet(name, on, vol = 0.5) {
+  const a = clips[name];
+  if (!a || !a._ok) { if (name === 'thrust' && on && Math.random() < 0.5) synth.thrust(); return; }
+  let l = loops[name]; if (!l) { l = loops[name] = a.cloneNode(); l.loop = true; l.volume = vol; }
+  if (on && !muted) { if (l.paused) l.play().catch(() => {}); } else if (!l.paused) l.pause();
+}
+const sfx = {
+  fire: () => playClip('laser', 0.45) || synth.fire(),
+  ufoFire: () => playClip('ufo_fire', 0.6) || synth.ufoFire(),
+  boom: s => playClip(s === 3 ? 'boom_large' : s === 2 ? 'boom_medium' : 'boom_small', 0.8) || synth.boom(s),
+  ufoBoom: () => playClip('ufo_boom', 0.8) || synth.boom(2),
+  shipBoom: () => playClip('ship_boom', 1) || synth.shipBoom(),
+  extra: () => playClip('extra_life', 0.8) || synth.extra(),
+  hyper: () => playClip('hyperspace', 0.7) || synth.hyper(),
+  alarm: () => playClip('alarm', 0.5),
+  shield: () => playClip('shield', 0.5),
+  coin: () => playClip('coin', 0.8),
+  gameOver: () => playClip('game_over', 0.8),
+};
+// Voice channel: one voice at a time; a new line only interrupts a lower-priority one. Always shows a subtitle.
+let voice = null, voicePri = 0, subText = '', subT = 0;
+function say(name, text, pri = 1) {
+  if (voice && !voice.ended && !voice.paused && pri <= voicePri) return;
+  if (voice) voice.pause();
+  if (name.startsWith('ctrl_')) playClip('radio', 0.3);
+  const c = playClip(name, 1); voice = c || null; voicePri = pri; subText = text;
+  if (c) { subT = 60; c.onended = () => { if (voice === c) subT = 0.8; }; } else subT = 2 + text.length * 0.05;
+}
+// Opening story, spoken over deep-space ambience. Plays on its own timer if the voice files aren't there.
+const STORY = [
+  ['story1', 'The year is 2184. Beyond the orbit of Neptune, our deepest telescopes found something... moving in the dark.'],
+  ['story2', 'A swarm. Ten thousand asteroids, tumbling out of the void... and every single one of them aimed at Earth.'],
+  ['story3', 'There was no time to evacuate. No time to build a better defense. There was only one ship left in range. Yours.'],
+  ['story4', 'Command has given you a name: the Last Line. Hold the field. Break the rock. Let nothing through. Earth is counting on you, pilot. Launch.'],
+];
+let st = { i: 0, t: 0, phase: 'gap', clip: null };
+function startStory() { state = 'story'; st = { i: 0, t: 0, phase: 'gap', clip: null, min: 0 }; loopSet('space_ambience', true, 0.35); }
+function endStory() { if (st.clip) st.clip.pause(); loopSet('space_ambience', false); newGame(); }
+function updateStory(dt) {
+  st.t += dt;
+  if (st.phase === 'gap') {
+    if (st.t > 1.0) { st.clip = playClip(STORY[st.i][0], 1); st.phase = 'speak'; st.t = 0; st.min = STORY[st.i][1].length * 0.065 + 1.5; }
+  } else {
+    const over = st.clip ? (st.clip.ended || st.t > 25) : st.t > st.min;
+    if (over && st.t > 1.5) { st.i++; st.t = 0; st.phase = 'gap'; if (st.i >= STORY.length) endStory(); }
+  }
+}
+function wrapText(str, x, y, maxW, lh, size) {
+  ctx.font = `${size}px "Courier New", monospace`; ctx.textAlign = 'center';
+  let line = '', row = 0; const lines = [];
+  for (const w of str.split(' ')) { const t = line ? line + ' ' + w : w;
+    if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; }
+  lines.push(line); lines.forEach((l, i) => ctx.fillText(l, x, y + i * lh));
+}
+function drawStory() {
+  const entry = STORY[Math.min(st.i, STORY.length - 1)];
+  ctx.globalAlpha = st.phase === 'speak' ? Math.min(1, st.t / 0.8) : Math.max(0, 1 - st.t / 0.4);
+  wrapText(entry[1], W / 2, H / 2 - 40, W - 220, 36, 26);
+  ctx.globalAlpha = 1; text('SPACE / ENTER TO SKIP', W / 2, H - 40, 14);
+}
+function gameOverSeq() {
+  state = 'over'; sfx.gameOver(); say('ann_game_over', 'Game over. The field claims another.', 3);
+  const newHigh = score > 0 && score > startHi;
+  setTimeout(() => { if (state !== 'over') return;
+    if (newHigh) say('ann_high_score', 'New high score!', 2);
+    else say('ctrl_all_lost', 'CONTROL: All ships lost. Control signing off. Goodbye, pilot.', 2); }, 3200);
+}
+
 // Classic two-note heartbeat that speeds up as asteroids dwindle
 let beatT = 0, beatHi = false;
 function heartbeat(dt) {
@@ -67,7 +154,11 @@ function onPress(code) {
   audio();
   if (code === 'KeyM') muted = !muted;
   if (code === 'KeyP' && (state === 'play' || state === 'pause')) state = state === 'play' ? 'pause' : 'play';
-  if ((code === 'Enter' || code === 'Space') && (state === 'title' || state === 'over')) newGame();
+  if (code === 'Enter' || code === 'Space') {
+    if (state === 'title') { sfx.coin(); startStory(); }
+    else if (state === 'over') { sfx.coin(); newGame(); }
+    else if (state === 'story') endStory();
+  }
   if (state === 'play' && ship.alive) {
     if (code === 'Space') fire();
     if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyH') hyperspace();
@@ -86,7 +177,7 @@ function wdist(a, b) { // shortest wrapped distance
 // ---------- Game state ----------
 let state = 'title', score = 0, lives = 3, wave = 0, hi = +(localStorage.getItem('asteroids-hi') || 0);
 let nextExtra = 10000, ship, rocks = [], bullets = [], ufoBullets = [], ufo = null, ufoTimer = 0, particles = [], debris = [];
-let waveDelay = 0, respawnT = 0;
+let waveDelay = 0, respawnT = 0, startHi = 0, ufoSeen = 0;
 
 function makeShip() {
   return { x: W / 2, y: H / 2, vx: 0, vy: 0, a: -Math.PI / 2, alive: true, inv: 3, cool: 0, thrusting: false, r: 12 };
@@ -94,10 +185,15 @@ function makeShip() {
 function newGame() {
   score = 0; lives = 3; wave = 0; nextExtra = 10000;
   rocks = []; bullets = []; ufoBullets = []; ufo = null; particles = []; debris = [];
+  startHi = hi; ufoSeen = 0; waveDelay = 0; voice = null; subT = 0;
   ship = makeShip(); state = 'play'; startWave();
 }
 function startWave() {
   wave++; const n = Math.min(4 + (wave - 1) * 2, 14);
+  if (wave === 1) say('ctrl_contact', 'CONTROL: Swarm contact in sixty seconds. Good hunting, pilot.', 1);
+  else { sfx.alarm();
+    if (wave === 5 || wave === 8) say('ann_accelerating', 'Warning. The swarm is accelerating.', 1);
+    else if (wave % 2 === 0) say('ann_incoming', 'Incoming. Brace yourself.', 1); }
   for (let i = 0; i < n; i++) {
     let x, y; do { x = rand(0, W); y = rand(0, H); } while (Math.hypot(x - W / 2, y - H / 2) < 180);
     rocks.push(makeRock(x, y, 3));
@@ -119,7 +215,7 @@ function fire() {
   sfx.fire();
 }
 function hyperspace() {
-  sfx.hyper(); burst(ship.x, ship.y, 10, 120, '#fff');
+  sfx.hyper(); say('ann_hyperspace', 'Hyperspace engaged.', 1); burst(ship.x, ship.y, 10, 120, '#fff');
   ship.x = rand(40, W - 40); ship.y = rand(40, H - 40); ship.vx = ship.vy = 0; ship.inv = 0.5;
   if (Math.random() < 0.15) killShip(); // classic risk
 }
@@ -129,7 +225,7 @@ function burst(x, y, n, speed, color = '#fff') {
 }
 function addScore(p) {
   score += p;
-  if (score >= nextExtra) { nextExtra += 10000; lives++; sfx.extra(); }
+  if (score >= nextExtra) { nextExtra += 10000; lives++; sfx.extra(); say('ctrl_extra_ship', 'CONTROL: Extra ship authorized. Earth thanks you.', 2); }
   if (score > hi) { hi = score; try { localStorage.setItem('asteroids-hi', hi); } catch (e) {} }
 }
 function killShip() {
@@ -139,6 +235,9 @@ function killShip() {
     debris.push({ x: ship.x, y: ship.y, vx: Math.cos(d) * rand(20, 80) + ship.vx * 0.3, vy: Math.sin(d) * rand(20, 80) + ship.vy * 0.3,
       a: d, spin: rand(-6, 6), len: rand(8, 14), life: 2.2 }); }
   lives--; respawnT = 2.2;
+  if (lives === 0) say('ann_pilot_down', 'Pilot down.', 2);
+  else if (lives === 1) say('ctrl_last_ship', "CONTROL: Last ship. Pilot, you're all we have left.", 2);
+  else say('ctrl_ship_lost', 'CONTROL: Ship destroyed! Deploying your backup. Stay sharp out there.', 2);
 }
 function breakRock(i) {
   const r = rocks[i]; rocks.splice(i, 1);
@@ -149,6 +248,11 @@ function spawnUfo() {
   const small = score > 3000 && Math.random() < Math.min(0.9, 0.3 + score / 40000);
   const left = Math.random() < 0.5;
   ufo = { x: left ? -20 : W + 20, y: rand(60, H - 60), vx: (left ? 1 : -1) * (small ? 130 : 90), vy: 0, small, r: small ? 10 : 18, shoot: 1, turn: 1 };
+  if (ufoSeen++ === 0) say('ctrl_unidentified', 'CONTROL: Unidentified craft on radar. It is not ours. Repeat, not ours.', 2);
+  else if (Math.random() < 0.7) {
+    const [clip, line] = pick([['alien_world_ends', 'Your world ends today, little pilot.'], ['alien_we_see_you', 'We see you.'],
+      ['alien_earth_ours', 'Earth will be ours.']]);
+    say(clip, line, 2); }
 }
 
 // ---------- Update ----------
@@ -159,7 +263,6 @@ function update(dt) {
     if (keys.ArrowRight) ship.a += 4.2 * dt;
     ship.thrusting = !!keys.ArrowUp;
     if (ship.thrusting) { ship.vx += Math.cos(ship.a) * 260 * dt; ship.vy += Math.sin(ship.a) * 260 * dt;
-      if (Math.random() < 0.5) sfx.thrust();
       particles.push({ x: ship.x - Math.cos(ship.a) * 10, y: ship.y - Math.sin(ship.a) * 10,
         vx: -Math.cos(ship.a) * 90 + rand(-25, 25), vy: -Math.sin(ship.a) * 90 + rand(-25, 25), life: 0.3, color: '#fff' }); }
     const drag = Math.pow(0.6, dt); ship.vx *= drag; ship.vy *= drag; // gentle friction
@@ -169,8 +272,8 @@ function update(dt) {
   } else if (respawnT > 0) {
     respawnT -= dt;
     if (respawnT <= 0) {
-      if (lives <= 0) { state = 'over'; }
-      else if (rocks.every(r => wdist(r, { x: W / 2, y: H / 2 }) > 130)) { ship = makeShip(); }
+      if (lives <= 0) gameOverSeq();
+      else if (rocks.every(r => wdist(r, { x: W / 2, y: H / 2 }) > 130)) { ship = makeShip(); sfx.shield(); }
       else respawnT = 0.1; // wait for safe space
     }
   }
@@ -197,7 +300,7 @@ function update(dt) {
   // collisions: bullets vs rocks / ufo
   for (let i = bullets.length - 1; i >= 0; i--) { const b = bullets[i]; let hit = false;
     for (let j = rocks.length - 1; j >= 0; j--) if (wdist(b, rocks[j]) < rocks[j].r) { breakRock(j); hit = true; break; }
-    if (!hit && ufo && wdist(b, ufo) < ufo.r + 3) { addScore(ufo.small ? 1000 : 200); sfx.boom(2); burst(ufo.x, ufo.y, 18, 130); ufo = null; hit = true; }
+    if (!hit && ufo && wdist(b, ufo) < ufo.r + 3) { addScore(ufo.small ? 1000 : 200); sfx.ufoBoom(); say('alien_impossible', 'Impossible...', 2); burst(ufo.x, ufo.y, 18, 130); ufo = null; hit = true; }
     if (hit) bullets.splice(i, 1); }
   // ufo bullets / ufo vs rocks
   if (ufo) for (let j = rocks.length - 1; j >= 0; j--) if (wdist(ufo, rocks[j]) < rocks[j].r + ufo.r) { breakRock(j); burst(ufo.x, ufo.y, 18, 130); ufo = null; break; }
@@ -215,7 +318,11 @@ function update(dt) {
   for (let i = debris.length - 1; i >= 0; i--) { const d = debris[i];
     d.x += d.vx * dt; d.y += d.vy * dt; d.a += d.spin * dt; d.life -= dt; if (d.life <= 0) debris.splice(i, 1); }
   // next wave
-  if (!rocks.length && !ufo) { waveDelay += dt; if (waveDelay > 2) { waveDelay = 0; startWave(); } }
+  if (!rocks.length && !ufo) {
+    if (waveDelay === 0 && ship.alive) say('ctrl_cleared', 'CONTROL: Field cleared. Nice shooting. Stand by for the next contact.', 1);
+    waveDelay += dt; if (waveDelay > 3.5) { waveDelay = 0; startWave(); } }
+  loopSet('thrust', ship.alive && ship.thrusting, 0.4);
+  loopSet('ufo_loop', !!ufo, 0.25);
   heartbeat(dt);
 }
 const pick = a => a[Math.floor(Math.random() * a.length)];
@@ -241,10 +348,11 @@ function text(s, x, y, size, align = 'center') { ctx.font = `${size}px "Courier 
 function render() {
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = ctx.fillStyle = '#fff'; ctx.lineWidth = 1.8; ctx.lineJoin = 'round';
-  // HUD
-  text(String(score).padStart(2, '0'), 120, 46, 36, 'right');
-  text(String(hi).padStart(2, '0'), W / 2, 30, 18);
-  for (let i = 0; i < Math.min(lives, 10); i++) drawShip(100 - i * 26 + 26, 76, -Math.PI / 2, false);
+  if (state !== 'story') { // HUD
+    text(String(score).padStart(2, '0'), 120, 46, 36, 'right');
+    text(String(hi).padStart(2, '0'), W / 2, 30, 18);
+    for (let i = 0; i < Math.min(lives, 10); i++) drawShip(100 - i * 26 + 26, 76, -Math.PI / 2, false);
+  }
 
   for (const r of rocks) ghosted(r, r.r * 1.2, () => { ctx.rotate(r.a); poly(r.pts.map(([a, d]) => [Math.cos(a) * d, Math.sin(a) * d])); });
   for (const b of bullets) ghosted(b, 4, () => ctx.fillRect(-1.5, -1.5, 3, 3));
@@ -270,8 +378,12 @@ function render() {
   } else if (state === 'over') {
     text('GAME OVER', W / 2, H / 2 - 10, 60);
     text('PRESS ENTER TO PLAY AGAIN', W / 2, H / 2 + 40, 20);
-  } else if (state === 'pause') text('PAUSED', W / 2, H / 2, 48);
+  } else if (state === 'story') drawStory();
+  else if (state === 'pause') text('PAUSED', W / 2, H / 2, 48);
   else if (!rocks.length && !ufo && waveDelay > 0) text('WAVE ' + (wave + 1), W / 2, H / 2, 36);
+  if (subT > 0 && state !== 'story') { // voice subtitles
+    ctx.globalAlpha = Math.min(1, subT * 2); ctx.fillStyle = '#9fd';
+    wrapText(subText, W / 2, H - 70, W - 200, 26, 20); ctx.globalAlpha = 1; ctx.fillStyle = '#fff'; }
 }
 
 // ---------- Loop ----------
@@ -281,7 +393,12 @@ let last = performance.now();
 function frame(t) {
   const dt = Math.min(0.05, (t - last) / 1000); last = t;
   if (state === 'play') update(dt);
-  else if (state === 'title' || state === 'over') for (const r of rocks) { r.x += r.vx * dt; r.y += r.vy * dt; r.a += r.spin * dt; wrap(r); }
+  else {
+    if (state === 'title' || state === 'over' || state === 'story') for (const r of rocks) { r.x += r.vx * dt; r.y += r.vy * dt; r.a += r.spin * dt; wrap(r); }
+    if (state === 'story') updateStory(dt);
+    if (state !== 'pause') { loopSet('thrust', false); loopSet('ufo_loop', false); }
+  }
+  if (subT > 0 && subT < 50) subT -= dt;
   render(); requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
