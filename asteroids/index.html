@@ -70,7 +70,11 @@ const W = cv.width, H = cv.height, TAU = Math.PI * 2;
 
 // ---------- Audio (tiny WebAudio synth) ----------
 let actx = null, muted = false;
-function audio() { if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } return actx; }
+function audio() {
+  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (actx && actx.state === 'suspended') actx.resume().catch(() => {});
+  return actx;
+}
 function tone(freq, dur, type = 'square', vol = 0.08, slide = 0) {
   const a = audio(); if (!a || muted) return;
   const o = a.createOscillator(), g = a.createGain();
@@ -106,12 +110,41 @@ const VOICE_FILES = ['story1','story2','story3','story4','ctrl_contact','ctrl_sh
   'ann_insert_coin','ann_high_score','ann_hyperspace','ann_accelerating','ann_pilot_down',
   'alien_world_ends','alien_we_see_you','alien_earth_ours','alien_impossible','ann_shields_up','ann_shields_down','ann_upgrade','ann_grenade',
   'fld_standard','fld_dense','fld_ice','fld_iron','fld_volatile','fld_gravity','fld_mother'];
-const clips = {};
-for (const [dir, list] of [['sfx', SFX_FILES], ['voice', VOICE_FILES]]) for (const n of list) {
-  const a = new Audio(`audio/${dir}/${n}.mp3`); a.preload = 'auto';
-  a.addEventListener('canplaythrough', () => a._ok = true); a.addEventListener('error', () => a._bad = true);
-  clips[n] = a;
+// Clips load through Web Audio (fetch + decode). That works inside locked-down embedded pages and on iPhones, where the plain
+// <audio> element is often blocked. If fetch isn't possible (opening the file straight from disk), it falls back to <audio>.
+class WebClip { // acts like an <audio> element: play, pause, loop, volume, paused, ended, onended, cloneNode
+  constructor(buf) { this.buf = buf; this.paused = true; this.ended = false; this.loop = false; this.onended = null; this._vol = 1; this._src = null; this._g = null; }
+  get volume() { return this._vol; }
+  set volume(v) { this._vol = v; if (this._g) this._g.gain.value = v; }
+  cloneNode() { return new WebClip(this.buf); }
+  play() {
+    const a = audio(); if (!a || !this.buf) return Promise.resolve();
+    this.pause(); const src = a.createBufferSource(), g = a.createGain();
+    src.buffer = this.buf; src.loop = this.loop; g.gain.value = this._vol; src.connect(g).connect(a.destination);
+    src.onended = () => { if (this._src !== src) return; this._src = null; this.paused = true; this.ended = true; if (this.onended) this.onended(); };
+    this._src = src; this._g = g; this.paused = false; this.ended = false; src.start(); return Promise.resolve();
+  }
+  pause() { const s = this._src; this._src = null; if (s) { s.onended = null; try { s.stop(); } catch (e) {} } this.paused = true; }
 }
+const useWeb = typeof fetch === 'function' && location.protocol !== 'file:';
+const clips = {};
+function elClip(url) {
+  const a = new Audio(url); a.preload = 'auto';
+  a.addEventListener('canplaythrough', () => a._ok = true); a.addEventListener('error', () => a._bad = true);
+  return a;
+}
+async function loadWeb(key, slot, url) {
+  try {
+    const r = await fetch(url); if (!r.ok) throw new Error(r.status);
+    const ctx = audio(); if (!ctx) throw new Error('no audio');
+    slot.buf = await ctx.decodeAudioData(await r.arrayBuffer()); slot._ok = true;
+  } catch (e) { clips[key] = elClip(url); }
+}
+function registerClip(key, url) {
+  if (useWeb) { const slot = new WebClip(null); slot._ok = false; clips[key] = slot; loadWeb(key, slot, url); }
+  else clips[key] = elClip(url);
+}
+for (const [dir, list] of [['sfx', SFX_FILES], ['voice', VOICE_FILES]]) for (const n of list) registerClip(n, `audio/${dir}/${n}.mp3`);
 function playClip(name, vol = 1) {
   const a = clips[name]; if (!a || !a._ok || muted) return false;
   const c = a.cloneNode(); c.volume = vol; c.play().catch(() => {}); return c;
@@ -193,9 +226,7 @@ function gameOverSeq() {
 
 // ---------- Music (ElevenLabs) — crossfades by wave, ducks under voices ----------
 for (const n of ['title', 'wave_early', 'gameplay', 'between_waves', 'boss', 'gameover', 'victory']) {
-  const a = new Audio(`audio/music/${n}.mp3`); a.preload = 'auto';
-  a.addEventListener('canplaythrough', () => a._ok = true); a.addEventListener('error', () => a._bad = true);
-  clips['m_' + n] = a;
+  registerClip('m_' + n, `audio/music/${n}.mp3`);
 }
 let musicCur = null; const musicEls = {};
 function musicPick() {
