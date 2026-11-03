@@ -707,7 +707,7 @@ function render() {
   if (state === 'play' && upBanner.t > 0) { ctx.globalAlpha = Math.min(1, upBanner.t); neon('#fd6', 18); text(upBanner.text, W / 2, H / 2 - 20, 30); ctx.globalAlpha = 1; }
   if (subT > 0 && state !== 'story') { // voice subtitles
     ctx.globalAlpha = Math.min(1, subT * 2); neon('#9fd', 8);
-    wrapText(subText, W / 2, touchMode ? 170 : H - 70, W - 200, 26, 20); // on phones, subtitles sit up top, clear of the pads ctx.globalAlpha = 1; }
+    wrapText(subText, W / 2, touchMode ? 170 : H - 70, W - 200, 26, 20); ctx.globalAlpha = 1; }
   ctx.shadowBlur = 0; ctx.fillStyle = '#fff';
   if (touchMode && (state === 'play' || state === 'pause')) drawPads();
 
