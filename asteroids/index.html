@@ -181,6 +181,9 @@ addEventListener('keydown', e => {
   keys[e.code] = true;
 });
 addEventListener('keyup', e => keys[e.code] = false);
+// Click or tap the screen to focus the page (needed when embedded) and to start / restart.
+cv.addEventListener('pointerdown', () => { window.focus(); audio(); if (state === 'title' || state === 'over') onPress('Enter'); });
+cv.tabIndex = 0;
 function onPress(code) {
   audio();
   if (code === 'KeyM') muted = !muted;
@@ -207,7 +210,8 @@ function wdist(a, b) { // shortest wrapped distance
 }
 
 // ---------- Game state ----------
-let state = 'title', score = 0, lives = 3, wave = 0, hi = +(localStorage.getItem('asteroids-hi') || 0);
+let state = 'title', score = 0, lives = 3, wave = 0, hi = 0;
+try { hi = +(localStorage.getItem('asteroids-hi') || 0); } catch (e) {} // storage can be blocked in embedded pages
 let nextExtra = 10000, ship, rocks = [], bullets = [], ufoBullets = [], ufo = null, ufoTimer = 0, particles = [], debris = [];
 let waveDelay = 0, respawnT = 0, startHi = 0, ufoSeen = 0, fromRestart = false;
 
