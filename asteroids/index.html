@@ -140,19 +140,38 @@ async function loadWeb(key, slot, url) {
     slot.buf = await ctx.decodeAudioData(await r.arrayBuffer()); slot._ok = true;
   } catch (e) { clips[key] = elClip(url); }
 }
+// Loading is lazy and throttled so the game never stalls: a few files at a time (one on phones), with a short breather between.
+// Anything not loaded yet loads the first time it is needed (ensure), and the sound effects fall back to the synth until then.
+const lite = matchMedia('(pointer: coarse)').matches; // phones and tablets get lighter loading
+const loadQ = []; let loading = 0;
+function pump() {
+  while (loading < (lite ? 1 : 2) && loadQ.length) {
+    const k = loadQ.shift(), sl = clips[k]; if (!(sl instanceof WebClip) || sl._ok || sl._started) continue;
+    sl._started = true; loading++;
+    loadWeb(k, sl, sl._url).finally(() => { loading--; setTimeout(pump, lite ? 120 : 20); });
+  }
+}
+function ensure(key) { const sl = clips[key]; if (sl instanceof WebClip && !sl._ok && !sl._started) { loadQ.unshift(key); pump(); } }
 function registerClip(key, url) {
-  if (useWeb) { const slot = new WebClip(null); slot._ok = false; clips[key] = slot; loadWeb(key, slot, url); }
+  if (useWeb) { const sl = new WebClip(null); sl._ok = false; sl._started = false; sl._url = url; clips[key] = sl; }
   else clips[key] = elClip(url);
+}
+const PRIORITY = ['story1', 'laser', 'boom_small', 'boom_medium', 'boom_large', 'coin', 'thrust', 'story2', 'story3', 'story4', 'm_title',
+  'ctrl_contact', 'ship_boom', 'radio', 'alarm', 'shield', 'shield_loop', 'shield_hit', 'shield_break', 'hull_hit', 'upgrade', 'fld_standard', 'm_wave_early'];
+function startPrefetch() { // desktop: load everything in the background. phone: just the essentials, the rest on demand.
+  const keys = lite ? PRIORITY : [...PRIORITY, ...Object.keys(clips).filter(k => !PRIORITY.includes(k))];
+  for (const k of keys) if (clips[k] instanceof WebClip) loadQ.push(k);
+  pump();
 }
 for (const [dir, list] of [['sfx', SFX_FILES], ['voice', VOICE_FILES]]) for (const n of list) registerClip(n, `audio/${dir}/${n}.mp3`);
 function playClip(name, vol = 1) {
-  const a = clips[name]; if (!a || !a._ok || muted) return false;
+  const a = clips[name]; if (!a) return false; if (!a._ok) { ensure(name); return false; } if (muted) return false;
   const c = a.cloneNode(); c.volume = vol; c.play().catch(() => {}); return c;
 }
 const loops = {};
 function loopSet(name, on, vol = 0.5) {
   const a = clips[name];
-  if (!a || !a._ok) { if (name === 'thrust' && on && Math.random() < 0.5) synth.thrust(); return; }
+  if (!a || !a._ok) { if (a && on) ensure(name); if (name === 'thrust' && on && Math.random() < 0.5) synth.thrust(); return; }
   let l = loops[name]; if (!l) { l = loops[name] = a.cloneNode(); l.loop = true; l.volume = vol; }
   if (on && !muted) { if (l.paused) l.play().catch(() => {}); } else if (!l.paused) l.pause();
 }
@@ -228,6 +247,7 @@ function gameOverSeq() {
 for (const n of ['title', 'wave_early', 'gameplay', 'between_waves', 'boss', 'gameover', 'victory']) {
   registerClip('m_' + n, `audio/music/${n}.mp3`);
 }
+startPrefetch();
 let musicCur = null; const musicEls = {};
 function musicPick() {
   if (state === 'story') return 'title';
@@ -238,8 +258,9 @@ function musicPick() {
   return null;
 }
 function musicSet(name) {
-  if (name === musicCur) return; musicCur = name;
-  const a = name && clips['m_' + name]; if (!a || !a._ok) return;
+  musicCur = name; if (!name || (musicEls[name] && !musicEls[name].paused)) return;
+  const a = clips['m_' + name]; if (!a) return;
+  if (!a._ok) { ensure('m_' + name); return; } // not loaded yet: it starts as soon as it is (retried every frame)
   const e = musicEls[name] || (musicEls[name] = Object.assign(a.cloneNode(), { loop: true, volume: 0 }));
   if (e.paused) e.play().catch(() => {});
 }
@@ -396,6 +417,8 @@ function startWave() {
     rocks.push(makeRock(x, y, field === 'dense' && Math.random() < 0.7 ? 2 : 3));
   }
   ufoTimer = rand(12, 20);
+  ensure('fld_' + fieldFor(wave + 1)); ensure('m_between_waves'); ensure('ann_upgrade'); // warm up what is coming next
+  if (wave >= 2) ensure('m_gameplay'); if (wave >= 4) ensure('m_boss');
 }
 function makeRock(x, y, size, kind = field) {
   const R = [0, 14, 28, 50, 90][size], pts = [], n = size === 4 ? 18 : 11;
