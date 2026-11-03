@@ -5,12 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Asteroids</title>
 <style>
-  html, body { margin:0; height:100%; background:#000; overflow:hidden; }
-  canvas { display:block; margin:0 auto; background:#000; max-width:100vw; max-height:100vh; }
+  html, body { margin:0; height:100%; background:#000; overflow:hidden; touch-action:none; overscroll-behavior:none;
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
+  canvas { display:block; margin:0 auto; background:#000; touch-action:none; outline:none;
+    width:min(100vw, calc(100vh * 4 / 3)); width:min(100vw, calc(100dvh * 4 / 3)); height:auto; aspect-ratio:4/3; }
+  #rot { display:none; position:fixed; inset:0; z-index:10; background:#000; color:#9ef; text-align:center;
+    align-items:center; justify-content:center; font:600 22px/1.5 "Courier New", monospace; padding:24px; }
+  @media (orientation: portrait) and (pointer: coarse) { #rot { display:flex; } }
 </style>
 </head>
 <body>
 <canvas id="c" width="960" height="720"></canvas>
+<div id="rot">Turn your phone sideways to play.<br>Asteroids needs a wide screen.</div>
 <script>
 // ===== Classic Asteroids (vector style) =====
 // Controls: ←/→ rotate, ↑ thrust, SPACE fire, SHIFT/H hyperspace, ENTER start, P pause, M mute
@@ -129,7 +135,7 @@ function drawStory() {
   const entry = STORY[Math.min(st.i, STORY.length - 1)];
   ctx.globalAlpha = st.phase === 'speak' ? Math.min(1, st.t / 0.8) : Math.max(0, 1 - st.t / 0.4);
   wrapText(entry[1], W / 2, H / 2 - 40, W - 220, 36, 26);
-  ctx.globalAlpha = 1; text('SPACE / ENTER TO SKIP', W / 2, H - 40, 14);
+  ctx.globalAlpha = 1; text(touchMode ? 'TAP TO SKIP' : 'SPACE / ENTER TO SKIP', W / 2, H - 40, 14);
 }
 function gameOverSeq() {
   state = 'over'; playClip('m_gameover', 0.7) || sfx.gameOver(); say('ann_game_over', 'Game over. The field claims another.', 3);
@@ -187,8 +193,56 @@ addEventListener('keydown', e => {
   keys[e.code] = true;
 });
 addEventListener('keyup', e => keys[e.code] = false);
-// Click or tap the screen to focus the page (needed when embedded) and to start / restart.
-cv.addEventListener('pointerdown', () => { window.focus(); audio(); if (state === 'title' || state === 'over') onPress('Enter'); });
+// ---------- Touch controls (phones / tablets) ----------
+// Left thumb steers, right thumb fires. Pads are multi-touch, so both thumbs work at once; sliding a thumb between pads works too.
+let touchMode = matchMedia('(pointer: coarse)').matches;
+const tkeys = {}, padDown = {}, pointers = new Map();
+let autoFire = 0;
+const PADS = {
+  left:   { x: 80,  y: 650, r: 46, key: 'ArrowLeft',  label: '\u25C0' },
+  right:  { x: 190, y: 650, r: 46, key: 'ArrowRight', label: '\u25B6' },
+  thrust: { x: 135, y: 545, r: 44, key: 'ArrowUp',    label: '\u25B2' },
+  fire:   { x: 855, y: 630, r: 70, label: 'FIRE' },
+  shield: { x: 725, y: 670, r: 42, key: 'KeyS',       label: 'SHIELD' },
+  bomb:   { x: 760, y: 560, r: 40, label: 'BOMB' },
+  hyper:  { x: 900, y: 505, r: 32, label: 'WARP' },
+  pause:  { x: 915, y: 45,  r: 26, label: 'II' },
+  mute:   { x: 860, y: 45,  r: 26, label: '\u266A' },
+};
+function toCanvas(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; }
+function padAt(x, y) {
+  let best = null, bd = 1e9;
+  for (const [n, p] of Object.entries(PADS)) { const d = Math.hypot(x - p.x, y - p.y); if (d < p.r * 1.25 && d < bd) { best = n; bd = d; } }
+  return best;
+}
+function refreshTouch() {
+  for (const k in tkeys) tkeys[k] = false; for (const n in padDown) padDown[n] = false;
+  for (const pad of pointers.values()) if (pad) { padDown[pad] = true; if (PADS[pad].key) tkeys[PADS[pad].key] = true; }
+}
+function padTap(n) {
+  if (n === 'pause') return onPress('KeyP');
+  if (n === 'mute') return onPress('KeyM');
+  if (state !== 'play' || !ship.alive) return;
+  if (n === 'fire') { fire(); autoFire = 0.22; } else if (n === 'bomb') grenade(); else if (n === 'hyper') hyperspace();
+}
+cv.addEventListener('pointerdown', e => {
+  window.focus(); audio(); e.preventDefault();
+  if (e.pointerType !== 'mouse') touchMode = true;
+  if (state === 'title' || state === 'over') { onPress('Enter'); return; }   // tap anywhere to start / restart
+  if (state === 'story') { endStory(); return; }                              // tap to skip the story
+  if (!touchMode) return;
+  const [x, y] = toCanvas(e), pad = padAt(x, y);
+  if (cv.setPointerCapture) try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+  pointers.set(e.pointerId, pad); refreshTouch(); if (pad) padTap(pad);
+});
+cv.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  const [x, y] = toCanvas(e), pad = padAt(x, y);
+  if (pad !== pointers.get(e.pointerId)) { pointers.set(e.pointerId, pad); refreshTouch(); }
+});
+const endPointer = e => { pointers.delete(e.pointerId); refreshTouch(); };
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) cv.addEventListener(ev, endPointer);
+cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.tabIndex = 0;
 function onPress(code) {
   audio();
@@ -427,9 +481,9 @@ function shieldCollisions() { // rocks bounce off, saucer shots are absorbed; ea
 function update(dt) {
   // ship
   if (ship.alive) {
-    if (keys.ArrowLeft) ship.a -= up.turn * dt;
-    if (keys.ArrowRight) ship.a += up.turn * dt;
-    ship.thrusting = !!keys.ArrowUp;
+    if (keys.ArrowLeft || tkeys.ArrowLeft) ship.a -= up.turn * dt;
+    if (keys.ArrowRight || tkeys.ArrowRight) ship.a += up.turn * dt;
+    ship.thrusting = !!(keys.ArrowUp || tkeys.ArrowUp);
     if (ship.thrusting) { ship.vx += Math.cos(ship.a) * up.thrust * dt; ship.vy += Math.sin(ship.a) * up.thrust * dt;
       particles.push({ x: ship.x - Math.cos(ship.a) * 10, y: ship.y - Math.sin(ship.a) * 10,
         vx: -Math.cos(ship.a) * 90 + rand(-25, 25), vy: -Math.sin(ship.a) * 90 + rand(-25, 25), life: 0.3, color: '#fa4' }); }
@@ -438,7 +492,7 @@ function update(dt) {
     ship.x += ship.vx * dt; ship.y += ship.vy * dt; wrap(ship);
     if (ship.inv > 0) ship.inv -= dt;
     // force field: hold S (or Down). Drains energy while up, recharges when down.
-    const want = keys.KeyS || keys.ArrowDown;
+    const want = keys.KeyS || keys.ArrowDown || tkeys.KeyS;
     if (!want) ship.needRelease = false; // after a break, release S before raising again
     if (want && !ship.shield && !ship.locked && !ship.needRelease && ship.energy > 8) raiseShield();
     else if (!want && ship.shield) lowerShield(false);
@@ -509,6 +563,7 @@ function update(dt) {
   if (!rocks.length && !ufo) {
     if (waveDelay === 0) { grantUpgrade(); if (ship.alive) ship.energy = up.maxPower; } // field cleared: upgrade + full power
     waveDelay += dt; if (waveDelay > 4.5) { waveDelay = 0; startWave(); } }
+  if (padDown.fire && ship.alive) { autoFire -= dt; if (autoFire <= 0) { fire(); autoFire = 0.22; } } // hold FIRE to keep shooting
   loopSet('thrust', ship.alive && ship.thrusting, 0.4);
   loopSet('shield_loop', ship.alive && ship.shield, 0.3);
   loopSet('ufo_loop', !!ufo, 0.25);
@@ -564,6 +619,17 @@ const crt = document.createElement('canvas'); crt.width = W; crt.height = H;
 function neon(color, blur) { ctx.strokeStyle = ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = fx ? blur : 0; }
 const rockColor = () => FIELDS[field].col || `hsl(${(wave * 47 + 190) % 360},100%,66%)`; // each field has its own color
 
+function drawPads() {
+  ctx.lineWidth = 2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const [n, p] of Object.entries(PADS)) {
+    const on = padDown[n]; neon(on ? '#6cf' : '#5a7bb8', on ? 18 : 6); ctx.globalAlpha = on ? 0.95 : 0.5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.stroke(); if (on) { ctx.globalAlpha = 0.25; ctx.fill(); }
+    ctx.globalAlpha = on ? 1 : 0.8; ctx.shadowBlur = 0;
+    ctx.font = `600 ${p.label.length > 2 ? 15 : 24}px "Courier New", monospace`; ctx.fillText(p.label, p.x, p.y + (n === 'bomb' ? -6 : 1));
+    if (n === 'bomb') { ctx.font = '600 13px "Courier New", monospace'; ctx.fillText('x' + up.grenades, p.x, p.y + 12); }
+  }
+  ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+}
 function render() {
   const t = performance.now() / 1000, rc = rockColor();
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
@@ -626,12 +692,14 @@ function render() {
   const hue = (t * 40) % 360, title = `hsl(${hue},100%,72%)`;
   if (state === 'title') {
     neon(title, 24); text('ASTEROIDS', W / 2, H / 2 - 60, 76);
-    neon('#fff', 10); text('PRESS ENTER OR SPACE TO START', W / 2, H / 2 + 10, 22);
-    neon('#9ef', 6); text('← → ROTATE   ↑ THRUST   SPACE FIRE   S SHIELD   B GRENADE   SHIFT HYPERSPACE', W / 2, H / 2 + 60, 16);
-    text('P PAUSE   M MUTE   C CRT EFFECTS', W / 2, H / 2 + 86, 16);
+    neon('#fff', 10); text(touchMode ? 'TAP ANYWHERE TO START' : 'PRESS ENTER OR SPACE TO START', W / 2, H / 2 + 10, 22);
+    neon('#9ef', 6);
+    if (touchMode) { text('LEFT THUMB: STEER AND THRUST', W / 2, H / 2 + 60, 16); text('RIGHT THUMB: FIRE (HOLD) \u00B7 SHIELD \u00B7 BOMB \u00B7 WARP', W / 2, H / 2 + 86, 16); }
+    else { text('← → ROTATE   ↑ THRUST   SPACE FIRE   S SHIELD   B GRENADE   SHIFT HYPERSPACE', W / 2, H / 2 + 60, 16);
+      text('P PAUSE   M MUTE   C CRT EFFECTS', W / 2, H / 2 + 86, 16); }
   } else if (state === 'over') {
     neon('#f55', 24); text('GAME OVER', W / 2, H / 2 - 10, 64);
-    neon('#fff', 8); text('PRESS ENTER TO PLAY AGAIN', W / 2, H / 2 + 40, 20);
+    neon('#fff', 8); text(touchMode ? 'TAP TO PLAY AGAIN' : 'PRESS ENTER TO PLAY AGAIN', W / 2, H / 2 + 40, 20);
   } else if (state === 'story') { neon('#dff', 10); drawStory(); }
   else if (state === 'pause') { neon('#fff', 14); text('PAUSED', W / 2, H / 2, 48); }
   else if (!rocks.length && !ufo && waveDelay > 0) { const nf = fieldFor(wave + 1); neon(FIELDS[nf].col || rc, 18); text('FIELD ' + (wave + 1) + '  -  ' + FIELDS[nf].name, W / 2, H / 2 + 40, 34); }
@@ -639,8 +707,9 @@ function render() {
   if (state === 'play' && upBanner.t > 0) { ctx.globalAlpha = Math.min(1, upBanner.t); neon('#fd6', 18); text(upBanner.text, W / 2, H / 2 - 20, 30); ctx.globalAlpha = 1; }
   if (subT > 0 && state !== 'story') { // voice subtitles
     ctx.globalAlpha = Math.min(1, subT * 2); neon('#9fd', 8);
-    wrapText(subText, W / 2, H - 70, W - 200, 26, 20); ctx.globalAlpha = 1; }
+    wrapText(subText, W / 2, touchMode ? 170 : H - 70, W - 200, 26, 20); // on phones, subtitles sit up top, clear of the pads ctx.globalAlpha = 1; }
   ctx.shadowBlur = 0; ctx.fillStyle = '#fff';
+  if (touchMode && (state === 'play' || state === 'pause')) drawPads();
 
   if (fx) {
     if (flash > 0) { ctx.globalAlpha = flash * 0.5; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
@@ -658,6 +727,7 @@ ship = makeShip(); ship.alive = false; wave = 1; for (let i = 0; i < 6; i++) roc
 let last = performance.now();
 function frame(t) {
   const dt = Math.min(0.05, (t - last) / 1000); last = t;
+  if (state === 'play' && touchMode && innerHeight > innerWidth) state = 'pause'; // turned upright: pause
   if (state === 'play') update(dt);
   else {
     if (state === 'title' || state === 'over' || state === 'story') for (const r of rocks) { r.x += r.vx * dt; r.y += r.vy * dt; r.a += r.spin * dt; wrap(r); }
