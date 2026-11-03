@@ -49,11 +49,11 @@ const synth = {
 // ---------- Recorded audio (ElevenLabs) with synth fallback ----------
 // Files live in ./audio/sfx and ./audio/voice. Anything missing quietly falls back to the synth.
 const SFX_FILES = ['laser','thrust','boom_large','boom_medium','boom_small','ship_boom','ufo_loop','ufo_fire','ufo_boom',
-  'hyperspace','extra_life','alarm','coin','game_over','shield','radio','space_ambience'];
+  'hyperspace','extra_life','alarm','coin','game_over','shield','radio','space_ambience','shield_loop','shield_hit','shield_break'];
 const VOICE_FILES = ['story1','story2','story3','story4','ctrl_contact','ctrl_ship_lost','ctrl_last_ship','ctrl_cleared',
   'ctrl_unidentified','ctrl_extra_ship','ctrl_all_lost','ann_title','ann_incoming','ann_extra_life','ann_game_over',
   'ann_insert_coin','ann_high_score','ann_hyperspace','ann_accelerating','ann_pilot_down',
-  'alien_world_ends','alien_we_see_you','alien_earth_ours','alien_impossible'];
+  'alien_world_ends','alien_we_see_you','alien_earth_ours','alien_impossible','ann_shields_up','ann_shields_down'];
 const clips = {};
 for (const [dir, list] of [['sfx', SFX_FILES], ['voice', VOICE_FILES]]) for (const n of list) {
   const a = new Audio(`audio/${dir}/${n}.mp3`); a.preload = 'auto';
@@ -81,6 +81,8 @@ const sfx = {
   hyper: () => playClip('hyperspace', 0.7) || synth.hyper(),
   alarm: () => playClip('alarm', 0.5),
   shield: () => playClip('shield', 0.5),
+  shieldHit: () => playClip('shield_hit', 0.6) || tone(700, 0.12, 'sine', 0.08, -300),
+  shieldBreak: () => playClip('shield_break', 0.8) || tone(400, 0.5, 'sawtooth', 0.08, -300),
   coin: () => playClip('coin', 0.8),
   gameOver: () => playClip('game_over', 0.8),
 };
@@ -216,7 +218,8 @@ let nextExtra = 10000, ship, rocks = [], bullets = [], ufoBullets = [], ufo = nu
 let waveDelay = 0, respawnT = 0, startHi = 0, ufoSeen = 0, fromRestart = false;
 
 function makeShip() {
-  return { x: W / 2, y: H / 2, vx: 0, vy: 0, a: -Math.PI / 2, alive: true, inv: 3, cool: 0, thrusting: false, r: 12 };
+  return { x: W / 2, y: H / 2, vx: 0, vy: 0, a: -Math.PI / 2, alive: true, inv: 3, cool: 0, thrusting: false, r: 12,
+    energy: 100, shield: false, locked: false, rechargeDelay: 0, hitFlash: 0 };
 }
 function newGame() {
   score = 0; lives = 3; wave = 0; nextExtra = 10000;
@@ -248,7 +251,7 @@ function makeRock(x, y, size) {
 
 // ---------- Actions ----------
 function fire() {
-  if (bullets.length >= 4) return;
+  if (bullets.length >= 4 || ship.shield) return; // can't fire with the shield up
   bullets.push({ x: ship.x + Math.cos(ship.a) * 14, y: ship.y + Math.sin(ship.a) * 14,
     vx: ship.vx + Math.cos(ship.a) * 520, vy: ship.vy + Math.sin(ship.a) * 520, life: 0.95 });
   sfx.fire();
@@ -298,6 +301,46 @@ function spawnUfo() {
     say(clip, line, 2); }
 }
 
+// ---------- Force field ----------
+const SHIELD_R = 24;
+let lastShieldSay = -99999;
+function wdelta(a, b) { // shortest wrapped vector from a to b
+  let dx = b.x - a.x, dy = b.y - a.y;
+  if (dx > W / 2) dx -= W; if (dx < -W / 2) dx += W; if (dy > H / 2) dy -= H; if (dy < -H / 2) dy += H;
+  return [dx, dy];
+}
+function raiseShield() {
+  ship.shield = true; sfx.shield();
+  if (performance.now() - lastShieldSay > 12000) { lastShieldSay = performance.now(); say('ann_shields_up', 'Shields up.', 1); }
+}
+function lowerShield(broken) {
+  ship.shield = false; ship.rechargeDelay = broken ? 2.5 : 1;
+  if (broken) { ship.locked = true; ship.needRelease = true; sfx.shieldBreak(); shake = Math.max(shake, 8); ring(ship.x, ship.y, 70, '#f55'); say('ann_shields_down', 'Shields depleted.', 2); }
+}
+function shieldHit(cost, x, y) {
+  ship.energy -= cost; ship.hitFlash = 0.25; sfx.shieldHit(); shake = Math.max(shake, 3); burst(x, y, 8, 90, '#6cf');
+  if (ship.energy <= 0) { ship.energy = 0; lowerShield(true); }
+}
+function shieldCollisions() { // rocks bounce off, saucer shots are absorbed; each costs energy
+  for (const r of rocks) {
+    const [dx, dy] = wdelta(ship, r), d = Math.hypot(dx, dy) || 1, min = r.r + SHIELD_R;
+    if (d >= min) continue;
+    const nx = dx / d, ny = dy / d, rvx = r.vx - ship.vx, rvy = r.vy - ship.vy, vn = rvx * nx + rvy * ny;
+    if (vn < 0) {
+      r.vx = ship.vx + (rvx - 2 * vn * nx) * 0.9; r.vy = ship.vy + (rvy - 2 * vn * ny) * 0.9;
+      ship.vx -= nx * 40 * r.size; ship.vy -= ny * 40 * r.size; // knock-back
+      shieldHit([0, 6, 12, 22][r.size], ship.x + nx * SHIELD_R, ship.y + ny * SHIELD_R);
+      if (!ship.shield) return;
+    }
+    r.x += nx * (min - d + 1); r.y += ny * (min - d + 1); wrap(r);
+  }
+  if (ufo) { const [dx, dy] = wdelta(ship, ufo), d = Math.hypot(dx, dy) || 1, min = ufo.r + SHIELD_R;
+    if (d < min) { ufo.vx = -ufo.vx; ufo.x += dx / d * (min - d + 2);
+      shieldHit(18, ship.x + dx / d * SHIELD_R, ship.y + dy / d * SHIELD_R); if (!ship.shield) return; } }
+  for (let i = ufoBullets.length - 1; i >= 0; i--) { const b = ufoBullets[i];
+    if (wdist(ship, b) < SHIELD_R + 3) { ufoBullets.splice(i, 1); shieldHit(10, b.x, b.y); if (!ship.shield) return; } }
+}
+
 // ---------- Update ----------
 function update(dt) {
   // ship
@@ -312,6 +355,15 @@ function update(dt) {
     const sp = Math.hypot(ship.vx, ship.vy); if (sp > 420) { ship.vx *= 420 / sp; ship.vy *= 420 / sp; }
     ship.x += ship.vx * dt; ship.y += ship.vy * dt; wrap(ship);
     if (ship.inv > 0) ship.inv -= dt;
+    // force field: hold S (or Down). Drains energy while up, recharges when down.
+    const want = keys.KeyS || keys.ArrowDown;
+    if (!want) ship.needRelease = false; // after a break, release S before raising again
+    if (want && !ship.shield && !ship.locked && !ship.needRelease && ship.energy > 8) raiseShield();
+    else if (!want && ship.shield) lowerShield(false);
+    if (ship.shield) { ship.energy -= 24 * dt; if (ship.energy <= 0) { ship.energy = 0; lowerShield(true); } }
+    else { ship.rechargeDelay -= dt; if (ship.rechargeDelay <= 0) ship.energy = Math.min(100, ship.energy + 15 * dt); }
+    if (ship.locked && ship.energy >= 30) ship.locked = false;
+    if (ship.hitFlash > 0) ship.hitFlash -= dt;
   } else if (respawnT > 0) {
     respawnT -= dt;
     if (respawnT <= 0) {
@@ -350,7 +402,8 @@ function update(dt) {
   for (let i = ufoBullets.length - 1; i >= 0; i--) for (let j = rocks.length - 1; j >= 0; j--)
     if (wdist(ufoBullets[i], rocks[j]) < rocks[j].r) { rocks.splice(j, 1, ...[]); ufoBullets.splice(i, 1); sfx.boom(1); break; }
   // ship collisions
-  if (ship.alive && ship.inv <= 0) {
+  if (ship.alive && ship.shield) shieldCollisions();
+  else if (ship.alive && ship.inv <= 0) {
     for (let j = rocks.length - 1; j >= 0; j--) if (wdist(ship, rocks[j]) < rocks[j].r + ship.r * 0.7) { breakRock(j); killShip(); break; }
     if (ship.alive && ufo && wdist(ship, ufo) < ufo.r + ship.r) { burst(ufo.x, ufo.y, 18, 130); ufo = null; killShip(); }
     if (ship.alive) for (let i = ufoBullets.length - 1; i >= 0; i--) if (wdist(ship, ufoBullets[i]) < ship.r) { ufoBullets.splice(i, 1); killShip(); break; }
@@ -365,6 +418,7 @@ function update(dt) {
     if (waveDelay === 0 && ship.alive) say('ctrl_cleared', 'CONTROL: Field cleared. Nice shooting. Stand by for the next contact.', 1);
     waveDelay += dt; if (waveDelay > 3.5) { waveDelay = 0; startWave(); } }
   loopSet('thrust', ship.alive && ship.thrusting, 0.4);
+  loopSet('shield_loop', ship.alive && ship.shield, 0.3);
   loopSet('ufo_loop', !!ufo, 0.25);
   heartbeat(dt);
 }
@@ -426,6 +480,9 @@ function render() {
     text(String(score).padStart(2, '0'), 120, 46, 36, 'right');
     neon('#fc6', 8); text(String(hi).padStart(2, '0'), W / 2, 30, 18);
     neon('#bff', 10); for (let i = 0; i < Math.min(lives, 10); i++) drawShip(100 - i * 26 + 26, 76, -Math.PI / 2, false);
+    const en = ship.energy / 100, ecol = ship.locked ? '#f55' : en > 0.5 ? '#6cf' : en > 0.25 ? '#fc4' : '#f55';
+    neon(ecol, 8); ctx.lineWidth = 1.5; ctx.strokeRect(61, 100, 100, 8); ctx.fillRect(61, 100, 100 * en, 8); ctx.lineWidth = 2;
+    neon('#9ef', 4); text(ship.locked ? 'SHIELD RECHARGING' : ship.shield ? 'SHIELD UP' : 'SHIELD [S]', 61, 124, 11, 'left');
   }
   neon(rc, 12);
   for (const r of rocks) ghosted(r, r.r * 1.2, () => { ctx.rotate(r.a); poly(r.pts.map(([a, d]) => [Math.cos(a) * d, Math.sin(a) * d])); });
@@ -441,6 +498,12 @@ function render() {
   if (ship.alive && (ship.inv <= 0 || Math.floor(ship.inv * 10) % 2 === 0)) ghosted(ship, 30, () => {
     ctx.rotate(ship.a); neon('#bff', 16); poly(shipPath());
     if (ship.thrusting && Math.random() < 0.8) { neon('#fa3', 18); poly([[-8, -5], [-18 - Math.random() * 10, 0], [-8, 5]], false); } });
+  if (ship.alive && ship.shield) { // force field bubble, color shows remaining energy
+    const e = ship.energy, col = e > 50 ? '#6cf' : e > 25 ? '#fc4' : '#f55', flick = e < 25 && Math.random() < 0.4;
+    ghosted(ship, 34, () => { neon(col, 20);
+      ctx.globalAlpha = Math.min(1, flick ? 0.25 : 0.55 + ship.hitFlash * 1.5 + 0.1 * Math.sin(t * 12));
+      ctx.beginPath(); ctx.arc(0, 0, SHIELD_R, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = Math.min(1, 0.08 + ship.hitFlash); ctx.fill(); ctx.globalAlpha = 1; }); }
   if (ship.alive && ship.inv > 0) { neon('#6cf', 14); ctx.globalAlpha = Math.min(1, ship.inv) * 0.6;
     ghosted(ship, 30, () => { ctx.beginPath(); ctx.arc(0, 0, 22, 0, TAU); ctx.stroke(); }); ctx.globalAlpha = 1; }
   neon('#bff', 8);
@@ -457,7 +520,7 @@ function render() {
   if (state === 'title') {
     neon(title, 24); text('ASTEROIDS', W / 2, H / 2 - 60, 76);
     neon('#fff', 10); text('PRESS ENTER OR SPACE TO START', W / 2, H / 2 + 10, 22);
-    neon('#9ef', 6); text('← → ROTATE   ↑ THRUST   SPACE FIRE   SHIFT HYPERSPACE', W / 2, H / 2 + 60, 16);
+    neon('#9ef', 6); text('← → ROTATE   ↑ THRUST   SPACE FIRE   S SHIELD   SHIFT HYPERSPACE', W / 2, H / 2 + 60, 16);
     text('P PAUSE   M MUTE   C CRT EFFECTS', W / 2, H / 2 + 86, 16);
   } else if (state === 'over') {
     neon('#f55', 24); text('GAME OVER', W / 2, H / 2 - 10, 64);
@@ -490,7 +553,7 @@ function frame(t) {
   else {
     if (state === 'title' || state === 'over' || state === 'story') for (const r of rocks) { r.x += r.vx * dt; r.y += r.vy * dt; r.a += r.spin * dt; wrap(r); }
     if (state === 'story') updateStory(dt);
-    if (state !== 'pause') { loopSet('thrust', false); loopSet('ufo_loop', false); }
+    if (state !== 'pause') { loopSet('thrust', false); loopSet('ufo_loop', false); loopSet('shield_loop', false); }
   }
   if (subT > 0 && subT < 50) subT -= dt;
   musicSet(musicPick()); musicTick(dt); starsTick(dt);
