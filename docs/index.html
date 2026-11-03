@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Asteroids</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Last Line Asteroids</title>
+<meta name="description" content="Defend Earth from the asteroid swarm. Arcade Asteroids with a story, voice acting, fields, upgrades and a soundtrack.">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Asteroids">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
   html, body { margin:0; height:100%; background:#000; overflow:hidden; touch-action:none; overscroll-behavior:none;
     -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
@@ -293,6 +302,7 @@ addEventListener('keyup', e => keys[e.code] = false);
 // ---------- Touch controls (phones / tablets) ----------
 // Big color-coded buttons in the side margins. Multi-touch: left thumb steers, right thumb fires. Thumbs can slide between buttons.
 let touchMode = matchMedia('(pointer: coarse)').matches;
+const standalone = !!navigator.standalone || matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches;
 const tkeys = {}, padDown = {}, pointers = new Map();
 const PADKEY = { left: 'ArrowLeft', right: 'ArrowRight', thrust: 'ArrowUp', shield: 'KeyS' };
 const padsEl = document.getElementById('pads'), padEls = [...padsEl.querySelectorAll('[data-pad]')];
@@ -783,6 +793,7 @@ function render() {
     if (touchMode) { text('LEFT THUMB: STEER AND THRUST', W / 2, H / 2 + 60, 16); text('RIGHT THUMB: FIRE (HOLD) \u00B7 SHIELD \u00B7 BOMB \u00B7 WARP', W / 2, H / 2 + 86, 16); }
     else { text('← → ROTATE   ↑ THRUST   SPACE FIRE   S SHIELD   B GRENADE   SHIFT HYPERSPACE', W / 2, H / 2 + 60, 16);
       text('P PAUSE   M MUTE   C CRT EFFECTS', W / 2, H / 2 + 86, 16); }
+    if (touchMode && !standalone && location.hostname.endsWith('github.io')) { neon('#fd6', 6); text('TIP: SHARE > ADD TO HOME SCREEN FOR FULL SCREEN', W / 2, H / 2 + 130, 15); }
   } else if (state === 'over') {
     neon('#f55', 24); text('GAME OVER', W / 2, H / 2 - 10, 64);
     neon('#fff', 8); text(touchMode ? 'TAP TO PLAY AGAIN' : 'PRESS ENTER TO PLAY AGAIN', W / 2, H / 2 + 40, 20);
@@ -824,6 +835,8 @@ function frame(t) {
   render(); requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+// Offline support (only where the browser allows it, i.e. the real website, not the embedded preview).
+try { if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 </script>
 </body>
 </html>

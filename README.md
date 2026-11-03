@@ -1,4 +1,20 @@
-# Moonrise Defense - Alien Shooter Game
+# Last Line Asteroids
+
+Arcade Asteroids with a story, voice acting, sound effects, a soundtrack, six kinds of asteroid fields, a force field, grenades,
+automatic upgrades and a boss. Plays on computers and phones.
+
+**Play it:** https://boweryking.github.io/moon-attack-/
+
+- **Computer:** Enter starts. Arrow keys steer and thrust, Space fires, S holds the shield, B throws a grenade, Shift warps, P pauses, M mutes, C toggles the CRT effects.
+- **iPhone / Android:** hold the phone sideways and tap to start. On iPhone, tap Share, then **Add to Home Screen** for a full-screen app icon that also works offline.
+- **Run it yourself:** download the repo, open the `docs` folder and double-click `index.html`.
+
+The game lives in `docs/` (that is the folder GitHub Pages publishes). Sound files are in `docs/audio/` - see `docs/audio/README.md`.
+When you replace an audio file, bump `VERSION` in `docs/sw.js` so devices refresh their offline copy.
+
+---
+
+# Moonrise Defense (the original game in this repo)
 
 A fast-paced space shooter game where you defend the Moonrise base from waves of alien invaders!
 
