@@ -349,6 +349,13 @@ function destroyPlanet() {
 }
 
 // ---------- Update ----------
+// Charge: aim once, fly dead straight, and only re-aim after the enemy has gone past you and is well clear (or after a few seconds).
+function charge(e, dx, dy, dist, sp, err) {
+  const closing = dx * e.vx + dy * e.vy; e.runT = (e.runT || 0) + 1 / 60;
+  if (!e.run || (closing < 0 && dist > 420) || e.runT > 5) {
+    const a = Math.atan2(dy, dx) + rand(-err, err); e.vx = Math.cos(a) * sp; e.vy = Math.sin(a) * sp; e.run = true; e.runT = 0;
+  }
+}
 function enemyShot(e, sp) { const dx = dxw(e.x, ship.x), dy = ship.y - e.y, d = Math.hypot(dx, dy) || 1;
   ebullets.push({ x: e.x, y: e.y, vx: dx / d * sp, vy: dy / d * sp, life: 3 }); play('enemy_fire', 0.3, synth.enemy); }
 function nearest(list, x) { let best = null, bd = 1e9; for (const h of list) { const d = Math.abs(dxw(x, h.x)); if (d < bd) { bd = d; best = h; } } return best; }
@@ -418,29 +425,29 @@ function update(dt) {
       }
       e.shoot -= dt; if (e.shoot <= 0 && Math.abs(dx) < 520 && ship.alive) { e.shoot = rand(2.6, 5); enemyShot(e, 190); }
     } else if (e.type === 'mutant') {
-      const sp = 190 + wave * 6; const ang = Math.atan2(dy, dx) + Math.sin(e.t * 5) * 0.7;
-      e.vx += (Math.cos(ang) * sp - e.vx) * Math.min(1, dt * 3); e.vy += (Math.sin(ang) * sp - e.vy) * Math.min(1, dt * 3);
-      e.shoot -= dt; if (e.shoot <= 0 && dist < 600 && ship.alive) { e.shoot = rand(1.2, 2.4); enemyShot(e, 260); }
+      charge(e, dx, dy, dist, Math.min(320, 215 + wave * 5), 0.1);   // a straight run at you, then it flies on past before turning round
+      e.shoot -= dt; if (e.shoot <= 0 && dist < 600 && ship.alive) { e.shoot = rand(2, 3.6); enemyShot(e, 230); }
     } else if (e.type === 'bomber') {
       e.vy = Math.cos(e.t * 1.5) * 105; e.shoot -= dt;
       if (e.shoot <= 0) { e.shoot = 2.1; mines.push({ x: e.x, y: e.y, t: 0 }); play('mine', 0.4); }
     } else if (e.type === 'pod') { e.vy = Math.sin(e.t * 1.2) * 40;
     } else if (e.type === 'swarmer') {
-      e.vx += (Math.sign(dx || 1) * 230 - e.vx) * Math.min(1, dt * 1.5); e.vy = Math.sin(e.t * 6) * 140 + clamp(dy, -60, 60);
+      charge(e, dx, dy, dist, 250, 0.08); e.vy += Math.sin(e.t * 5) * 70;
       e.shoot -= dt; if (e.shoot <= 0 && Math.abs(dy) < 50 && Math.abs(dx) < 480 && ship.alive) { e.shoot = 1.6; ebullets.push({ x: e.x, y: e.y, vx: Math.sign(dx) * 340, vy: 0, life: 2 }); play('enemy_fire', 0.25, synth.enemy); }
     } else if (e.type === 'baiter') {
-      const sp = 430; const ang = Math.atan2(dy + ship.vy * 0.25, dx + ship.vx * 0.25);
-      e.vx += (Math.cos(ang) * sp - e.vx) * Math.min(1, dt * 2.5); e.vy += (Math.sin(ang) * sp - e.vy) * Math.min(1, dt * 2.5);
-      e.shoot -= dt; if (e.shoot <= 0 && dist < 650 && ship.alive) { e.shoot = 0.9; enemyShot(e, 300); }
+      charge(e, dx + ship.vx * 0.25, dy + ship.vy * 0.25, dist, 440, 0.05);
+      e.shoot -= dt; if (e.shoot <= 0 && dist < 650 && ship.alive) { e.shoot = 1.4; enemyShot(e, 280); }
     }
-    e.x = wrapX(e.x + e.vx * dt); e.y = clamp(e.y + e.vy * dt, TOP + 6, planetDead ? H - 6 : groundY(e.x) - 14);
+    e.x = wrapX(e.x + e.vx * dt); const ny = e.y + e.vy * dt, lo = TOP + 6, hi3 = planetDead ? H - 6 : groundY(e.x) - 14;
+    if ((ny < lo || ny > hi3) && e.type !== 'lander') { e.vy = -e.vy; e.run = e.type === 'mutant' || e.type === 'swarmer' || e.type === 'baiter' ? true : e.run; }
+    e.y = clamp(ny, lo, hi3);
   }
   loopSet('abduct', abductions > 0, 0.35); loopSet('thrust', ship.alive && ship.thrusting, 0.35);
   // --- player lasers
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i]; b.x = wrapX(b.x + b.dir * 1500 * dt); b.life -= dt; let hit = false;
     const lo = b.dir > 0 ? -b.len : 0, hi2 = b.dir > 0 ? 0 : b.len;
-    for (const e of enemies) { const ex = dxw(b.x, e.x), cx = clamp(ex, lo, hi2); if (Math.hypot(ex - cx, e.y - b.y) < e.r + 4) { killEnemy(e); hit = true; break; } }
+    for (const e of enemies) { const ex = dxw(b.x, e.x), cx = clamp(ex, lo, hi2); if (Math.hypot(ex - cx, (e.y - b.y) * 0.8) < e.r + 7) { killEnemy(e); hit = true; break; } }
     if (!hit) for (let j = mines.length - 1; j >= 0; j--) { const m = mines[j], ex = dxw(b.x, m.x), cx = clamp(ex, lo, hi2); if (Math.hypot(ex - cx, m.y - b.y) < 12) { mines.splice(j, 1); burst(m.x, m.y, 8, 100, '#6df'); hit = true; break; } }
     if (hit || b.life <= 0) bullets.splice(i, 1);
   }
