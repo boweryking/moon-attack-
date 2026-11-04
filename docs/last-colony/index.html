@@ -242,15 +242,29 @@ function stickMove(e) {
 function stickEnd(e) { if (joy.id !== e.pointerId) return; joy.id = null; joy.on = false; joy.x = joy.y = 0; stickEl.classList.remove('on'); stickEl.style.setProperty('--kx', '0px'); stickEl.style.setProperty('--ky', '0px'); }
 stickEl.addEventListener('pointerdown', e => {
   e.preventDefault(); e.stopPropagation(); window.focus(); audio(); touchMode = true;
-  if (joy.id !== null) return; joy.id = e.pointerId; joy.on = true; stickEl.classList.add('on');
+  if (pointers.size > activeTouches) releaseAll();
+  joy.id = e.pointerId; joy.on = true; stickEl.classList.add('on');
   try { stickEl.setPointerCapture(e.pointerId); } catch (err) {} stickMove(e);
 });
 stickEl.addEventListener('pointermove', e => { if (joy.id === e.pointerId) { e.stopPropagation(); stickMove(e); } });
 for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) stickEl.addEventListener(ev, stickEnd);
 stickEl.addEventListener('contextmenu', e => e.preventDefault());
+function releaseAll() {
+  pointers.clear(); refreshTouch(); joy.id = null; joy.on = false; joy.x = joy.y = 0;
+  stickEl.classList.remove('on'); stickEl.style.setProperty('--kx', '0px'); stickEl.style.setProperty('--ky', '0px');
+}
+
+// If the browser never tells us a finger lifted (the buttons were hidden, the app lost focus, an edge swipe), let everything go
+// so nothing is left stuck "held down".
+addEventListener('blur', releaseAll); addEventListener('pagehide', releaseAll);
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
+for (const ev of ['touchend', 'touchcancel']) document.addEventListener(ev, e => { if (e.touches.length === 0) releaseAll(); }, { passive: true });
+let activeTouches = 0; // how many fingers are really on the screen, so leftover 'held' buttons can be spotted and cleared
+for (const ev of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) document.addEventListener(ev, e => { activeTouches = e.touches.length; }, { passive: true });
 const padOf = el => el && el.closest ? el.closest('[data-pad]') : null;
 padsEl.addEventListener('pointerdown', e => {
   const el = padOf(e.target); if (!el) return; e.preventDefault(); window.focus(); audio(); touchMode = true;
+  if (pointers.size > activeTouches) releaseAll(); // a stale 'held' button from a finger that is long gone: clear it
   pointers.set(e.pointerId, el.dataset.pad); refreshTouch(); padTap(el.dataset.pad);
 });
 padsEl.addEventListener('pointermove', e => {
@@ -262,7 +276,7 @@ const endPointer = e => { if (pointers.delete(e.pointerId)) refreshTouch(); };
 for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) padsEl.addEventListener(ev, endPointer);
 padsEl.addEventListener('contextmenu', e => e.preventDefault());
 function updatePads() {
-  const on = touchMode && (state === 'play' || state === 'pause'); document.body.classList.toggle('playing', on); if (!on) return;
+  const on = touchMode && (state === 'play' || state === 'pause'); document.body.classList.toggle('playing', on); if (!on) { if (pointers.size || joy.on) releaseAll(); return; }
   bombN.textContent = bombs; bombEl.classList.toggle('empty', bombs <= 0); muteEl.classList.toggle('muted', muted);
 }
 cv.addEventListener('pointerdown', e => {
