@@ -9,7 +9,9 @@ automatic upgrades and a boss. Plays on computers and phones.
 - **iPhone / Android:** hold the phone sideways and tap to start. On iPhone, tap Share, then **Add to Home Screen** for a full-screen app icon that also works offline.
 - **Run it yourself:** download the repo, open the `docs` folder and double-click `index.html`.
 
-The game lives in `docs/` (that is the folder GitHub Pages publishes). Sound files are in `docs/audio/` - see `docs/audio/README.md`.
+**Also here:** [Last Colony](docs/last-colony/) - a Defender-style game (play at `/last-colony/` on the same site).
+
+The Asteroids game lives in `docs/` (that is the folder GitHub Pages publishes). Sound files are in `docs/audio/` - see `docs/audio/README.md`.
 When you replace an audio file, bump `VERSION` in `docs/sw.js` so devices refresh their offline copy.
 
 ---
