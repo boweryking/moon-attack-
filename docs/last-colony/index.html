@@ -9,7 +9,15 @@
   html, body { margin:0; height:100%; background:#000; overflow:hidden; touch-action:none; overscroll-behavior:none;
     -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
   canvas { display:block; margin:0 auto; background:#000; touch-action:none; outline:none;
-    width:min(100vw, calc(100vh * 16 / 9)); width:min(100vw, calc(100dvh * 16 / 9)); height:auto; aspect-ratio:16/9; }
+    width:min(100vw, calc((100vh - 34px) * 16 / 9)); width:min(100vw, calc((100dvh - 34px) * 16 / 9)); height:auto; aspect-ratio:16/9; }
+  /* Key guide under the game, desktop only (phones have labeled buttons instead). */
+  #keys { height:34px; display:flex; justify-content:center; align-items:center; gap:clamp(8px, 1.2vw, 18px); white-space:nowrap; overflow:hidden;
+    font:600 min(13px, 1.05vw)/1 "Courier New", monospace; color:#7f90bd; background:#000; }
+  #keys b { color:#cfeaff; font-weight:700; border:1px solid #3b4d86; border-radius:5px; padding:3px 6px; margin-right:4px; background:#0b1230; box-shadow:0 1px 0 #1a2550; }
+  #keys b + b { margin-left:-1px; }
+  body.touch #keys { display:none; }
+  body.touch canvas { width:min(100vw, calc(100vh * 16 / 9)); width:min(100vw, calc(100dvh * 16 / 9)); }
+  @media (pointer: coarse) { #keys { display:none; } canvas { width:min(100vw, calc(100vh * 16 / 9)); width:min(100vw, calc(100dvh * 16 / 9)); } }
   /* On-screen controls: big color-coded buttons out in the side margins. */
   :root { --u: clamp(54px, 17dvh, 108px); }
   #pads { display:none; position:fixed; inset:0; z-index:5; pointer-events:none; }
@@ -49,6 +57,7 @@
 </head>
 <body>
 <canvas id="c" width="960" height="540"></canvas>
+<div id="keys"><span><b>↑</b><b>↓</b>Move</span><span><b>←</b><b>→</b>Turn + thrust</span><span><b>Space</b>Fire</span><span><b>B</b>Smart bomb</span><span><b>Shift</b>Warp</span><span><b>X</b>Turn around</span><span><b>P</b>Pause</span><span><b>M</b>Mute</span><span><b>Enter</b>Start</span></div>
 <div id="pads">
   <div id="padT">
     <button class="pad" id="mutePad" data-pad="mute" style="--c:#8fa0cc;--bg:rgba(143,160,204,.22)" aria-label="Sound on or off"><svg viewBox="0 0 24 24"><path class="f" d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/><path class="slash" d="M3 3l18 18"/></svg></button>
@@ -276,6 +285,7 @@ const endPointer = e => { if (pointers.delete(e.pointerId)) refreshTouch(); };
 for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) padsEl.addEventListener(ev, endPointer);
 padsEl.addEventListener('contextmenu', e => e.preventDefault());
 function updatePads() {
+  document.body.classList.toggle('touch', touchMode);
   const on = touchMode && (state === 'play' || state === 'pause'); document.body.classList.toggle('playing', on); if (!on) { if (pointers.size || joy.on) releaseAll(); return; }
   bombN.textContent = bombs; bombEl.classList.toggle('empty', bombs <= 0); muteEl.classList.toggle('muted', muted);
 }
