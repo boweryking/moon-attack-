@@ -378,7 +378,6 @@ function updatePads() {
 }
 cv.addEventListener('pointerdown', e => {
   window.focus(); audio(); e.preventDefault();
-  if (e.pointerType !== 'mouse' && !standalone && !document.fullscreenElement && document.documentElement.requestFullscreen) { try { document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}); } catch (err) {} } if (e.pointerType !== 'mouse') touchMode = true;
   if (state === 'title') { play('radio', 0.5); startStory(); } else if (state === 'over') { fromRestart = true; newGame(); } else if (state === 'story') endStory(); else if (state === 'pause') state = 'play';
 });
 cv.addEventListener('contextmenu', e => e.preventDefault()); cv.tabIndex = 0;
