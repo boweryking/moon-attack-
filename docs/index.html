@@ -39,6 +39,7 @@
   .pad .badge { position:absolute; top:-4px; right:-4px; min-width:1.5em; padding:0 .3em; border-radius:1em; background:#000c; border:2px solid var(--c);
     font:700 calc(var(--u) * .24)/1.4 "Courier New", monospace; text-align:center; pointer-events:none; }
   .pad.empty { opacity:.35; }
+  .pad.listening { background:var(--c); box-shadow:0 0 22px var(--c), inset 0 0 14px rgba(255,255,255,.5); opacity:1; }
   .pad .eb { position:absolute; left:14%; right:14%; bottom:-9px; height:6px; border-radius:3px; background:#000a; border:1px solid var(--c); overflow:hidden; pointer-events:none; }
   .pad .eb b { display:block; height:100%; width:100%; background:#35e07a; }
   #mutePad .slash { display:none; } #mutePad.muted .slash { display:block; } #mutePad.muted .wave { display:none; }
@@ -61,9 +62,10 @@
 </head>
 <body>
 <canvas id="c" width="960" height="720"></canvas>
-<div id="keys"><span><b>←</b><b>→</b>Rotate</span><span><b>↑</b>Thrust</span><span><b>Space</b>Fire</span><span><b>S</b>Shield (hold)</span><span><b>B</b>Grenade</span><span><b>Shift</b>Hyperspace</span><span><b>P</b>Pause</span><span><b>M</b>Mute</span><span><b>Enter</b>Start</span></div>
+<div id="keys"><span><b>←</b><b>→</b>Rotate</span><span><b>↑</b>Thrust</span><span><b>Space</b>Fire</span><span><b>S</b>Shield (hold)</span><span><b>B</b>Grenade</span><span><b>H</b>Hyperspace</span><span><b>P</b>Pause</span><span><b>M</b>Mute</span><span><b>V</b>Voice</span><span><b>Enter</b>Start</span></div>
 <div id="pads">
   <div id="padT">
+    <button class="pad" id="voicePad" data-pad="voice" style="--c:#6f9;--bg:rgba(102,255,153,.20)" aria-label="Voice commands"><svg viewBox="0 0 24 24"><rect class="f" x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></button>
     <button class="pad" id="mutePad" data-pad="mute" style="--c:#8fa0cc;--bg:rgba(143,160,204,.22)" aria-label="Sound on or off"><svg viewBox="0 0 24 24"><path class="f" d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/><path class="slash" d="M3 3l18 18"/></svg></button>
     <button class="pad" data-pad="pause" style="--c:#8fa0cc;--bg:rgba(143,160,204,.22)" aria-label="Pause"><svg viewBox="0 0 24 24"><path class="f" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg></button>
   </div>
@@ -82,7 +84,7 @@
 <div id="rot">Turn your phone sideways to play.<br>Asteroids needs a wide screen.</div>
 <script>
 // ===== Classic Asteroids (vector style) =====
-// Controls: ←/→ rotate, ↑ thrust, SPACE fire, SHIFT/H hyperspace, ENTER start, P pause, M mute
+// Controls: ←/→ rotate, ↑ thrust, SPACE fire, H hyperspace, V voice commands, ENTER start, P pause, M mute
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const W = cv.width, H = cv.height, TAU = Math.PI * 2;
 
@@ -302,12 +304,91 @@ function heartbeat(dt) {
 
 // ---------- Input ----------
 const keys = {};
+const GAMEKEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Enter', 'KeyB', 'KeyG', 'KeyH', 'KeyX', 'KeyS', 'KeyP', 'KeyM', 'KeyC', 'KeyV']);
+const MODS = new Set(['Alt', 'Meta', 'Control', 'Shift']);
 addEventListener('keydown', e => {
-  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code)) e.preventDefault();
-  if (!keys[e.code]) onPress(e.code);
-  keys[e.code] = true;
+  // Option, Command and Control sit right next to the arrow keys. If one is hit by accident, ignore it and stop the browser acting on it
+  // (no "back", no menus). On a Mac, a key released while Command is down never reports its release, so drop every held key when Command changes.
+  if (GAMEKEYS.has(e.code) || e.key === 'Alt' || e.key === 'Meta' || e.key === 'Control') e.preventDefault();
+  if (e.key === 'Meta') for (const k in keys) keys[k] = false;
+  if (MODS.has(e.key)) return;
+  if (!keys[e.code]) onPress(e.code); keys[e.code] = true;
 });
-addEventListener('keyup', e => keys[e.code] = false);
+addEventListener('keyup', e => {
+  if (e.key === 'Alt' || e.key === 'Meta') { e.preventDefault(); for (const k in keys) keys[k] = false; }
+  keys[e.code] = false;
+});
+// Switching away (Spotlight, another window, the chat beside the game) pauses the game instead of letting you die.
+function autoPause() { for (const k in keys) keys[k] = false; if (state === 'play') state = 'pause'; }
+addEventListener('blur', autoPause);
+document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
+
+// ---------- Voice commands (Web Speech API) ----------
+// Say a command out loud. Works in Chrome, Edge and Safari on the real website; browsers block the microphone inside the claude.ai preview.
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let voiceOn = false, voiceRec = null, voiceListening = false, voiceHeard = '', voiceHeardT = 0, voiceNote = '', voiceNoteT = 0, voiceQuietAt = 0, voiceInit = false; const voiceLast = {};
+let voiceShield = false;
+const VOICE_HINT = 'shields, grenade, hyperspace, pause, mute';
+function voiceStartGame() { if (state === 'title') { sfx.coin(); startStory(); } else if (state === 'over') { sfx.coin(); fromRestart = true; newGame(); } else if (state === 'story') endStory(); else if (state === 'pause') state = 'play'; }
+const VOICE_CMDS = [
+  [/\b(shields? (down|off)|drop (the )?shields?|lower (the )?shields?|cancel shields?)\b/, 'shields off', () => { voiceShield = false; }],
+  [/\b(shields?|force ?field)\b/, 'shields', () => { voiceShield = true; }],
+  [/\b(grenades?|bombs?|boom|blast)\b/, 'grenade', () => { if (state === 'play' && ship.alive) grenade(); }],
+  [/\b(hyper ?space|hyper|warp|jump|teleport)\b/, 'hyperspace', () => { if (state === 'play' && ship.alive) hyperspace(); }],
+  [/\b(unmute|sound on)\b/, 'unmute', () => { muted = false; }],
+  [/\b(mute|silence|quiet)\b/, 'mute', () => { muted = true; }],
+  [/\b(pause|stop|hold on|wait)\b/, 'pause', () => { if (state === 'play') state = 'pause'; }],
+  [/\b(resume|continue|unpause|keep going)\b/, 'resume', () => { if (state === 'pause') state = 'play'; }],
+  [/\b(start|begin|launch|new game|play again)\b/, 'start', voiceStartGame],
+];
+function voiceSay(msg, secs = 4) { voiceNote = msg; voiceNoteT = secs; }
+// The microphone can hear the announcer through the speakers ("Smart bomb." would set off a bomb). So while a voice line is playing,
+// ignore a phrase only if every word of it is in what the announcer is saying. Anything else you say still counts.
+function voiceIsEcho(heard) {
+  const words = heard.split(/\s+/).filter(Boolean), said = new Set(String(subText || '').toLowerCase().replace(/[^a-z ]/g, ' ').split(/\s+/));
+  return words.length > 0 && words.every(w => said.has(w));
+}
+function voiceHandle(text) {
+  let rest = text.toLowerCase().replace(/[^a-z ]/g, ' ');
+  if (performance.now() < voiceQuietAt && voiceIsEcho(rest)) return;
+  voiceHeard = text.trim(); voiceHeardT = 3;
+  for (const [re, name, fn] of VOICE_CMDS) {
+    if (!re.test(rest)) continue; rest = rest.replace(re, ' ');
+    const now = performance.now(); if (now - (voiceLast[name] || 0) < 1300) continue; voiceLast[name] = now;
+    fn(); voiceHeard = name.toUpperCase();
+  }
+}
+function voiceStart() {
+  if (!SR) { voiceOn = false; voiceSay('Voice commands need Chrome, Edge or Safari.', 6); return; }
+  try {
+    voiceRec = new SR(); voiceRec.continuous = true; voiceRec.interimResults = true; voiceRec.lang = 'en-US';
+    voiceRec.onstart = () => { voiceListening = true; };
+    voiceRec.onresult = e => { for (let i = e.resultIndex; i < e.results.length; i++) voiceHandle(e.results[i][0].transcript); };
+    voiceRec.onerror = e => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { voiceOn = false; voiceListening = false; voiceSay('Microphone is blocked here. Voice works on the full website, not in this preview.', 8); }
+      else if (e.error === 'audio-capture') { voiceOn = false; voiceListening = false; voiceSay('No microphone found.', 6); }
+    };
+    voiceRec.onend = () => { voiceListening = false; if (voiceOn) setTimeout(() => { try { voiceRec.start(); } catch (err) {} }, 300); };
+    voiceRec.start();
+  } catch (err) { voiceOn = false; voiceSay('Could not start voice commands.', 5); }
+}
+function voiceToggle() {
+  voiceOn = !voiceOn;
+  if (voiceOn) { voiceStart(); if (voiceOn) voiceSay('Listening. Say: ' + VOICE_HINT, 5); try { localStorage.setItem('voice-on', '1'); } catch (e) {} }
+  else { try { voiceRec && voiceRec.abort(); } catch (e) {} voiceListening = false; voiceSay('Voice commands off.', 2); try { localStorage.removeItem('voice-on'); } catch (e) {} }
+}
+function voiceMaybeAuto() { // if voice was on last time, turn it back on at the first key or tap (browsers want a gesture)
+  if (voiceInit) return; voiceInit = true;
+  try { if (localStorage.getItem('voice-on')) { voiceOn = true; voiceStart(); } } catch (e) {}
+}
+addEventListener('keydown', voiceMaybeAuto, { once: true, passive: true }); document.addEventListener('pointerdown', voiceMaybeAuto, { once: true, passive: true });
+function drawVoice() {
+  if (!voiceOn && voiceNoteT <= 0) return;
+  if (voiceNoteT > 0) { neon('#fc6', 6); text(voiceNote, 18, H - 16, 13, 'left'); return; }
+  neon(voiceListening ? '#6f9' : '#fc6', 6);
+  text((voiceListening ? 'MIC ON' : 'MIC STARTING') + '   say: ' + VOICE_HINT.toUpperCase() + (voiceHeardT > 0 ? '   heard: "' + voiceHeard + '"' : ''), 18, H - 16, 13, 'left');
+}
+
 // ---------- Touch controls (phones / tablets) ----------
 // Big color-coded buttons in the side margins. Multi-touch: left thumb steers, right thumb fires. Thumbs can slide between buttons.
 let touchMode = matchMedia('(pointer: coarse)').matches;
@@ -323,6 +404,7 @@ function refreshTouch() {
   for (const el of padEls) el.classList.toggle('on', !!padDown[el.dataset.pad]);
 }
 function padTap(n) {
+  if (n === 'voice') return voiceToggle();
   if (n === 'pause') return onPress('KeyP');
   if (n === 'mute') return onPress('KeyM');
   if (state !== 'play' || !ship.alive) return;
@@ -353,7 +435,7 @@ for (const ev of ['touchend', 'touchcancel']) document.addEventListener(ev, e =>
 let activeTouches = 0; // how many fingers are really on the screen, so leftover 'held' buttons can be spotted and cleared
 for (const ev of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) document.addEventListener(ev, e => { activeTouches = e.touches.length; }, { passive: true });
 function updatePads() {
-  document.body.classList.toggle('touch', touchMode); // show the buttons while playing; keep counters and the shield meter current
+  document.body.classList.toggle('touch', touchMode); document.getElementById('voicePad').classList.toggle('listening', voiceOn); // show the buttons while playing; keep counters and the shield meter current
   const on = touchMode && (state === 'play' || state === 'pause');
   document.body.classList.toggle('playing', on); if (!on) { if (pointers.size) releaseAll(); return; }
   bombN.textContent = up.grenades; bombEl.classList.toggle('empty', up.grenades <= 0);
@@ -365,12 +447,13 @@ function updatePads() {
 cv.addEventListener('pointerdown', e => {
   window.focus(); audio(); e.preventDefault();
   if (e.pointerType !== 'mouse') touchMode = true;
-  if (state === 'title' || state === 'over') onPress('Enter'); else if (state === 'story') endStory();
+  if (state === 'title' || state === 'over') onPress('Enter'); else if (state === 'story') endStory(); else if (state === 'pause') state = 'play';
 });
 cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.tabIndex = 0;
 function onPress(code) {
   audio();
+  if (code === 'KeyV') voiceToggle();
   if (code === 'KeyM') muted = !muted;
   if (code === 'KeyC') fx = !fx;
   if (code === 'KeyP' && (state === 'play' || state === 'pause')) state = state === 'play' ? 'pause' : 'play';
@@ -382,7 +465,7 @@ function onPress(code) {
   if (state === 'play' && ship.alive) {
     if (code === 'Space') fire();
     if (code === 'KeyB' || code === 'KeyG') grenade();
-    if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyH') hyperspace();
+    if (code === 'KeyH') hyperspace();
   }
 }
 
@@ -577,6 +660,7 @@ function raiseShield() {
   if (performance.now() - lastShieldSay > 12000) { lastShieldSay = performance.now(); say('ann_shields_up', 'Shields up.', 1); }
 }
 function lowerShield(broken) {
+  if (broken) voiceShield = false; // a voice-held shield drops when it breaks
   ship.shield = false; ship.rechargeDelay = broken ? 2.5 : 1;
   if (broken) { ship.locked = true; ship.needRelease = true; sfx.shieldBreak(); shake = Math.max(shake, 8); ring(ship.x, ship.y, 70, '#f55'); say('ann_shields_down', 'Shields depleted.', 2); }
 }
@@ -619,7 +703,7 @@ function update(dt) {
     ship.x += ship.vx * dt; ship.y += ship.vy * dt; wrap(ship);
     if (ship.inv > 0) ship.inv -= dt;
     // force field: hold S (or Down). Drains energy while up, recharges when down.
-    const want = keys.KeyS || keys.ArrowDown || tkeys.KeyS;
+    const want = keys.KeyS || keys.ArrowDown || tkeys.KeyS || voiceShield;
     if (!want) ship.needRelease = false; // after a break, release S before raising again
     if (want && !ship.shield && !ship.locked && !ship.needRelease && ship.energy > 8) raiseShield();
     else if (!want && ship.shield) lowerShield(false);
@@ -811,20 +895,21 @@ function render() {
     neon('#fff', 10); text(touchMode ? 'TAP ANYWHERE TO START' : 'PRESS ENTER OR SPACE TO START', W / 2, H / 2 + 10, 22);
     neon('#9ef', 6);
     if (touchMode) { text('LEFT THUMB: STEER AND THRUST', W / 2, H / 2 + 60, 16); text('RIGHT THUMB: FIRE (HOLD) \u00B7 SHIELD \u00B7 BOMB \u00B7 WARP', W / 2, H / 2 + 86, 16); }
-    else { text('← → ROTATE   ↑ THRUST   SPACE FIRE   S SHIELD   B GRENADE   SHIFT HYPERSPACE', W / 2, H / 2 + 60, 16);
-      text('P PAUSE   M MUTE   C CRT EFFECTS', W / 2, H / 2 + 86, 16); }
+    else { text('← → ROTATE   ↑ THRUST   SPACE FIRE   S SHIELD   B GRENADE   H HYPERSPACE', W / 2, H / 2 + 60, 16);
+      text('P PAUSE   M MUTE   V VOICE COMMANDS   C CRT EFFECTS', W / 2, H / 2 + 86, 16); }
     if (touchMode && !standalone && location.hostname.endsWith('github.io')) { neon('#fd6', 6); text('TIP: SHARE > ADD TO HOME SCREEN FOR FULL SCREEN', W / 2, H / 2 + 130, 15); }
   } else if (state === 'over') {
     neon('#f55', 24); text('GAME OVER', W / 2, H / 2 - 10, 64);
     neon('#fff', 8); text(touchMode ? 'TAP TO PLAY AGAIN' : 'PRESS ENTER TO PLAY AGAIN', W / 2, H / 2 + 40, 20);
   } else if (state === 'story') { neon('#dff', 10); drawStory(); }
-  else if (state === 'pause') { neon('#fff', 14); text('PAUSED', W / 2, H / 2, 48); }
+  else if (state === 'pause') { neon('#fff', 14); text('PAUSED', W / 2, H / 2, 48); neon('#9ef', 8); text(touchMode ? 'TAP THE PAUSE BUTTON TO RESUME' : 'PRESS P OR CLICK TO RESUME', W / 2, H / 2 + 40, 18); }
   else if (!rocks.length && !ufo && waveDelay > 0) { const nf = fieldFor(wave + 1); neon(FIELDS[nf].col || rc, 18); text('FIELD ' + (wave + 1) + '  -  ' + FIELDS[nf].name, W / 2, H / 2 + 40, 34); }
   if (state === 'play' && banner.t > 0) { ctx.globalAlpha = Math.min(1, banner.t); neon(FIELDS[field].col || rc, 16); text(banner.text, W / 2, 110, 26); ctx.globalAlpha = 1; }
   if (state === 'play' && upBanner.t > 0) { ctx.globalAlpha = Math.min(1, upBanner.t); neon('#fd6', 18); text(upBanner.text, W / 2, H / 2 - 20, 30); ctx.globalAlpha = 1; }
   if (subT > 0 && state !== 'story') { // voice subtitles
     ctx.globalAlpha = Math.min(1, subT * 2); neon('#9fd', 8);
     wrapText(subText, W / 2, H - 70, W - 200, 26, 20); ctx.globalAlpha = 1; }
+  drawVoice();
   ctx.shadowBlur = 0; ctx.fillStyle = '#fff';
 
   if (fx) {
@@ -852,6 +937,8 @@ function frame(t) {
   }
   if (subT > 0 && subT < 50) subT -= dt;
   musicSet(musicPick()); musicTick(dt); starsTick(dt); updatePads();
+  if ((voice && !voice.ended && !voice.paused) || (state === 'story' && st.clip && !st.clip.ended)) voiceQuietAt = performance.now() + 900;
+  voiceNoteT -= dt; voiceHeardT -= dt;
   render(); requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

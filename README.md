@@ -5,8 +5,9 @@ automatic upgrades and a boss. Plays on computers and phones.
 
 **Play it:** https://boweryking.github.io/moon-attack-/
 
-- **Computer:** Enter starts. Arrow keys steer and thrust, Space fires, S holds the shield, B throws a grenade, Shift warps, P pauses, M mutes, C toggles the CRT effects.
+- **Computer:** Enter starts. Arrow keys steer and thrust, Space fires, S holds the shield, B throws a grenade, H warps, P pauses, M mutes, C toggles the CRT effects.
 - **iPhone / Android:** hold the phone sideways and tap to start. On iPhone, tap Share, then **Add to Home Screen** for a full-screen app icon that also works offline.
+- **Voice commands** (computer or phone, on the real website only): press V, then say "shields" / "grenade" / "hyperspace" (Asteroids) or "bomb" / "warp" / "turn" (Last Colony), plus "pause", "resume", "mute", "start".
 - **Run it yourself:** download the repo, open the `docs` folder and double-click `index.html`.
 
 **Also here:** [Last Colony](docs/last-colony/) - a Defender-style game (play at `/last-colony/` on the same site).
