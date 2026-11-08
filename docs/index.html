@@ -43,14 +43,14 @@
   .pad .eb { position:absolute; left:14%; right:14%; bottom:-9px; height:6px; border-radius:3px; background:#000a; border:1px solid var(--c); overflow:hidden; pointer-events:none; }
   .pad .eb b { display:block; height:100%; width:100%; background:#35e07a; }
   #mutePad .slash { display:none; } #mutePad.muted .slash { display:block; } #mutePad.muted .wave { display:none; }
-  #padL { position:absolute; left:max(12px, env(safe-area-inset-left, 0px)); bottom:max(12px, 12dvh); width:calc(var(--u) * 2.3); height:calc(var(--u) * 2.35); }
+  #padL { position:absolute; left:max(12px, env(safe-area-inset-left, 0px)); bottom:max(10px, 8dvh); width:calc(var(--u) * 3.2); height:calc(var(--u) * 2.9); }
   #padR { position:absolute; right:max(12px, env(safe-area-inset-right, 0px)); bottom:max(12px, 12dvh); width:calc(var(--u) * 2.9); height:calc(var(--u) * 2.75); }
   #padT { position:absolute; top:max(8px, env(safe-area-inset-top, 0px)); right:max(10px, env(safe-area-inset-right, 0px)); display:flex; gap:10px; pointer-events:none; }
   #padT .pad { position:static; width:calc(var(--u) * .62); height:calc(var(--u) * .62); }
   #bPad { left:0; bottom:0; width:calc(var(--u) * 1.05); height:calc(var(--u) * 1.05); }
-  #tPad { left:calc(var(--u) * .62); top:0; width:calc(var(--u) * 1.1); height:calc(var(--u) * 1.1); }
-  #lPad { left:0; bottom:0; width:calc(var(--u) * 1.05); height:calc(var(--u) * 1.05); }
-  #rPad { right:0; bottom:0; width:calc(var(--u) * 1.05); height:calc(var(--u) * 1.05); }
+  #tPad { left:calc(var(--u) * .95); top:0; width:calc(var(--u) * 1.3); height:calc(var(--u) * 1.3); }
+  #lPad { left:0; bottom:0; width:calc(var(--u) * 1.55); height:calc(var(--u) * 1.55); }
+  #rPad { right:0; bottom:0; width:calc(var(--u) * 1.55); height:calc(var(--u) * 1.55); }
   #fPad { right:0; bottom:0; width:calc(var(--u) * 1.65); height:calc(var(--u) * 1.65); }
   #sPad { left:0; bottom:0; width:calc(var(--u) * 1.05); height:calc(var(--u) * 1.05); }
   #gPad { left:calc(var(--u) * .3); top:0; width:calc(var(--u) * 1.1); height:calc(var(--u) * 1.1); }
@@ -460,6 +460,7 @@ function updatePads() {
 // Tap the game screen to focus the page and to start / restart / skip the story.
 cv.addEventListener('pointerdown', e => {
   window.focus(); audio(); e.preventDefault();
+  if (e.pointerType !== 'mouse' && !standalone && !document.fullscreenElement && document.documentElement.requestFullscreen) { try { document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}); } catch (err) {} }
   if (e.pointerType !== 'mouse') touchMode = true;
   if (state === 'title' || state === 'over') onPress('Enter'); else if (state === 'story') endStory(); else if (state === 'pause') state = 'play';
 });
@@ -914,6 +915,7 @@ function render() {
   if (state === 'title') {
     neon(title, 24); text('ASTEROIDS', W / 2, H / 2 - 60, 76);
     neon('#fff', 10); text(touchMode ? 'TAP ANYWHERE TO START' : 'PRESS ENTER OR SPACE TO START', W / 2, H / 2 + 10, 22);
+    if (touchMode && !standalone && !document.fullscreenElement && !document.documentElement.requestFullscreen) { neon('#9ef', 6); text('FULL SCREEN: SHARE  >  ADD TO HOME SCREEN, THEN OPEN IT FROM THERE', W / 2, H / 2 + 52, 13); }
     neon('#9ef', 6);
     if (touchMode) { text('LEFT THUMB: STEER AND THRUST', W / 2, H / 2 + 60, 16); text('RIGHT THUMB: FIRE (HOLD) \u00B7 SHIELD \u00B7 BOMB \u00B7 WARP', W / 2, H / 2 + 86, 16); }
     else { text('← → ROTATE   ↑ THRUST   SPACE FIRE   S SHIELD   B GRENADE   H HYPERSPACE', W / 2, H / 2 + 60, 16);

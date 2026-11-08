@@ -377,7 +377,8 @@ function updatePads() {
   bombN.textContent = bombs; bombEl.classList.toggle('empty', bombs <= 0); muteEl.classList.toggle('muted', muted);
 }
 cv.addEventListener('pointerdown', e => {
-  window.focus(); audio(); e.preventDefault(); if (e.pointerType !== 'mouse') touchMode = true;
+  window.focus(); audio(); e.preventDefault();
+  if (e.pointerType !== 'mouse' && !standalone && !document.fullscreenElement && document.documentElement.requestFullscreen) { try { document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}); } catch (err) {} } if (e.pointerType !== 'mouse') touchMode = true;
   if (state === 'title') { play('radio', 0.5); startStory(); } else if (state === 'over') { fromRestart = true; newGame(); } else if (state === 'story') endStory(); else if (state === 'pause') state = 'play';
 });
 cv.addEventListener('contextmenu', e => e.preventDefault()); cv.tabIndex = 0;
@@ -709,7 +710,7 @@ function render() {
   if (state !== 'story' && state !== 'title') drawHud(t);
   ctx.shadowBlur = 0; const hue = (t * 40) % 360;
   if (state === 'title') { neon(`hsl(${hue},100%,72%)`, 24); text('LAST COLONY', W / 2, H / 2 - 40, 72);
-    neon('#fff', 10); text(touchMode ? 'TAP ANYWHERE TO START' : 'PRESS ENTER OR SPACE TO START', W / 2, H / 2 + 20, 22); neon('#9ef', 6);
+    neon('#fff', 10); text(touchMode ? 'TAP ANYWHERE TO START' : 'PRESS ENTER OR SPACE TO START', W / 2, H / 2 + 20, 22); if (touchMode && !standalone && !document.fullscreenElement && !document.documentElement.requestFullscreen) { neon('#9ef', 6); text('FULL SCREEN: SHARE  >  ADD TO HOME SCREEN, THEN OPEN IT FROM THERE', W / 2, H / 2 + 56, 13); } neon('#9ef', 6);
     if (touchMode) { text('LEFT THUMB: JOYSTICK. PUSH SIDEWAYS TO FLY, UP OR DOWN TO CLIMB AND DIVE', W / 2, H / 2 + 66, 15); text('RIGHT THUMB: FIRE (HOLD), SMART BOMB, WARP', W / 2, H / 2 + 90, 15); }
     else { text('↑ ↓ MOVE   ← → TURN + THRUST   SPACE FIRE   B SMART BOMB   H WARP', W / 2, H / 2 + 66, 15); text('P PAUSE   M MUTE   V VOICE   C CRT EFFECTS   (X = TURN AROUND)', W / 2, H / 2 + 90, 15); }
     neon('#fd6', 6); text('PROTECT THE COLONISTS. CATCH THE FALLING. DEFEND HAVEN.', W / 2, H / 2 + 134, 15);
