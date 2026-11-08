@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Last Line Asteroids</title>
 <meta name="description" content="Defend Earth from the asteroid swarm. Arcade Asteroids with a story, voice acting, fields, upgrades and a soundtrack.">
 <meta name="theme-color" content="#000000">
@@ -43,8 +43,8 @@
   .pad .eb { position:absolute; left:14%; right:14%; bottom:-9px; height:6px; border-radius:3px; background:#000a; border:1px solid var(--c); overflow:hidden; pointer-events:none; }
   .pad .eb b { display:block; height:100%; width:100%; background:#35e07a; }
   #mutePad .slash { display:none; } #mutePad.muted .slash { display:block; } #mutePad.muted .wave { display:none; }
-  #padL { position:absolute; left:max(12px, env(safe-area-inset-left, 0px)); bottom:max(14px, 12dvh); width:calc(var(--u) * 3.1); height:calc(var(--u) * 2.45); }
-  #padR { position:absolute; right:max(12px, env(safe-area-inset-right, 0px)); bottom:max(12px, 12dvh); width:calc(var(--u) * 2.9); height:calc(var(--u) * 2.75); }
+  #padL { position:absolute; left:max(12px, env(safe-area-inset-left, 0px)); bottom:max(34px, 21dvh); width:calc(var(--u) * 3.1); height:calc(var(--u) * 2.45); }
+  #padR { position:absolute; right:max(12px, env(safe-area-inset-right, 0px)); bottom:max(40px, 24dvh); width:calc(var(--u) * 2.9); height:calc(var(--u) * 2.75); }
   #padT { position:absolute; top:max(8px, env(safe-area-inset-top, 0px)); right:max(10px, env(safe-area-inset-right, 0px)); display:flex; gap:10px; pointer-events:none; }
   #padT .pad { position:static; width:calc(var(--u) * .62); height:calc(var(--u) * .62); }
   #bPad { left:0; bottom:0; width:calc(var(--u) * 1.05); height:calc(var(--u) * 1.05); }
@@ -408,6 +408,10 @@ const mouseUp = e => { if (e.pointerType !== 'mouse') return; if (e.button === 2
 cv.addEventListener('pointerup', mouseUp); cv.addEventListener('pointercancel', () => { mouse.l = mouse.r = false; });
 addEventListener('blur', () => { mouse.l = mouse.r = false; });
 let mFireT = 0; const MOUSE_RING = 150;
+// Stop iOS double-tap / pinch zoom ("the screen expands and I can't get out")
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend', 'dblclick']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+let lastTapT = 0; document.addEventListener('touchend', e => { const n = Date.now(); if (n - lastTapT < 350) e.preventDefault(); lastTapT = n; }, { passive: false });
+
 // ---------- Touch controls (phones / tablets) ----------
 // Big color-coded buttons in the side margins. Multi-touch: left thumb steers, right thumb fires. Thumbs can slide between buttons.
 let touchMode = matchMedia('(pointer: coarse)').matches;

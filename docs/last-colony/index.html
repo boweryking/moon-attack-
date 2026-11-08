@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Last Colony</title>
 <meta name="theme-color" content="#000000">
 <style>
@@ -33,7 +33,7 @@
   .pad.empty { opacity:.35; }
   .pad.listening { background:var(--c); box-shadow:0 0 22px var(--c), inset 0 0 14px rgba(255,255,255,.5); opacity:1; }
   #mutePad .slash { display:none; } #mutePad.muted .slash { display:block; } #mutePad.muted .wave { display:none; }
-  #padR { position:absolute; right:max(12px, env(safe-area-inset-right, 0px)); bottom:max(12px, 17dvh); width:calc(var(--u) * 2.9); height:calc(var(--u) * 2.75); }
+  #padR { position:absolute; right:max(12px, env(safe-area-inset-right, 0px)); bottom:max(40px, 25dvh); width:calc(var(--u) * 2.9); height:calc(var(--u) * 2.75); }
   /* Joystick: a thumb-sized knob on the left, halfway up the screen. */
   #stick { position:absolute; left:max(14px, calc(env(safe-area-inset-left, 0px) + 3vw)); top:50%; transform:translateY(-50%);
     width:calc(var(--u) * 2.8); height:calc(var(--u) * 2.8); pointer-events:auto; touch-action:none; display:flex; align-items:center; justify-content:center; }
@@ -308,6 +308,10 @@ function drawVoice() {
   neon(voiceListening ? '#6f9' : '#fc6', 6);
   text((voiceListening ? 'MIC ON' : 'MIC STARTING') + '   say: ' + VOICE_HINT.toUpperCase() + (voiceHeardT > 0 ? '   heard: "' + voiceHeard + '"' : ''), 18, H - 16, 13, 'left');
 }
+
+// Stop iOS double-tap / pinch zoom ("the screen expands and I can't get out")
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend', 'dblclick']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+let lastTapT = 0; document.addEventListener('touchend', e => { const n = Date.now(); if (n - lastTapT < 350) e.preventDefault(); lastTapT = n; }, { passive: false });
 
 // ---------- Touch controls ----------
 let touchMode = matchMedia('(pointer: coarse)').matches;
