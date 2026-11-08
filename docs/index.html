@@ -62,7 +62,7 @@
 </head>
 <body>
 <canvas id="c" width="960" height="720"></canvas>
-<div id="keys"><span><b>←</b><b>→</b>Rotate</span><span><b>↑</b>Thrust</span><span><b>Space</b>Fire</span><span><b>S</b>Shield (hold)</span><span><b>B</b>Grenade</span><span><b>H</b>Hyperspace</span><span><b>P</b>Pause</span><span><b>M</b>Mute</span><span><b>V</b>Voice</span><span><b>Enter</b>Start</span></div>
+<div id="keys"><span><b>Mouse</b>Aim · outside ring = fly</span><span><b>Click</b>Fire</span><span><b>Right-click</b>Shield</span><span><b>W A D</b>or <b>←↑→</b></span><span><b>Space</b>Fire</span><span><b>S</b>Shield</span><span><b>B</b>Grenade</span><span><b>H</b>Hyperspace</span><span><b>P</b>Pause</span><span><b>M</b>Mute</span><span><b>V</b>Voice</span><span><b>Enter</b>Start</span></div>
 <div id="pads">
   <div id="padT">
     <button class="pad" id="voicePad" data-pad="voice" style="--c:#6f9;--bg:rgba(102,255,153,.20)" aria-label="Voice commands"><svg viewBox="0 0 24 24"><rect class="f" x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></button>
@@ -304,7 +304,7 @@ function heartbeat(dt) {
 
 // ---------- Input ----------
 const keys = {};
-const GAMEKEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Enter', 'KeyB', 'KeyG', 'KeyH', 'KeyX', 'KeyS', 'KeyP', 'KeyM', 'KeyC', 'KeyV']);
+const GAMEKEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Enter', 'KeyB', 'KeyG', 'KeyH', 'KeyX', 'KeyS', 'KeyP', 'KeyM', 'KeyC', 'KeyV', 'KeyW', 'KeyA', 'KeyD']);
 const MODS = new Set(['Alt', 'Meta', 'Control', 'Shift']);
 addEventListener('keydown', e => {
   // Option, Command and Control sit right next to the arrow keys. If one is hit by accident, ignore it and stop the browser acting on it
@@ -312,6 +312,7 @@ addEventListener('keydown', e => {
   if (GAMEKEYS.has(e.code) || e.key === 'Alt' || e.key === 'Meta' || e.key === 'Control') e.preventDefault();
   if (e.key === 'Meta') for (const k in keys) keys[k] = false;
   if (MODS.has(e.key)) return;
+  if (/^(Arrow|Key[WASD])/.test(e.code) && typeof mouse !== 'undefined') mouse.on = false; // keys take over from the mouse until it moves again
   if (!keys[e.code]) onPress(e.code); keys[e.code] = true;
 });
 addEventListener('keyup', e => {
@@ -319,7 +320,7 @@ addEventListener('keyup', e => {
   keys[e.code] = false;
 });
 // Switching away (Spotlight, another window, the chat beside the game) pauses the game instead of letting you die.
-function autoPause() { for (const k in keys) keys[k] = false; if (state === 'play') state = 'pause'; }
+function autoPause() { for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; if (state === 'play') state = 'pause'; }
 addEventListener('blur', autoPause);
 document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
 
@@ -351,7 +352,7 @@ function voiceIsEcho(heard) {
 function voiceHandle(text) {
   let rest = text.toLowerCase().replace(/[^a-z ]/g, ' ');
   if (performance.now() < voiceQuietAt && voiceIsEcho(rest)) return;
-  voiceHeard = text.trim(); voiceHeardT = 3;
+  voiceHeard = text.trim(); voiceHeardT = 4;
   for (const [re, name, fn] of VOICE_CMDS) {
     if (!re.test(rest)) continue; rest = rest.replace(re, ' ');
     const now = performance.now(); if (now - (voiceLast[name] || 0) < 1300) continue; voiceLast[name] = now;
@@ -362,11 +363,14 @@ function voiceStart() {
   if (!SR) { voiceOn = false; voiceSay('Voice commands need Chrome, Edge or Safari.', 6); return; }
   try {
     voiceRec = new SR(); voiceRec.continuous = true; voiceRec.interimResults = true; voiceRec.lang = 'en-US';
-    voiceRec.onstart = () => { voiceListening = true; };
+    voiceRec.onstart = () => { voiceListening = true; voiceSay('Mic is on. Say: ' + VOICE_HINT, 4); };
+    voiceRec.onaudiostart = () => { voiceHeard = '(hearing you)'; voiceHeardT = 1.5; };
     voiceRec.onresult = e => { for (let i = e.resultIndex; i < e.results.length; i++) voiceHandle(e.results[i][0].transcript); };
     voiceRec.onerror = e => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { voiceOn = false; voiceListening = false; voiceSay('Microphone is blocked here. Voice works on the full website, not in this preview.', 8); }
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { voiceOn = false; voiceListening = false; voiceSay('Microphone blocked. Click the lock icon in the address bar, allow Microphone, then press V.', 9); }
       else if (e.error === 'audio-capture') { voiceOn = false; voiceListening = false; voiceSay('No microphone found.', 6); }
+      else if (e.error === 'network') { voiceOn = false; voiceListening = false; voiceSay('This browser cannot reach its speech service (Brave and some setups block it). Try Chrome or Safari.', 10); }
+      else if (e.error === 'language-not-supported') { voiceOn = false; voiceSay('Speech language not supported here.', 6); }
     };
     voiceRec.onend = () => { voiceListening = false; if (voiceOn) setTimeout(() => { try { voiceRec.start(); } catch (err) {} }, 300); };
     voiceRec.start();
@@ -389,6 +393,16 @@ function drawVoice() {
   text((voiceListening ? 'MIC ON' : 'MIC STARTING') + '   say: ' + VOICE_HINT.toUpperCase() + (voiceHeardT > 0 ? '   heard: "' + voiceHeard + '"' : ''), 18, H - 16, 13, 'left');
 }
 
+
+// ---------- Mouse / touchpad ----------
+const mouse = { on: false, x: 0, y: 0, l: false, r: false };
+function mouseXY(e) { const r = cv.getBoundingClientRect(); mouse.x = (e.clientX - r.left) * W / r.width; mouse.y = (e.clientY - r.top) * H / r.height; }
+cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') { mouseXY(e); mouse.on = true; } });
+cv.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') return; mouseXY(e); mouse.on = true; if (e.button === 2) { mouse.r = true; void 0; } else mouse.l = true; try { cv.setPointerCapture(e.pointerId); } catch (err) {} });
+const mouseUp = e => { if (e.pointerType !== 'mouse') return; if (e.button === 2) mouse.r = false; else mouse.l = false; };
+cv.addEventListener('pointerup', mouseUp); cv.addEventListener('pointercancel', () => { mouse.l = mouse.r = false; });
+addEventListener('blur', () => { mouse.l = mouse.r = false; });
+let mFireT = 0; const MOUSE_RING = 150;
 // ---------- Touch controls (phones / tablets) ----------
 // Big color-coded buttons in the side margins. Multi-touch: left thumb steers, right thumb fires. Thumbs can slide between buttons.
 let touchMode = matchMedia('(pointer: coarse)').matches;
@@ -692,9 +706,16 @@ function shieldCollisions() { // rocks bounce off, saucer shots are absorbed; ea
 function update(dt) {
   // ship
   if (ship.alive) {
-    if (keys.ArrowLeft || tkeys.ArrowLeft) ship.a -= up.turn * dt;
-    if (keys.ArrowRight || tkeys.ArrowRight) ship.a += up.turn * dt;
-    ship.thrusting = !!(keys.ArrowUp || tkeys.ArrowUp);
+    const kTurn = keys.ArrowLeft || keys.ArrowRight || keys.KeyA || keys.KeyD || tkeys.ArrowLeft || tkeys.ArrowRight;
+    if (keys.ArrowLeft || keys.KeyA || tkeys.ArrowLeft) ship.a -= up.turn * dt;
+    if (keys.ArrowRight || keys.KeyD || tkeys.ArrowRight) ship.a += up.turn * dt;
+    let mThrust = false;
+    if (mouse.on && !kTurn) { // mouse / touchpad: the ship points at the cursor; pull the cursor outside the ring to fly toward it
+      const dx = mouse.x - ship.x, dy = mouse.y - ship.y, d = Math.hypot(dx, dy);
+      if (d > 12) { let da = Math.atan2(dy, dx) - ship.a; da = Math.atan2(Math.sin(da), Math.cos(da)); const step = up.turn * 1.7 * dt; ship.a += Math.abs(da) < step ? da : Math.sign(da) * step; mThrust = d > MOUSE_RING && Math.abs(da) < 0.7; }
+    }
+    if (mouse.l && state === 'play') { mFireT -= dt; if (mFireT <= 0) { fire(); mFireT = 0.17; } } else mFireT = 0;
+    ship.thrusting = !!(keys.ArrowUp || keys.KeyW || tkeys.ArrowUp || mThrust);
     if (ship.thrusting) { ship.vx += Math.cos(ship.a) * up.thrust * dt; ship.vy += Math.sin(ship.a) * up.thrust * dt;
       particles.push({ x: ship.x - Math.cos(ship.a) * 10, y: ship.y - Math.sin(ship.a) * 10,
         vx: -Math.cos(ship.a) * 90 + rand(-25, 25), vy: -Math.sin(ship.a) * 90 + rand(-25, 25), life: 0.3, color: '#fa4' }); }
@@ -703,7 +724,7 @@ function update(dt) {
     ship.x += ship.vx * dt; ship.y += ship.vy * dt; wrap(ship);
     if (ship.inv > 0) ship.inv -= dt;
     // force field: hold S (or Down). Drains energy while up, recharges when down.
-    const want = keys.KeyS || keys.ArrowDown || tkeys.KeyS || voiceShield;
+    const want = keys.KeyS || keys.ArrowDown || tkeys.KeyS || voiceShield || mouse.r;
     if (!want) ship.needRelease = false; // after a break, release S before raising again
     if (want && !ship.shield && !ship.locked && !ship.needRelease && ship.energy > 8) raiseShield();
     else if (!want && ship.shield) lowerShield(false);
@@ -909,6 +930,12 @@ function render() {
   if (subT > 0 && state !== 'story') { // voice subtitles
     ctx.globalAlpha = Math.min(1, subT * 2); neon('#9fd', 8);
     wrapText(subText, W / 2, H - 70, W - 200, 26, 20); ctx.globalAlpha = 1; }
+  if (mouse.on && state === 'play' && ship.alive) { // aiming ring and cursor
+    ctx.save(); ctx.lineWidth = 1.5; ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(150,230,255,.22)'; ctx.setLineDash([4, 9]);
+    ctx.beginPath(); ctx.arc(ship.x, ship.y, MOUSE_RING, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = Math.hypot(mouse.x - ship.x, mouse.y - ship.y) > MOUSE_RING ? 'rgba(255,200,100,.9)' : 'rgba(150,255,200,.9)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(mouse.x, mouse.y, 9, 0, TAU); ctx.moveTo(mouse.x - 15, mouse.y); ctx.lineTo(mouse.x - 4, mouse.y); ctx.moveTo(mouse.x + 4, mouse.y); ctx.lineTo(mouse.x + 15, mouse.y); ctx.moveTo(mouse.x, mouse.y - 15); ctx.lineTo(mouse.x, mouse.y - 4); ctx.moveTo(mouse.x, mouse.y + 4); ctx.lineTo(mouse.x, mouse.y + 15); ctx.stroke(); ctx.restore();
+  }
   drawVoice();
   ctx.shadowBlur = 0; ctx.fillStyle = '#fff';
 
