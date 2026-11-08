@@ -62,7 +62,7 @@
 </head>
 <body>
 <canvas id="c" width="960" height="720"></canvas>
-<div id="keys"><span><b>Mouse</b>Aim · outside ring = fly</span><span><b>Click</b>Fire</span><span><b>Right-click</b>Shield</span><span><b>W A D</b>or <b>←↑→</b></span><span><b>Space</b>Fire</span><span><b>S</b>Shield</span><span><b>B</b>Grenade</span><span><b>H</b>Hyperspace</span><span><b>P</b>Pause</span><span><b>M</b>Mute</span><span><b>V</b>Voice</span><span><b>Enter</b>Start</span></div>
+<div id="keys"><span><b>Mouse</b>Aim · outside ring = fly</span><span><b>Click</b>Fire (auto on rocks)</span><span><b>Right-click</b>Shield</span><span><b>W A D</b>or <b>←↑→</b></span><span><b>Space</b>Fire</span><span><b>S</b>Shield</span><span><b>B</b>Grenade</span><span><b>H</b>Hyperspace</span><span><b>P</b>Pause</span><span><b>M</b>Mute</span><span><b>V</b>Voice</span><span><b>Enter</b>Start</span></div>
 <div id="pads">
   <div id="padT">
     <button class="pad" id="voicePad" data-pad="voice" style="--c:#6f9;--bg:rgba(102,255,153,.20)" aria-label="Voice commands"><svg viewBox="0 0 24 24"><rect class="f" x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></button>
@@ -715,7 +715,13 @@ function update(dt) {
       const dx = mouse.x - ship.x, dy = mouse.y - ship.y, d = Math.hypot(dx, dy);
       if (d > 12) { let da = Math.atan2(dy, dx) - ship.a; da = Math.atan2(Math.sin(da), Math.cos(da)); const step = up.turn * 1.7 * dt; ship.a += Math.abs(da) < step ? da : Math.sign(da) * step; mThrust = d > MOUSE_RING && Math.abs(da) < 0.7; }
     }
-    if (mouse.l && state === 'play') { mFireT -= dt; if (mFireT <= 0) { fire(); mFireT = 0.17; } } else mFireT = 0;
+    // auto-fire: with the mouse / touchpad, the ship shoots by itself while the cursor is on a rock or saucer and the nose is pointing that way. Click to fire by hand anytime.
+    let mAuto = false;
+    if (mouse.on && !kTurn && state === 'play') {
+      let da = Math.atan2(mouse.y - ship.y, mouse.x - ship.x) - ship.a; da = Math.abs(Math.atan2(Math.sin(da), Math.cos(da)));
+      if (da < 0.3) mAuto = rocks.some(r => Math.hypot(r.x - mouse.x, r.y - mouse.y) < r.r + 22) || (ufo && Math.hypot(ufo.x - mouse.x, ufo.y - mouse.y) < ufo.r + 26);
+    }
+    if ((mouse.l || mAuto) && state === 'play') { mFireT -= dt; if (mFireT <= 0) { fire(); mFireT = 0.17; } } else mFireT = 0;
     ship.thrusting = !!(keys.ArrowUp || keys.KeyW || tkeys.ArrowUp || mThrust);
     if (ship.thrusting) { ship.vx += Math.cos(ship.a) * up.thrust * dt; ship.vy += Math.sin(ship.a) * up.thrust * dt;
       particles.push({ x: ship.x - Math.cos(ship.a) * 10, y: ship.y - Math.sin(ship.a) * 10,
