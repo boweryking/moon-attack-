@@ -58,7 +58,7 @@
 </head>
 <body>
 <canvas id="c" width="960" height="540"></canvas>
-<div id="keys"><span><b>Mouse</b>Up / down</span><span><b>Click</b>Fire</span><span><b>Right-click</b>Smart bomb</span><span><b>A</b><b>D</b>or<b>←</b><b>→</b>Thrust</span><span><b>Space</b>Fire</span><span><b>B</b>Smart bomb</span><span><b>H</b>Warp</span><span><b>X</b>Turn around</span><span><b>P</b>Pause</span><span><b>M</b>Mute</span><span><b>V</b>Voice</span><span><b>Enter</b>Start</span></div>
+<div id="keys"><span><b>Mouse</b>Up / down</span><span><b>Click</b>Fire</span><span><b>Right-click</b>Smart bomb</span><span><b>A</b><b>D</b>or<b>←</b><b>→</b>Thrust</span><span><b>Shift</b>Fire</span><span><b>⌘</b>Smart bomb</span><span><b>H</b>Warp</span><span><b>X</b>Turn around</span><span><b>P</b>Pause</span><span><b>M</b>Mute</span><span><b>V</b>Voice</span><span><b>Enter</b>Start</span></div>
 <div id="pads">
   <div id="padT">
     <button class="pad" id="voicePad" data-pad="voice" style="--c:#6f9;--bg:rgba(102,255,153,.20)" aria-label="Voice commands"><svg viewBox="0 0 24 24"><rect class="f" x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></button>
@@ -214,6 +214,8 @@ addEventListener('keydown', e => {
   // (no "back", no menus). On a Mac, a key released while Command is down never reports its release, so drop every held key when Command changes.
   if (GAMEKEYS.has(e.code) || ALIAS[e.code] || e.key === 'Alt' || e.key === 'Meta' || e.key === 'Control') e.preventDefault();
   if (e.key === 'Meta') for (const k in keys) keys[k] = false;
+  if (e.key === 'Meta') { if (!e.repeat) onPress('MetaLeft'); return; } // Command = grenade / smart bomb
+  if (e.key === 'Shift') { if (!keys[e.code]) { keys[e.code] = true; onPress('ShiftLeft'); } return; } // Shift = fire (hold to keep firing)
   if (MODS.has(e.key)) return;
   if (/^Arrow(Up|Down)/.test(code) && typeof mouse !== 'undefined') mouse.on = false; // keys take over from the mouse until it moves again
   if (!keys[code]) onPress(code); keys[code] = true;
@@ -236,8 +238,8 @@ function onPress(code) {
     if (state === 'title') { play('radio', 0.5); startStory(); } else if (state === 'over') { fromRestart = true; newGame(); } else if (state === 'story') endStory();
   }
   if (state === 'play' && ship.alive) {
-    if (code === 'Space') { fire(); ship.cool = 0.14; }
-    if (code === 'KeyB' || code === 'KeyG') smartBomb();
+    if (code === 'Space' || code === 'ShiftLeft') { fire(); ship.cool = 0.14; }
+    if (code === 'KeyB' || code === 'KeyG' || code === 'MetaLeft') smartBomb();
     if (code === 'KeyH') hyperspace();
     if (code === 'KeyX') ship.face *= -1;
   }
@@ -522,13 +524,13 @@ function update(dt) {
       if (ship.thrusting) ship.vx += ship.face * 1100 * dt; else ship.vx *= Math.pow(0.35, dt);
     }
     ship.vx = clamp(ship.vx, -540, 540);
-    const mouseY = mouse.on && !keys.ArrowUp && !keys.ArrowDown && Math.abs(mouse.y - ship.y) > 10 ? clamp((mouse.y - ship.y) / 110, -1, 1) : 0;
+    const mouseY = mouse.on && !keys.ArrowUp && !keys.ArrowDown && Math.abs(mouse.y - ship.y) > 10 ? clamp((mouse.y - ship.y) / 170, -1, 1) * 0.7 : 0;
     const dir = jon ? jy : ((keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0)) || mouseY;
     ship.vy += (dir * 300 - ship.vy) * Math.min(1, dt * 9);
     ship.x = wrapX(ship.x + ship.vx * dt); ship.y += ship.vy * dt;
     ship.y = clamp(ship.y, TOP + 14, planetDead ? H - 8 : groundY(ship.x) - 14);
     if (ship.inv > 0) ship.inv -= dt;
-    if (keys.Space || padDown.fire || mouse.l) { ship.cool -= dt; if (ship.cool <= 0) { fire(); ship.cool = 0.14; } }
+    if (keys.Space || keys.ShiftLeft || keys.ShiftRight || padDown.fire || mouse.l) { ship.cool -= dt; if (ship.cool <= 0) { fire(); ship.cool = 0.14; } }
   } else if (respawnT > 0) {
     respawnT -= dt;
     if (respawnT <= 0) { if (lives <= 0) gameOverSeq(); else { ship = makeShip(ship.x); ebullets = ebullets.filter(b => Math.abs(dxw(ship.x, b.x)) > 260); } }
