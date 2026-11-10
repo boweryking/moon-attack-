@@ -523,6 +523,7 @@ const freshUp = () => ({ maxPower: 100, recharge: 15, turn: 4.2, thrust: 260, ma
 let up = freshUp();
 const tier = () => Math.min(3, Math.floor(up.n / 3));
 const shipCol = () => ['#bff', '#7ff', '#9f9', '#fd6'][tier()];
+let respawnWait = 0;
 function makeShip() {
   return { x: W / 2, y: H / 2, vx: 0, vy: 0, a: -Math.PI / 2, alive: true, inv: 3, cool: 0, thrusting: false, r: 12,
     energy: up.maxPower, shield: false, locked: false, rechargeDelay: 0, hitFlash: 0 };
@@ -551,7 +552,9 @@ const blasts = [];
 function startWave() {
   wave++; field = fieldFor(wave); const F = FIELDS[field];
   let n = Math.min(4 + (wave - 1) * 2, 14); if (field === 'dense') n = Math.min(Math.round(n * 1.6), 20);
-  well = field === 'gravity' ? { x: rand(W * 0.3, W * 0.7), y: rand(H * 0.3, H * 0.7), t: 0 } : null;
+  if (field === 'gravity') n = Math.min(n, 6); // the well drags rocks together, so fewer of them
+  well = null;
+  if (field === 'gravity') { let wx, wy; do { wx = rand(W * 0.2, W * 0.8); wy = rand(H * 0.2, H * 0.8); } while (Math.hypot(wx - W / 2, wy - H / 2) < 170); well = { x: wx, y: wy, t: 0 }; } // never on top of the ship's spawn point
   banner = { text: `FIELD ${wave}  -  ${F.name}`, t: 3.4 };
   if (wave === 1) {
     if (fromRestart) say('ann_title', 'Asteroids. Survive the field.', 1);
@@ -560,7 +563,7 @@ function startWave() {
   else { sfx.alarm(); say('fld_' + field, F.say, 2); }
   if (field === 'mother') rocks.push(makeRock(Math.random() < 0.5 ? 70 : W - 70, rand(120, H - 120), 4));
   else for (let i = 0; i < n; i++) {
-    let x, y; do { x = rand(0, W); y = rand(0, H); } while (Math.hypot(x - W / 2, y - H / 2) < 180);
+    let x, y; do { x = rand(0, W); y = rand(0, H); } while (Math.hypot(x - W / 2, y - H / 2) < 180 || (well && Math.hypot(x - well.x, y - well.y) < 200));
     rocks.push(makeRock(x, y, field === 'dense' && Math.random() < 0.7 ? 2 : 3));
   }
   ufoTimer = rand(12, 20);
@@ -596,7 +599,7 @@ function grantUpgrade() { // after each cleared field: the next upgrade is insta
 }
 function applyWell(o, dt, k) { // pull toward the gravity well, with a soft core so nothing gets stuck
   const dx = well.x - o.x, dy = well.y - o.y, d = Math.hypot(dx, dy) || 1;
-  const acc = (d < 40 ? -140 : 24000 / (d + 140)) * k;
+  const acc = (d < 60 ? -140 : 14000 / (d + 140)) * k;
   o.vx += dx / d * acc * dt; o.vy += dy / d * acc * dt;
 }
 
@@ -764,13 +767,16 @@ function update(dt) {
     respawnT -= dt;
     if (respawnT <= 0) {
       if (lives <= 0) gameOverSeq();
-      else if (rocks.every(r => wdist(r, { x: W / 2, y: H / 2 }) > 130)) { ship = makeShip(); sfx.shield(); }
-      else respawnT = 0.1; // wait for safe space
+      else if (rocks.every(r => wdist(r, { x: W / 2, y: H / 2 }) > 130)) { ship = makeShip(); sfx.shield(); respawnWait = 0; }
+      else { respawnWait += 0.1; respawnT = 0.1; // wait for the middle to clear; after 1.2s come back anyway at the emptiest spot, shielded
+        if (respawnWait > 1.2) { ship = makeShip(); let best = -1;
+          for (let gx = 80; gx < W; gx += 80) for (let gy = 80; gy < H; gy += 80) { const m = Math.min(...rocks.map(r => wdist(r, { x: gx, y: gy }) - r.r), well ? Math.hypot(well.x - gx, well.y - gy) - 60 : 1e9); if (m > best) { best = m; ship.x = gx; ship.y = gy; } }
+          ship.inv = 3.5; sfx.shield(); respawnWait = 0; } }
     }
   }
   if (well) { well.t += dt;
-    for (const r of rocks) { applyWell(r, dt, 1); const v = Math.hypot(r.vx, r.vy); if (v > 170) { r.vx *= 170 / v; r.vy *= 170 / v; } }
-    if (ship.alive) applyWell(ship, dt, 0.8); }
+    for (const r of rocks) { applyWell(r, dt, 1); const v = Math.hypot(r.vx, r.vy); if (v > 120) { r.vx *= 120 / v; r.vy *= 120 / v; } }
+    if (ship.alive) applyWell(ship, dt, 0.6); }
   for (let i = blasts.length - 1; i >= 0; i--) { const bl = blasts[i]; bl.t -= dt; if (bl.t > 0) continue; blasts.splice(i, 1);
     ring(bl.x, bl.y, bl.r, '#f54'); burst(bl.x, bl.y, 22, 210, '#fa4'); shake = Math.max(shake, 6); sfx.boom(2);
     for (let j = rocks.length - 1; j >= 0; j--) if (rocks[j].size < 4 && wdist(bl, rocks[j]) < bl.r + rocks[j].r * 0.5) breakRock(j);
