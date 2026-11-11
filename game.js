@@ -21,8 +21,8 @@ const keys = {};
 const player = {
     x: canvas.width / 2,
     y: canvas.height - 80,
-    width: 40,
-    height: 40,
+    width: 50,
+    height: 50,
     speed: 5,
     health: 100,
     maxHealth: 100
@@ -33,6 +33,17 @@ let enemies = [];
 let enemyBullets = [];
 let stars = [];
 let particles = [];
+
+// Joystick variables
+let joystick = {
+    active: false,
+    startX: 0,
+    startY: 0,
+    currentX: 0,
+    currentY: 0,
+    radius: 50,
+    maxDistance: 30
+};
 
 class Star {
     constructor() {
@@ -82,12 +93,12 @@ class Particle {
     }
 }
 
-class Bullet {
+class Spit {
     constructor(x, y, speed, color) {
         this.x = x;
         this.y = y;
-        this.width = 4;
-        this.height = 12;
+        this.width = 8;
+        this.height = 8;
         this.speed = speed;
         this.color = color;
     }
@@ -97,30 +108,35 @@ class Bullet {
     }
 
     draw() {
+        // Draw spit as a dripping blob
         ctx.fillStyle = this.color;
         ctx.shadowBlur = 10;
         ctx.shadowColor = this.color;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
+        ctx.beginPath();
+        ctx.ellipse(this.x + 4, this.y, 4, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
         ctx.shadowBlur = 0;
     }
 }
 
-class Enemy {
+class Caterpillar {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.width = 40;
-        this.height = 40;
+        this.width = 50;
+        this.height = 30;
         this.speed = Math.random() * 1.5 + 0.5;
         this.directionX = Math.random() < 0.5 ? -1 : 1;
         this.health = 2;
         this.shootTimer = Math.random() * 120 + 60;
-        this.color = `hsl(${Math.random() * 60 + 280}, 100%, 50%)`;
+        this.color = `hsl(${Math.random() * 60 + 80}, 70%, 50%)`;
+        this.wiggle = 0;
     }
 
     update() {
         this.x += this.directionX * this.speed;
         this.y += this.speed * 0.3;
+        this.wiggle += 0.1;
 
         if (this.x < 0 || this.x + this.width > canvas.width) {
             this.directionX *= -1;
@@ -134,24 +150,37 @@ class Enemy {
     }
 
     shoot() {
-        enemyBullets.push(new Bullet(this.x + this.width / 2 - 2, this.y + this.height, 5, '#ff0000'));
+        enemyBullets.push(new Spit(this.x + this.width / 2 - 4, this.y + this.height, 5, '#88ff00'));
     }
 
     draw() {
-        ctx.fillStyle = this.color;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = this.color;
+        // Draw caterpillar body segments
+        const segmentCount = 5;
+        const segmentSize = 10;
 
+        for (let i = 0; i < segmentCount; i++) {
+            const offsetX = Math.sin(this.wiggle + i * 0.5) * 3;
+            const x = this.x + i * (segmentSize - 2) + offsetX;
+            const y = this.y + this.height / 2;
+
+            ctx.fillStyle = i % 2 === 0 ? this.color : this.color.replace('50%', '40%');
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = this.color;
+            ctx.beginPath();
+            ctx.arc(x + segmentSize / 2, y, segmentSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw head (last segment)
+        const headX = this.x + (segmentCount - 1) * (segmentSize - 2);
+        const headY = this.y + this.height / 2;
+
+        // Eyes
+        ctx.fillStyle = '#000';
         ctx.beginPath();
-        ctx.moveTo(this.x + this.width / 2, this.y);
-        ctx.lineTo(this.x, this.y + this.height);
-        ctx.lineTo(this.x + this.width / 2, this.y + this.height * 0.7);
-        ctx.lineTo(this.x + this.width, this.y + this.height);
-        ctx.closePath();
+        ctx.arc(headX + segmentSize / 2 - 2, headY - 2, 2, 0, Math.PI * 2);
+        ctx.arc(headX + segmentSize / 2 + 2, headY - 2, 2, 0, Math.PI * 2);
         ctx.fill();
-
-        ctx.fillStyle = '#ff0000';
-        ctx.fillRect(this.x + this.width / 2 - 3, this.y + 10, 6, 6);
 
         ctx.shadowBlur = 0;
     }
@@ -166,43 +195,85 @@ function createStars() {
 function spawnWave() {
     enemies = [];
     for (let i = 0; i < enemiesPerWave; i++) {
-        const x = Math.random() * (canvas.width - 40);
+        const x = Math.random() * (canvas.width - 50);
         const y = Math.random() * -300 - 50;
-        enemies.push(new Enemy(x, y));
+        enemies.push(new Caterpillar(x, y));
     }
 }
 
 function drawPlayer() {
-    ctx.fillStyle = '#00ffff';
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = '#00ffff';
+    const centerX = player.x + player.width / 2;
+    const centerY = player.y + player.height / 2;
 
+    // Body
+    ctx.fillStyle = '#ff6b9d';
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ff6b9d';
     ctx.beginPath();
-    ctx.moveTo(player.x + player.width / 2, player.y);
-    ctx.lineTo(player.x, player.y + player.height);
-    ctx.lineTo(player.x + player.width / 2, player.y + player.height * 0.7);
-    ctx.lineTo(player.x + player.width, player.y + player.height);
-    ctx.closePath();
+    ctx.ellipse(centerX, centerY + 5, 20, 25, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // Head
+    ctx.fillStyle = '#ff8fb3';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY - 10, 15, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eyes
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(player.x + 5, player.y + player.height - 15, 8, 10);
-    ctx.fillRect(player.x + player.width - 13, player.y + player.height - 15, 8, 10);
+    ctx.beginPath();
+    ctx.arc(centerX - 6, centerY - 12, 5, 0, Math.PI * 2);
+    ctx.arc(centerX + 6, centerY - 12, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pupils
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(centerX - 6, centerY - 11, 2, 0, Math.PI * 2);
+    ctx.arc(centerX + 6, centerY - 11, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Mouth (open for spitting)
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY - 5, 4, 0, Math.PI);
+    ctx.stroke();
+
+    // Arms/tentacles
+    ctx.strokeStyle = '#ff6b9d';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(centerX - 15, centerY);
+    ctx.lineTo(centerX - 25, centerY + 10);
+    ctx.moveTo(centerX + 15, centerY);
+    ctx.lineTo(centerX + 25, centerY + 10);
+    ctx.stroke();
 
     ctx.shadowBlur = 0;
 }
 
 function updatePlayer() {
+    // Keyboard controls
     if (keys['ArrowLeft'] && player.x > 0) {
         player.x -= player.speed;
     }
     if (keys['ArrowRight'] && player.x < canvas.width - player.width) {
         player.x += player.speed;
     }
+
+    // Joystick controls
+    if (joystick.active) {
+        const deltaX = joystick.currentX - joystick.startX;
+        const moveX = (deltaX / joystick.maxDistance) * player.speed;
+
+        player.x += moveX;
+        player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+    }
 }
 
 function shoot() {
-    playerBullets.push(new Bullet(player.x + player.width / 2 - 2, player.y, -8, '#00ffff'));
+    playerBullets.push(new Spit(player.x + player.width / 2 - 4, player.y, -8, '#00ffff'));
 }
 
 function checkCollisions() {
@@ -268,6 +339,22 @@ function checkCollisions() {
     });
 }
 
+function drawJoystick() {
+    if (!joystick.active) return;
+
+    // Draw base
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.beginPath();
+    ctx.arc(joystick.startX, joystick.startY, joystick.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw stick
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.beginPath();
+    ctx.arc(joystick.currentX, joystick.currentY, 20, 0, Math.PI * 2);
+    ctx.fill();
+}
+
 function updateGame() {
     if (gameState !== 'playing') return;
 
@@ -315,6 +402,8 @@ function updateGame() {
 
     checkCollisions();
 
+    drawJoystick();
+
     if (enemies.length === 0) {
         wave++;
         enemiesPerWave += 2;
@@ -358,7 +447,7 @@ function gameOver() {
 document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
 
-    if (e.key === ' ' && gameState === 'playing') {
+    if ((e.key === 'Shift' || e.shiftKey) && gameState === 'playing') {
         e.preventDefault();
         shoot();
     }
@@ -366,6 +455,91 @@ document.addEventListener('keydown', (e) => {
 
 document.addEventListener('keyup', (e) => {
     keys[e.key] = false;
+});
+
+// Touch controls for joystick
+canvas.addEventListener('touchstart', (e) => {
+    if (gameState !== 'playing') return;
+    e.preventDefault();
+
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    joystick.active = true;
+    joystick.startX = touch.clientX - rect.left;
+    joystick.startY = touch.clientY - rect.top;
+    joystick.currentX = joystick.startX;
+    joystick.currentY = joystick.startY;
+});
+
+canvas.addEventListener('touchmove', (e) => {
+    if (!joystick.active) return;
+    e.preventDefault();
+
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    let touchX = touch.clientX - rect.left;
+    let touchY = touch.clientY - rect.top;
+
+    // Limit joystick movement
+    const dx = touchX - joystick.startX;
+    const dy = touchY - joystick.startY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > joystick.maxDistance) {
+        const angle = Math.atan2(dy, dx);
+        joystick.currentX = joystick.startX + Math.cos(angle) * joystick.maxDistance;
+        joystick.currentY = joystick.startY + Math.sin(angle) * joystick.maxDistance;
+    } else {
+        joystick.currentX = touchX;
+        joystick.currentY = touchY;
+    }
+});
+
+canvas.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) {
+        joystick.active = false;
+    }
+});
+
+// Mouse controls for joystick (for desktop testing)
+canvas.addEventListener('mousedown', (e) => {
+    if (gameState !== 'playing') return;
+
+    const rect = canvas.getBoundingClientRect();
+    joystick.active = true;
+    joystick.startX = e.clientX - rect.left;
+    joystick.startY = e.clientY - rect.top;
+    joystick.currentX = joystick.startX;
+    joystick.currentY = joystick.startY;
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    if (!joystick.active) return;
+
+    const rect = canvas.getBoundingClientRect();
+    let mouseX = e.clientX - rect.left;
+    let mouseY = e.clientY - rect.top;
+
+    const dx = mouseX - joystick.startX;
+    const dy = mouseY - joystick.startY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > joystick.maxDistance) {
+        const angle = Math.atan2(dy, dx);
+        joystick.currentX = joystick.startX + Math.cos(angle) * joystick.maxDistance;
+        joystick.currentY = joystick.startY + Math.sin(angle) * joystick.maxDistance;
+    } else {
+        joystick.currentX = mouseX;
+        joystick.currentY = mouseY;
+    }
+});
+
+canvas.addEventListener('mouseup', () => {
+    joystick.active = false;
+});
+
+canvas.addEventListener('mouseleave', () => {
+    joystick.active = false;
 });
 
 startBtn.addEventListener('click', startGame);
