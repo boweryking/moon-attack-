@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Cockpit Asteroids</title>
+<style>
+  /* Layout: one centered game window, a thin control strip under it, and short notes on how the trackpad scheme works. Neon-on-black, single look by choice. */
+  :root { --bg:#04060f; --panel:#0b1228; --line:#24407a; --ink:#d6e6ff; --dim:#7f93c4; --cy:#5ff0ff; --am:#ffb23d; --rd:#ff4d5e; --gr:#5dffa0;
+    --ui:"Space Grotesk", system-ui, sans-serif; --mono:"Share Tech Mono", ui-monospace, "Courier New", monospace; color-scheme:dark; }
+  html, body { background:var(--bg); }
+  body { margin:0; color:var(--ink); font:15px/1.5 var(--ui); padding-block:18px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+  .wrap { max-width:980px; margin:0 auto; display:flex; flex-direction:column; gap:14px; }
+  h1 { font:700 22px/1.2 var(--ui); letter-spacing:.04em; margin:0; text-transform:uppercase; color:var(--cy); text-shadow:0 0 14px rgba(95,240,255,.45); }
+  .sub { color:var(--dim); margin:2px 0 0; max-width:62ch; }
+  #stage { position:relative; width:100%; aspect-ratio:16/9; background:#000; border:1px solid var(--line); border-radius:6px; overflow:hidden; box-shadow:0 0 30px rgba(60,120,255,.18); }
+  canvas { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:none; touch-action:none; }
+  .bar { display:flex; flex-wrap:wrap; gap:10px 22px; align-items:center; font:13px var(--mono); color:var(--dim); }
+  .bar label { display:flex; align-items:center; gap:8px; }
+  .bar input[type=range] { accent-color:var(--cy); width:140px; }
+  .bar input[type=checkbox] { accent-color:var(--cy); }
+  #tiltMsg { flex-basis:100%; color:var(--am); }
+  .bar button { font:600 13px var(--ui); color:var(--ink); background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:7px 14px; cursor:pointer; }
+  .bar button:hover { border-color:var(--cy); }
+  .bar button:focus-visible, .bar input:focus-visible { outline:2px solid var(--cy); outline-offset:2px; }
+  .notes { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; }
+  .notes div { min-width:0; border-top:2px solid var(--line); padding-top:8px; }
+  .notes b { display:block; font:600 12px var(--ui); letter-spacing:.12em; text-transform:uppercase; color:var(--am); margin-bottom:3px; }
+  .notes span { color:var(--dim); font-size:14px; }
+  kbd { font:12px var(--mono); border:1px solid var(--line); border-radius:3px; padding:1px 5px; color:var(--ink); background:var(--panel); }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Share+Tech+Mono&display=swap">
+
+<div class="wrap">
+  <header>
+    <h1>Cockpit Asteroids</h1>
+    <p class="sub">First-person space fighter. Hunt the orange jets that run, dodge the pink jets that hunt you, and watch for rocks. Trackpad and keys on a laptop, thumbs on an iPad.</p>
+  </header>
+  <div id="stage"><canvas id="c" width="1280" height="720" aria-label="Cockpit view game"></canvas></div>
+  <div class="bar">
+    <label for="spd">Rock speed <input id="spd" type="range" min="40" max="220" value="70"><span id="spdv">70</span></label>
+    <label for="auto"><input id="auto" type="checkbox" checked> Auto-fire on target</label>
+    <label for="voice"><input id="voice" type="checkbox" checked> Computer voice</label>
+    <button id="reset" type="button">Restart</button>
+    <button id="tiltBtn" type="button">Tilt steering</button>
+    <button id="recenter" type="button">Recenter tilt</button>
+    <label for="invLR"><input id="invLR" type="checkbox"> Flip tilt left/right</label>
+    <label for="invUD"><input id="invUD" type="checkbox"> Flip tilt up/down</label>
+    <span id="tiltMsg"></span>
+  </div>
+  <div class="notes">
+    <div><b>Aim</b><span>Keep the cursor inside the dashed box to aim without turning. Click, or hold <kbd>Shift</kbd>, to fire. With auto-fire on, the guns open up the moment the crosshair sits on a rock.</span></div>
+    <div><b>Turn and thrust</b><span>Push the cursor out past the box and the ship turns that way, faster the further out. Hold <kbd>&uarr;</kbd> to thrust the way you are facing and <kbd>&darr;</kbd> to brake. Turn with the trackpad while you thrust.</span></div>
+    <div><b>Jets</b><span>Pink jets fly at you and fire. Orange jets run, so chase them down. Each takes two hits and the crosshair bracket leads the shot for you. Press <kbd>X</kbd> to spin around fast. Pink and orange arrows on the edge point to jets you can't see.</span></div>
+    <div><b>Onboard computer</b><span>Press <kbd>H</kbd> or tap <kbd>?</kbd> any time for the help screen. The ship also talks: it warns you about hostiles behind you, rocks close by, low hull and shields. Target with <kbd>T</kbd>, throw a grenade with <kbd>B</kbd>, hold <kbd>Space</kbd> for the shield.</span></div>
+    <div><b>On an iPad</b><span>Tap Tilt steering on the page, then steer by tilting the iPad (needs the hosted page, see below). Or drag on the left half to steer with a floating stick. The lever on the right edge sets your thrust and stays where you leave it. FIRE sits in the middle, SHIELD and BOMB on the left, TARGET and 180 on the right.</span></div>
+    <div><b>Warnings</b><span>A red pulsing arrow means a rock is close and out of sight in that direction. Turn toward the arrow to see it. The scope below the crosshair shows every rock around you, ahead at the top.</span></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height, F = H * 0.95, TAU = Math.PI * 2;
+  const rnd = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const spdEl = document.getElementById('spd'), spdV = document.getElementById('spdv'), autoEl = document.getElementById('auto');
+  let speed = 70; spdEl.addEventListener('input', () => { speed = +spdEl.value; spdV.textContent = speed; });
+  document.getElementById('reset').addEventListener('click', reset);
+
+  // --- state
+  let yaw = 0, pitch = 0, vel = [0, 0, 0], pos = [0, 0, 0], hull = 100, score = 0, wave = 0, over = false, shake = 0, flash = 0, hitT = 0, fireT = 0, time = 0;
+  const mouse = { x: W / 2, y: H / 2, in: false, down: false, rdown: false }, keys = {};
+  const rocks = [], shots = [], sparks = [], jets = [], ebolts = [];
+  let flipT = 0, rockT = 5, touchMode = false, throttle = 0, leverId = null, fireId = null, incoming = 0;
+  const stick = { on: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
+  const BTNS = [
+    { id: 'fire', x: W * .5, y: H * .625, r: 62, col: '#ff4d5e', label: 'FIRE', hold: 1 },
+    { id: 'shield', x: W * .10, y: H * .62, r: 46, col: '#5dffa0', label: 'SHIELD', hold: 1 },
+    { id: 'gren', x: W * .10, y: H * .38, r: 42, col: '#ffd23d', label: 'BOMB' },
+    { id: 'flip', x: W * .80, y: H * .45, r: 40, col: '#5ff0ff', label: '180' },
+    { id: 'tgt', x: W * .80, y: H * .67, r: 40, col: '#ff9cf6', label: 'TARGET' },
+    { id: 'help', x: W * .945, y: H * .085, r: 26, col: '#d6e6ff', label: '?' }];
+  const held = new Map(), isHeld = id => { for (const v of held.values()) if (v === id) return true; return false; };
+  let grenades = 3, energy = 100, shieldOn = false, shieldLock = false, shieldHit = 0, target = null, helpOpen = false, msg = { t: 0, text: '' }, sixT = 0, callT = 0, rockCallT = 0, warned = {}, blasts = [];
+  const tilt = { on: false, has: false, b: 0, g: 0, b0: 0, g0: 0, cal: false };
+  const voiceEl = document.getElementById('voice'), tiltMsg = document.getElementById('tiltMsg');
+  const LEVER = { x: W * .945, y0: H * .2, y1: H * .74 };
+  const SIZES = [0, 22, 38, 62];
+
+  function shape() { // an irregular wireframe rock: 14 points on a sphere, each joined to its 3 nearest neighbours
+    const pts = []; for (let i = 0; i < 14; i++) { const u = rnd(-1, 1), t = rnd(0, TAU), r = Math.sqrt(1 - u * u), k = rnd(.72, 1.12); pts.push([r * Math.cos(t) * k, u * k, r * Math.sin(t) * k]); }
+    const edges = new Set(); pts.forEach((p, i) => { pts.map((q, j) => [j, (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2]).filter(a => a[0] !== i).sort((a, b) => a[1] - b[1]).slice(0, 3).forEach(a => edges.add(Math.min(i, a[0]) + '-' + Math.max(i, a[0]))); });
+    return { pts, edges: [...edges].map(s => s.split('-').map(Number)) };
+  }
+  function addRock(size, x, y, z, v) {
+    rocks.push({ size, r: SIZES[size], x, y, z, vx: v[0], vy: v[1], vz: v[2], rx: rnd(0, TAU), ry: rnd(0, TAU), sx: rnd(-.8, .8), sy: rnd(-.8, .8), sh: shape(), hp: 1, hit: 0 });
+  }
+  function spawn(front) { // from anywhere on the sphere (or, for the first few, somewhere you can see), drifting toward the ship
+    const u = rnd(-.6, .6), t = rnd(0, TAU), r = Math.sqrt(1 - u * u), d = rnd(700, 1100), s = speed * rnd(.7, 1.3);
+    let dir = [r * Math.cos(t), u, r * Math.sin(t)]; if (front) { const q = Math.hypot(rnd(-.45, .45), rnd(-.3, .3), 1); dir = toWorldDir(rnd(-.45, .45) / q, rnd(-.3, .3) / q, 1 / q); }
+    addRock(3, dir[0] * d, dir[1] * d, dir[2] * d, [-dir[0] * s + rnd(-25, 25), -dir[1] * s + rnd(-25, 25), -dir[2] * s + rnd(-25, 25)]);
+  }
+  function startWave() {
+    wave++; if (wave > 1) { grenades = Math.min(5, grenades + 1); say('Wave ' + wave + '. Hostile jets inbound. Grenade restocked.', 4); } const nj = Math.min(1 + wave, 6); for (let i = 0; i < nj; i++) addJet(i % 2 ? 'run' : 'attack', i < 2);
+    for (let i = rocks.length; i < Math.min(2 + wave, 7); i++) spawn(i < 1);
+  }
+  function addJet(kind, front) { // 'attack' jets come at you and shoot; 'run' jets flee and you hunt them
+    const d = rnd(900, 1300); let dir;
+    if (front) { const q = Math.hypot(rnd(-.5, .5), rnd(-.3, .3), 1); dir = toWorldDir(rnd(-.5, .5) / q, rnd(-.3, .3) / q, 1 / q); }
+    else { const u = rnd(-.5, .5), t = rnd(0, TAU), r = Math.sqrt(1 - u * u); dir = [r * Math.cos(t), u, r * Math.sin(t)]; }
+    const sp = (kind === 'run' ? 150 : 175) + wave * 8, h = kind === 'run' ? dir : dir.map(v => -v);
+    jets.push({ x: dir[0] * d, y: dir[1] * d, z: dir[2] * d, vx: h[0] * sp, vy: h[1] * sp, vz: h[2] * sp, sp, kind, hp: 2, evade: 0, fireT: rnd(1.5, 3), hit: 0, jink: rnd(0, TAU) });
+  }
+  function steer(e, tx, ty, tz, turn, dt) {
+    const l = Math.hypot(tx, ty, tz) || 1; tx /= l; ty /= l; tz /= l; const vl = Math.hypot(e.vx, e.vy, e.vz) || 1; let dx = e.vx / vl, dy = e.vy / vl, dz = e.vz / vl; const k = Math.min(1, turn * dt);
+    dx += (tx - dx) * k; dy += (ty - dy) * k; dz += (tz - dz) * k; const m = Math.hypot(dx, dy, dz) || 1; e.vx = dx / m * e.sp; e.vy = dy / m * e.sp; e.vz = dz / m * e.sp;
+  }
+  function say(text, secs = 3.8, speak = true) {
+    msg = { t: secs, text };
+    if (speak && voiceEl.checked) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1.05; u.pitch = .85; speechSynthesis.speak(u); } catch (x) {} }
+  }
+  function damage(n) {
+    if (shieldOn) { energy -= n * 1.6; shieldHit = .35; shake = .2; if (energy <= 0) { energy = 0; shieldLock = true; say('Shields down.', 2.5); } return; }
+    hull -= n; shake = .5; hitT = .6; flash = .5; if (hull <= 0) { hull = 0; over = true; }
+  }
+  function cycleTarget() {
+    const list = jets.slice().sort((a, b) => Math.hypot(a.x, a.y, a.z) - Math.hypot(b.x, b.y, b.z)); if (!list.length) { say('No hostile jets.', 2); return; }
+    const i = list.indexOf(target); target = i < 0 ? list[0] : (i + 1 < list.length ? list[i + 1] : null); if (target) { target.prev = Math.hypot(target.x, target.y, target.z); target.close = 0; say(target.kind === 'attack' ? 'Target locked. Hunter jet.' : 'Target locked. Runner jet.', 2.5); } else say('Target released.', 2);
+  }
+  function grenade() {
+    if (grenades <= 0) { say('No grenades left.', 2); return; } grenades--; blasts.push({ t: .6 }); flash = .6; shake = .4; const R = 520;
+    for (let i = rocks.length - 1; i >= 0; i--) { const r = rocks[i]; if (Math.hypot(r.x, r.y, r.z) < R + r.r) { boom(r.x, r.y, r.z, 16, '#ffd27a'); score += 40; rocks.splice(i, 1); } }
+    for (let i = jets.length - 1; i >= 0; i--) { const e = jets[i]; if (Math.hypot(e.x, e.y, e.z) < R) { boom(e.x, e.y, e.z, 40, '#ffd27a'); score += 300; if (target === e) target = null; jets.splice(i, 1); } }
+    ebolts.length = 0; say('Grenade away. ' + grenades + ' left.', 2.5);
+  }
+  function press(id) { if (id === 'flip') { if (flipT <= 0) flipT = .35; } else if (id === 'gren') grenade(); else if (id === 'tgt') cycleTarget(); else if (id === 'help') helpOpen = !helpOpen; }
+  function reset() { rocks.length = shots.length = sparks.length = jets.length = ebolts.length = 0; flipT = 0; throttle = 0; yaw = pitch = 0; vel = [0, 0, 0]; pos = [0, 0, 0]; hull = 100; score = 0; wave = 0; over = false; grenades = 3; energy = 100; shieldLock = false; target = null; helpOpen = false; warned = {}; blasts.length = 0; held.clear(); startWave(); say('Onboard computer online. Press H for help.', 6, false); }
+
+  // --- 3D helpers. World: x right, y up, z forward at yaw 0.
+  const cy = () => Math.cos(yaw), sy = () => Math.sin(yaw), cp = () => Math.cos(pitch), sp = () => Math.sin(pitch);
+  function toCam(x, y, z) { // world -> camera space
+    const a = cy(), b = sy(), x1 = x * a - z * b, z1 = x * b + z * a, c = cp(), s = sp();
+    return [x1, y * c - z1 * s, y * s + z1 * c];
+  }
+  function toWorldDir(cx, cyy, cz) { // camera -> world
+    const c = cp(), s = sp(), y1 = cyy * c + cz * s, z1 = -cyy * s + cz * c, a = cy(), b = sy();
+    return [cx * a + z1 * b, y1, -cx * b + z1 * a];
+  }
+  const proj = c => [W / 2 + c[0] / c[2] * F, H / 2 - c[1] / c[2] * F];
+
+  // --- input
+  function setMouse(e) { const r = cv.getBoundingClientRect(); mouse.x = (e.clientX - r.left) * W / r.width; mouse.y = (e.clientY - r.top) * H / r.height; mouse.in = true; }
+  const cxy = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+  const setLever = y => { throttle = clamp((LEVER.y1 - y) / (LEVER.y1 - LEVER.y0), 0, 1); };
+  cv.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'touch') { setMouse(e); return; }
+    const [x, y] = cxy(e); if (e.pointerId === stick.id) { stick.x = x; stick.y = y; } else if (e.pointerId === leverId) setLever(y);
+  });
+  const btnAt = (x, y) => BTNS.find(b => Math.hypot(x - b.x, y - b.y) < b.r + 16);
+  cv.addEventListener('pointerdown', e => {
+    try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+    if (helpOpen) { helpOpen = false; return; }
+    if (e.pointerType === 'touch') { // iPad / phone
+      touchMode = true; mouse.in = true; mouse.x = W / 2; mouse.y = H / 2; if (over) { reset(); return; }
+      const [x, y] = cxy(e), b = btnAt(x, y);
+      if (b) { if (b.hold) held.set(e.pointerId, b.id); else press(b.id); return; }
+      if (x > W * .88) { leverId = e.pointerId; setLever(y); } else if (!tilt.on && x < W * .6) { stick.on = true; stick.id = e.pointerId; stick.ox = stick.x = x; stick.oy = stick.y = y; }
+      return;
+    }
+    setMouse(e); if (e.button === 2) mouse.rdown = true; else mouse.down = true; if (over) reset();
+  });
+  const upPtr = e => {
+    if (e.pointerType !== 'touch') { if (e.button === 2) mouse.rdown = false; else mouse.down = false; return; }
+    if (e.pointerId === stick.id) { stick.on = false; stick.id = null; } if (e.pointerId === leverId) leverId = null; held.delete(e.pointerId);
+  };
+  cv.addEventListener('pointerup', upPtr); cv.addEventListener('pointercancel', upPtr); cv.addEventListener('contextmenu', e => e.preventDefault());
+  cv.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch' && !mouse.down) mouse.in = false; });
+  // tilt steering (needs a real device and the hosted page; the claude.ai preview blocks motion sensors)
+  const onOrient = e => { if (e.beta == null) return; tilt.b = e.beta; tilt.g = e.gamma || 0; if (!tilt.has) { tilt.has = true; tilt.b0 = tilt.b; tilt.g0 = tilt.g; tiltMsg.textContent = 'Tilt is on. Hold the iPad the way you like to fly, then press Recenter tilt. If it steers the wrong way, use the Flip boxes.'; } };
+  document.getElementById('tiltBtn').addEventListener('click', async () => {
+    if (tilt.on) { tilt.on = false; removeEventListener('deviceorientation', onOrient); tiltMsg.textContent = 'Tilt is off.'; return; }
+    try { if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) { const r = await DeviceOrientationEvent.requestPermission(); if (r !== 'granted') { tiltMsg.textContent = 'Motion access was not allowed. On iPad, allow it when asked, or turn it on in Settings > Safari > Motion & Orientation Access.'; return; } } } catch (x) { tiltMsg.textContent = 'This view blocks motion sensors. Open the hosted page instead: last-line-arcade.netlify.app/cockpit/'; return; }
+    tilt.on = true; tilt.has = false; touchMode = true; mouse.in = true; mouse.x = W / 2; mouse.y = H / 2; addEventListener('deviceorientation', onOrient);
+    setTimeout(() => { if (tilt.on && !tilt.has) { tilt.on = false; tiltMsg.textContent = 'No motion data came through. This works on an iPad or phone with the hosted page: last-line-arcade.netlify.app/cockpit/'; } }, 2000);
+  });
+  document.getElementById('recenter').addEventListener('click', () => { tilt.b0 = tilt.b; tilt.g0 = tilt.g; });
+  const invLR = document.getElementById('invLR'), invUD = document.getElementById('invUD');
+  function tiltAxes() {
+    const ang = (screen.orientation && screen.orientation.angle != null) ? screen.orientation.angle : (window.orientation || 0), b = tilt.b - tilt.b0, g = tilt.g - tilt.g0; let lr, ud;
+    if (ang === 90) { lr = b; ud = -g; } else if (ang === 270 || ang === -90) { lr = -b; ud = g; } else if (ang === 180) { lr = -g; ud = -b; } else { lr = g; ud = b; }
+    return [invLR.checked ? -lr : lr, invUD.checked ? -ud : ud];
+  }
+    const KMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down' };
+  addEventListener('keydown', e => { if (e.key === 'Shift') keys.shift = true; if (e.code === 'KeyX') press('flip'); if (e.code === 'KeyB' && !e.repeat) press('gren'); if (e.code === 'KeyT' && !e.repeat) press('tgt'); if (e.code === 'KeyH' && !e.repeat) press('help'); if (e.code === 'Escape') helpOpen = false; if (e.code === 'Space') { keys.space = true; e.preventDefault(); } if (KMAP[e.code]) { keys[KMAP[e.code]] = true; e.preventDefault(); } });
+  addEventListener('keyup', e => { if (e.key === 'Shift') keys.shift = false; if (e.code === 'Space') keys.space = false; if (KMAP[e.code]) keys[KMAP[e.code]] = false; });
+  addEventListener('blur', () => { keys.shift = keys.up = keys.down = keys.space = false; mouse.down = mouse.rdown = false; });
+
+  const BOX = { w: W * 0.30, h: H * 0.26 }; // the aim zone: half-width and half-height around the centre
+
+  function aimDir() { // direction (world) through the crosshair
+    const nx = (mouse.x - W / 2) / F, ny = -(mouse.y - H / 2) / F, l = Math.hypot(nx, ny, 1);
+    return toWorldDir(nx / l, ny / l, 1 / l);
+  }
+  function rayHit(d, r) { // distance along ray d (from origin) to rock sphere r, or null
+    const t = r.x * d[0] + r.y * d[1] + r.z * d[2]; if (t <= 0) return null;
+    const px = r.x - d[0] * t, py = r.y - d[1] * t, pz = r.z - d[2] * t; return Math.hypot(px, py, pz) < r.r * 1.15 ? t : null;
+  }
+  function fire() {
+    const d = aimDir(); shots.push({ x: 0, y: -14, z: 0, vx: d[0] * 2100, vy: d[1] * 2100, vz: d[2] * 2100, life: 1.3 }); fireT = .12;
+  }
+  function boom(x, y, z, n, col) { for (let i = 0; i < n; i++) sparks.push({ x, y, z, vx: rnd(-1, 1) * 160, vy: rnd(-1, 1) * 160, vz: rnd(-1, 1) * 160, life: rnd(.4, 1), col }); }
+  function breakRock(i) {
+    const r = rocks[i]; rocks.splice(i, 1); score += [0, 150, 80, 40][r.size]; boom(r.x, r.y, r.z, 22, '#ffd27a');
+    if (r.size > 1) for (let k = 0; k < 2; k++) addRock(r.size - 1, r.x, r.y, r.z, [r.vx + rnd(-70, 70), r.vy + rnd(-70, 70), r.vz + rnd(-70, 70)]);
+  }
+
+  function update(dt) {
+    time += dt; if (over || helpOpen) return;
+    if (msg.t > 0) msg.t -= dt;
+    // shield: hold Space / SHIELD / right-click. It soaks hits, drains energy, and blocks your guns while up.
+    const want = keys.space || mouse.rdown || isHeld('shield'); if (shieldLock && energy >= 30) shieldLock = false;
+    shieldOn = want && !shieldLock && energy > 2; if (shieldHit > 0) shieldHit -= dt;
+    if (shieldOn) energy = Math.max(0, energy - 16 * dt); else if (!want) energy = Math.min(100, energy + 13 * dt);
+    if (tilt.on && tilt.has) { const [lr, ud] = tiltAxes(), k = v => Math.sign(v) * Math.pow(clamp((Math.abs(v) - 5) / 17, 0, 1), 1.2); yaw += k(lr) * 1.9 * dt; pitch = clamp(pitch - k(ud) * 1.3 * dt, -1.2, 1.2); }
+    // turning: only when the cursor is out past the aim box
+    if (touchMode) {
+      if (stick.on) { const dx = (stick.x - stick.ox) / 110, dy = (stick.y - stick.oy) / 110, m = Math.hypot(dx, dy), k = m < .12 ? 0 : Math.min(1, m) ** 1.3; yaw += dx / (m || 1) * k * 1.9 * dt; pitch = clamp(pitch - dy / (m || 1) * k * 1.3 * dt, -1.2, 1.2); }
+    } else if (mouse.in && !(tilt.on && tilt.has)) {
+      const dx = mouse.x - W / 2, dy = mouse.y - H / 2, ox = Math.max(0, Math.abs(dx) - BOX.w) / (W / 2 - BOX.w), oy = Math.max(0, Math.abs(dy) - BOX.h) / (H / 2 - BOX.h);
+      yaw += Math.sign(dx) * Math.min(1, ox) ** 1.5 * 1.9 * dt; pitch = clamp(pitch - Math.sign(dy) * Math.min(1, oy) ** 1.5 * 1.3 * dt, -1.2, 1.2);
+    }
+    if (flipT > 0) { const st = Math.min(flipT, dt); yaw += Math.PI * st / .35; flipT -= dt; } // turn-around
+    // thrust: Up pushes the ship the way you are looking, Down brakes (and backs up). The rocks and dust slide past instead.
+    const fwd = toWorldDir(0, 0, 1); let kUp = keys.up, kDn = keys.down;
+    if (touchMode) { const want = throttle * 300, along = vel[0] * fwd[0] + vel[1] * fwd[1] + vel[2] * fwd[2]; kUp = along < want - 10; kDn = along > want + 25; }
+    if (kUp) for (let k = 0; k < 3; k++) vel[k] += fwd[k] * 320 * dt;
+    if (kDn) { const sp = Math.hypot(vel[0], vel[1], vel[2]); if (sp > 20) for (let k = 0; k < 3; k++) vel[k] -= vel[k] / sp * 420 * dt; else for (let k = 0; k < 3; k++) vel[k] -= fwd[k] * 120 * dt; }
+    const dr = Math.pow(kUp ? .75 : .45, dt); for (let k = 0; k < 3; k++) vel[k] *= dr;
+    const vs = Math.hypot(vel[0], vel[1], vel[2]); if (vs > 300) for (let k = 0; k < 3; k++) vel[k] *= 300 / vs;
+    for (let k = 0; k < 3; k++) pos[k] += vel[k] * dt;
+    for (const r of rocks) { r.x -= vel[0] * dt; r.y -= vel[1] * dt; r.z -= vel[2] * dt; }
+    for (const q of sparks) { q.x -= vel[0] * dt; q.y -= vel[1] * dt; q.z -= vel[2] * dt; }
+    for (const e of jets) { e.x -= vel[0] * dt; e.y -= vel[1] * dt; e.z -= vel[2] * dt; }
+    for (const b of ebolts) { b.x -= vel[0] * dt; b.y -= vel[1] * dt; b.z -= vel[2] * dt; }
+    for (const b of shots) { b.x -= vel[0] * dt; b.y -= vel[1] * dt; b.z -= vel[2] * dt; }
+    // guns
+    fireT -= dt; let lock = null;
+    if (mouse.in) { const d = aimDir(); let bt = 1e9;
+      for (const r of rocks) { const t = rayHit(d, r); if (t !== null && t < bt) { bt = t; lock = r; } }
+      for (const e of jets) { const dist = Math.hypot(e.x, e.y, e.z), lt = dist / 2100, pr = { x: e.x + e.vx * lt, y: e.y + e.vy * lt, z: e.z + e.vz * lt, r: 34, jet: true }; const t = rayHit(d, pr); if (t !== null && t < bt) { bt = t; lock = pr; } } }
+    cv._lock = lock;
+    if (mouse.in && fireT <= 0 && !shieldOn && (mouse.down || keys.shift || isHeld('fire') || (autoEl.checked && lock && Math.hypot(lock.x, lock.y, lock.z) < 1100))) fire();
+    // shots
+    for (let i = shots.length - 1; i >= 0; i--) {
+      const s = shots[i]; s.life -= dt; const nx = s.x + s.vx * dt, ny = s.y + s.vy * dt, nz = s.z + s.vz * dt; let gone = s.life <= 0;
+      for (let j = rocks.length - 1; j >= 0 && !gone; j--) { const r = rocks[j], mx = (s.x + nx) / 2, my = (s.y + ny) / 2, mz = (s.z + nz) / 2; if (Math.hypot(r.x - mx, r.y - my, r.z - mz) < r.r + 24) { breakRock(j); gone = true; } }
+      for (let j = jets.length - 1; j >= 0 && !gone; j--) { const e = jets[j], mx = (s.x + nx) / 2, my = (s.y + ny) / 2, mz = (s.z + nz) / 2;
+        if (Math.hypot(e.x - mx, e.y - my, e.z - mz) < 38) { e.hp--; e.hit = .15; gone = true; boom(e.x, e.y, e.z, 8, '#ff9cf6'); if (e.hp <= 0) { boom(e.x, e.y, e.z, 40, '#ffd27a'); jets.splice(j, 1); score += 300; shake = .15; } } }
+      s.x = nx; s.y = ny; s.z = nz; if (gone) shots.splice(i, 1);
+    }
+    // rocks
+    for (let i = rocks.length - 1; i >= 0; i--) {
+      const r = rocks[i]; r.x += r.vx * dt; r.y += r.vy * dt; r.z += r.vz * dt; r.rx += r.sx * dt; r.ry += r.sy * dt; if (r.hit > 0) r.hit -= dt;
+      const d = Math.hypot(r.x, r.y, r.z);
+      if (d < r.r + 26) { damage([0, 12, 24, 45][r.size]); boom(r.x, r.y, r.z, 14, '#ff6a6a'); rocks.splice(i, 1); }
+      else if (d > 2600) { r.vx = -r.x / d * speed; r.vy = -r.y / d * speed; r.vz = -r.z / d * speed; } // wandered off: send it back
+    }
+    // enemy jets
+    for (let i = jets.length - 1; i >= 0; i--) {
+      const e = jets[i], d = Math.hypot(e.x, e.y, e.z) || 1, to = [-e.x / d, -e.y / d, -e.z / d]; e.jink += dt * 1.7; if (e.hit > 0) e.hit -= dt;
+      if (e.kind === 'attack') {
+        if (e.evade > 0) { e.evade -= dt; steer(e, -to[0] + Math.sin(e.jink) * .8, -to[1] + Math.cos(e.jink * 1.3) * .6, -to[2], 1.6, dt); }
+        else { steer(e, to[0], to[1], to[2], 1.2, dt); if (d < 170) e.evade = 2.4; }
+        e.fireT -= dt; const facing = (e.vx * to[0] + e.vy * to[1] + e.vz * to[2]) / e.sp;
+        if (e.evade <= 0 && e.fireT <= 0 && d < 950 && d > 140 && facing > .92) { ebolts.push({ x: e.x, y: e.y, z: e.z, vx: to[0] * 700 + rnd(-30, 30), vy: to[1] * 700 + rnd(-30, 30), vz: to[2] * 700 + rnd(-30, 30), life: 3 }); e.fireT = rnd(1.1, 2.2); }
+      } else if (d > 1700) steer(e, to[0], to[1], to[2], .8, dt);
+      else steer(e, -to[0] + Math.sin(e.jink) * .7, -to[1] + Math.cos(e.jink * 1.3) * .5, -to[2], 1.0, dt);
+      e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
+      if (d < 44) { damage(15); boom(e.x, e.y, e.z, 30, '#ffd27a'); jets.splice(i, 1); }
+    }
+    incoming = 0;
+    for (let i = ebolts.length - 1; i >= 0; i--) {
+      const b = ebolts[i]; b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; const d = Math.hypot(b.x, b.y, b.z);
+      if (d < 34) { damage(7); boom(b.x, b.y, b.z, 10, '#ff9a3d'); ebolts.splice(i, 1); continue; }
+      if (d < 600) incoming = 1; if (b.life <= 0) ebolts.splice(i, 1);
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) { const p = sparks[i]; p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; if (p.life <= 0) sparks.splice(i, 1); }
+    if (target && !jets.includes(target)) target = null;
+    if (target) { const d = Math.hypot(target.x, target.y, target.z); target.close = (target.close || 0) * .9 + ((target.prev - d) / Math.max(dt, 1e-3)) * .1; target.prev = d; }
+    let six = false; for (const e of jets) if (e.kind === 'attack') { const c = toCam(e.x, e.y, e.z); if (c[2] < 0 && Math.hypot(e.x, e.y, e.z) < 650) six = true; }
+    sixT = six ? sixT + dt : 0; callT -= dt; rockCallT -= dt;
+    if (sixT > 1.2 && callT <= 0) { say('Hostile on your six. Press X, or the 180 button, to turn around.', 4.5); callT = 10; }
+    if (hull < 30 && !warned.hull) { warned.hull = 1; say('Hull critical. Raise shields.', 4); }
+    if (!shieldOn && rockCallT <= 0) for (const r of rocks) if (Math.hypot(r.x, r.y, r.z) < 330) { say('Rock close. Raise shields or throw a grenade.', 3.5); rockCallT = 14; break; }
+    for (const bl of blasts) bl.t -= dt; blasts = blasts.filter(bl => bl.t > 0);
+    rockT -= dt; if (rockT <= 0) { if (rocks.length < 4 + wave) spawn(false); rockT = 7; }
+    if (!jets.length) startWave();
+    shake = Math.max(0, shake - dt); flash = Math.max(0, flash - dt * 1.5); hitT = Math.max(0, hitT - dt);
+  }
+
+  // --- drawing
+  const stars = Array.from({ length: 260 }, () => { const u = rnd(-1, 1), t = rnd(0, TAU), r = Math.sqrt(1 - u * u); return [r * Math.cos(t), u, r * Math.sin(t), rnd(.5, 1.6)]; });
+  const dust = Array.from({ length: 140 }, () => [rnd(0, 1400), rnd(0, 1400), rnd(0, 1400)]);
+  function glow(col, b) { ctx.strokeStyle = col; ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = b; }
+  const JET = { pts: [[0, 0, 3.2], [-2.4, 0, -1.4], [2.4, 0, -1.4], [0, .5, -1.6], [0, 1.5, -2.0], [0, -.5, -1.2], [-1.2, 0, -.2], [1.2, 0, -.2]], edges: [[0, 1], [0, 2], [1, 3], [2, 3], [3, 4], [0, 3], [0, 5], [1, 5], [2, 5], [1, 6], [2, 7], [0, 6], [0, 7]] };
+  function drawJet(e) {
+    const vl = Math.hypot(e.vx, e.vy, e.vz) || 1, f = [e.vx / vl, e.vy / vl, e.vz / vl]; let r = [f[2], 0, -f[0]], rl = Math.hypot(r[0], r[1], r[2]); if (rl < 1e-3) { r = [1, 0, 0]; rl = 1; } r = r.map(v => v / rl);
+    const u = [f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2], f[0] * r[1] - f[1] * r[0]], S = 20;
+    const pp = JET.pts.map(p => { const c = toCam(e.x + (r[0] * p[0] + u[0] * p[1] + f[0] * p[2]) * S, e.y + (r[1] * p[0] + u[1] * p[1] + f[1] * p[2]) * S, e.z + (r[2] * p[0] + u[2] * p[1] + f[2] * p[2]) * S); return c[2] > 20 ? proj(c) : null; });
+    const col = e.hit > 0 ? '#ffffff' : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d'; glow(col, 12); ctx.lineWidth = 2; ctx.beginPath();
+    for (const [i, j] of JET.edges) if (pp[i] && pp[j]) { ctx.moveTo(pp[i][0], pp[i][1]); ctx.lineTo(pp[j][0], pp[j][1]); } ctx.stroke();
+  }
+  function drawRock(r) {
+    const cr = Math.cos(r.rx), sr = Math.sin(r.rx), cq = Math.cos(r.ry), sq = Math.sin(r.ry), pp = [], ok = [];
+    for (const v of r.sh.pts) {
+      let x = v[0], y = v[1], z = v[2], t = x * cr - z * sr; z = x * sr + z * cr; x = t; t = y * cq - z * sq; z = y * sq + z * cq; y = t;
+      const c = toCam(r.x + x * r.r, r.y + y * r.r, r.z + z * r.r); ok.push(c[2] > 20); pp.push(c[2] > 20 ? proj(c) : null);
+    }
+    const dist = Math.hypot(r.x, r.y, r.z), a = clamp(1.25 - dist / 1300, .25, 1), col = r.hit > 0 ? '#ffffff' : r.size === 3 ? '#7fb2ff' : r.size === 2 ? '#9fc6ff' : '#c4dcff';
+    glow(col, 10); ctx.globalAlpha = a; ctx.lineWidth = Math.max(1, 2.2 * (1 - dist / 1800)); ctx.beginPath();
+    for (const [i, j] of r.sh.edges) if (pp[i] && pp[j]) { ctx.moveTo(pp[i][0], pp[i][1]); ctx.lineTo(pp[j][0], pp[j][1]); }
+    ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  function draw() {
+    ctx.save(); ctx.fillStyle = '#02030a'; ctx.fillRect(0, 0, W, H);
+    if (shake > 0) ctx.translate(rnd(-1, 1) * shake * 16, rnd(-1, 1) * shake * 16);
+    // stars (a fixed sphere around us, so turning shows real motion)
+    ctx.shadowBlur = 0; for (const s of stars) { const c = toCam(s[0], s[1], s[2]); if (c[2] <= .05) continue; const p = proj(c); if (p[0] < -4 || p[0] > W + 4 || p[1] < -4 || p[1] > H + 4) continue; ctx.fillStyle = `rgba(190,215,255,${.35 + s[3] * .25})`; ctx.fillRect(p[0], p[1], s[3], s[3]); }
+    // dust: points fixed in space around the ship, so you can see yourself moving
+    for (const d of dust) { const c = toCam(((d[0] - pos[0]) % 1400 + 1400) % 1400 - 700, ((d[1] - pos[1]) % 1400 + 1400) % 1400 - 700, ((d[2] - pos[2]) % 1400 + 1400) % 1400 - 700); if (c[2] < 30) continue; const p = proj(c); if (p[0] < 0 || p[0] > W || p[1] < 0 || p[1] > H) continue; const sz = clamp(260 / c[2], .8, 3); ctx.fillStyle = 'rgba(160,200,255,.45)'; ctx.fillRect(p[0], p[1], sz, sz); }
+    // rocks, far to near
+    const list = rocks.map(r => [Math.hypot(r.x, r.y, r.z), r]).sort((a, b) => b[0] - a[0]); for (const [, r] of list) drawRock(r);
+    for (const e of jets) drawJet(e);
+    if (target) { const dist = Math.hypot(target.x, target.y, target.z), lt = dist / 2100, c = toCam(target.x, target.y, target.z), cl = toCam(target.x + target.vx * lt, target.y + target.vy * lt, target.z + target.vz * lt);
+      if (c[2] > 20) { const p = proj(c), q = proj(cl); glow('#ffe066', 12); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(p[0], p[1] - 46); ctx.lineTo(p[0] + 46, p[1]); ctx.lineTo(p[0], p[1] + 46); ctx.lineTo(p[0] - 46, p[1]); ctx.closePath(); ctx.stroke();
+        glow('#5ff0ff', 10); ctx.beginPath(); ctx.arc(q[0], q[1], 11, 0, TAU); ctx.stroke(); ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); ctx.setLineDash([]); } }
+    for (const b of ebolts) { const c = toCam(b.x, b.y, b.z), c2 = toCam(b.x - b.vx * .05, b.y - b.vy * .05, b.z - b.vz * .05); if (c[2] < 20 || c2[2] < 20) continue; const a = proj(c), q = proj(c2); glow('#ffa23d', 16); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); }
+    // shots
+    for (const s of shots) { const c = toCam(s.x, s.y, s.z), c2 = toCam(s.x - s.vx * .035, s.y - s.vy * .035, s.z - s.vz * .035); if (c[2] < 20 || c2[2] < 20) continue; const a = proj(c), b = proj(c2); glow('#ff5a6e', 14); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+    for (const p of sparks) { const c = toCam(p.x, p.y, p.z); if (c[2] < 20) continue; const q = proj(c); glow(p.col, 8); ctx.globalAlpha = clamp(p.life, 0, 1); ctx.fillRect(q[0], q[1], 3, 3); ctx.globalAlpha = 1; }
+    // edge warnings for rocks you cannot see
+    for (const r of rocks) {
+      const d = Math.hypot(r.x, r.y, r.z); if (d > 700) continue; const c = toCam(r.x, r.y, r.z), p = c[2] > 20 ? proj(c) : null;
+      if (p && p[0] > 30 && p[0] < W - 30 && p[1] > 30 && p[1] < H - 30) continue;
+      const ang = Math.atan2(-c[1], c[0]), ex = W / 2 + Math.cos(ang) * (W * .43), ey = H / 2 + Math.sin(ang) * (H * .40), pulse = .55 + .45 * Math.sin(time * 9 + d);
+      glow('#ff4d5e', 14); ctx.globalAlpha = pulse; ctx.beginPath(); ctx.moveTo(ex + Math.cos(ang) * 16, ey + Math.sin(ang) * 16); ctx.lineTo(ex + Math.cos(ang + 2.5) * 14, ey + Math.sin(ang + 2.5) * 14); ctx.lineTo(ex + Math.cos(ang - 2.5) * 14, ey + Math.sin(ang - 2.5) * 14); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    for (const e of jets) { // jets out of sight: a steady chevron points the way
+      const c = toCam(e.x, e.y, e.z), p = c[2] > 20 ? proj(c) : null; if (p && p[0] > 30 && p[0] < W - 30 && p[1] > 30 && p[1] < H - 30) continue;
+      const ang = Math.atan2(-c[1], c[0]), ex = W / 2 + Math.cos(ang) * (W * .39), ey = H / 2 + Math.sin(ang) * (H * .36), col = e === target ? '#ffe066' : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d';
+      glow(col, 10); ctx.lineWidth = e === target ? 5 : 3; ctx.beginPath(); ctx.moveTo(ex + Math.cos(ang + 2.4) * 15, ey + Math.sin(ang + 2.4) * 15); ctx.lineTo(ex + Math.cos(ang) * 12, ey + Math.sin(ang) * 12); ctx.lineTo(ex + Math.cos(ang - 2.4) * 15, ey + Math.sin(ang - 2.4) * 15); ctx.stroke();
+    }
+    ctx.restore(); ctx.shadowBlur = 0;
+    // grenade blast and shield
+    for (const bl of blasts) { const k = 1 - bl.t / .6; glow('#bff', 30); ctx.lineWidth = 8 * (1 - k) + 2; ctx.globalAlpha = 1 - k; ctx.beginPath(); ctx.arc(W / 2, H / 2, 60 + k * W * .55, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1; ctx.shadowBlur = 0; }
+    if (shieldOn || shieldHit > 0) { const g = ctx.createRadialGradient(W / 2, H / 2, H * .3, W / 2, H / 2, H * .75); g.addColorStop(0, 'rgba(60,255,160,0)'); g.addColorStop(1, `rgba(60,255,160,${shieldHit > 0 ? .5 : .28})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = `rgba(120,255,190,${.25 + (shieldHit > 0 ? .5 : 0)})`; ctx.lineWidth = 2; for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.arc(W / 2, H / 2, H * (.62 + .03 * Math.abs(i)), 0, TAU); ctx.stroke(); } }
+    // red hit wash
+    if (flash > 0) { ctx.fillStyle = `rgba(255,60,70,${flash * .35})`; ctx.fillRect(0, 0, W, H); }
+    cockpit(); radar(); reticle(); hud(); touchUI(); computer();
+    if (over) { ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H); glow('#ff4d5e', 20); ctx.textAlign = 'center'; ctx.font = '700 54px "Space Grotesk", sans-serif'; ctx.fillText('HULL BREACH', W / 2, H / 2 - 6); glow('#d6e6ff', 6); ctx.font = '22px "Share Tech Mono", monospace'; ctx.fillText('SCORE ' + score + '   -   CLICK TO FLY AGAIN', W / 2, H / 2 + 40); }
+  }
+  function cockpit() { // canopy struts and the dashboard, drawn over the view
+    ctx.shadowBlur = 0; ctx.fillStyle = '#070a18'; ctx.strokeStyle = '#1b2f63'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, H * .78); ctx.lineTo(W * .2, H * .86); ctx.lineTo(W * .36, H * .9); ctx.lineTo(W * .5, H * .915); ctx.lineTo(W * .64, H * .9); ctx.lineTo(W * .8, H * .86); ctx.lineTo(W, H * .78); ctx.lineTo(W, H); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W * .07, 0); ctx.lineTo(0, H * .46); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W, 0); ctx.lineTo(W * .93, 0); ctx.lineTo(W, H * .46); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W, 0); ctx.lineTo(W, H * .035); ctx.lineTo(0, H * .035); ctx.closePath(); ctx.fill();
+    const g = ctx.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  function radar() { // the whole sphere, flattened: ahead is up, behind is down
+    const cx = W / 2, cyy = H - 78, R = 62, RANGE = 1400; ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(2,10,24,.9)'; ctx.beginPath(); ctx.arc(cx, cyy, R, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cyy, R, 0, TAU); ctx.moveTo(cx - R, cyy); ctx.lineTo(cx + R, cyy); ctx.moveTo(cx, cyy - R); ctx.lineTo(cx, cyy + R); ctx.stroke(); ctx.beginPath(); ctx.arc(cx, cyy, R * .5, 0, TAU); ctx.stroke();
+    ctx.fillStyle = 'rgba(95,240,255,.12)'; ctx.beginPath(); ctx.moveTo(cx, cyy); ctx.arc(cx, cyy, R, -Math.PI / 2 - .62, -Math.PI / 2 + .62); ctx.closePath(); ctx.fill(); // the cone you can see
+    for (const r of rocks) {
+      const a = Math.cos(yaw), b = Math.sin(yaw), lx = r.x * a - r.z * b, lz = r.x * b + r.z * a, d = Math.hypot(r.x, r.y, r.z); 
+      const px = cx + lx / RANGE * R, pz = cyy - lz / RANGE * R, behind = lz < 0, near = d < 650;
+      if (Math.hypot(px - cx, pz - cyy) > R - 2) continue; glow(behind && near ? '#ff4d5e' : behind ? '#ffb23d' : '#5ff0ff', 8); ctx.globalAlpha = behind && near ? .6 + .4 * Math.sin(time * 9) : 1; ctx.beginPath(); ctx.arc(px, pz, 2 + r.size, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    for (const e of jets) { const a = Math.cos(yaw), b = Math.sin(yaw), lx = e.x * a - e.z * b, lz = e.x * b + e.z * a, px = cx + lx / RANGE * R, pz = cyy - lz / RANGE * R; if (Math.hypot(px - cx, pz - cyy) > R - 2) continue; glow(e.kind === 'attack' ? '#ff5cf0' : '#ffa84d', 8); ctx.fillRect(px - 4, pz - 4, 8, 8); }
+    ctx.shadowBlur = 0; ctx.fillStyle = '#7f93c4'; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('AHEAD', cx, cyy - R - 6); ctx.fillText('BEHIND', cx, cyy + R + 14);
+  }
+  function reticle() {
+    ctx.shadowBlur = 0; ctx.setLineDash([6, 9]); ctx.strokeStyle = 'rgba(95,240,255,.22)'; ctx.lineWidth = 1.5; ctx.strokeRect(W / 2 - BOX.w, H / 2 - BOX.h, BOX.w * 2, BOX.h * 2); ctx.setLineDash([]);
+    if (!mouse.in) { ctx.fillStyle = 'rgba(214,230,255,.8)'; ctx.font = '16px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('MOVE THE CURSOR OVER THE WINDOW', W / 2, H / 2 - BOX.h - 18); return; }
+    const lock = cv._lock, col = lock ? '#ff5a6e' : '#5dffa0', x = mouse.x, y = mouse.y; glow(col, 10); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 14, 0, TAU);
+    ctx.moveTo(x - 24, y); ctx.lineTo(x - 8, y); ctx.moveTo(x + 8, y); ctx.lineTo(x + 24, y); ctx.moveTo(x, y - 24); ctx.lineTo(x, y - 8); ctx.moveTo(x, y + 8); ctx.lineTo(x, y + 24); ctx.stroke();
+    if (lock) { const c = toCam(lock.x, lock.y, lock.z); if (c[2] > 20) { const p = proj(c), s = lock.r / c[2] * F * 1.15 + 6; ctx.strokeStyle = '#ff5a6e'; ctx.beginPath(); for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { ctx.moveTo(p[0] + sx * s, p[1] + sy * (s - 10)); ctx.lineTo(p[0] + sx * s, p[1] + sy * s); ctx.lineTo(p[0] + sx * (s - 10), p[1] + sy * s); } ctx.stroke(); ctx.font = '12px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillStyle = '#ff5a6e'; ctx.fillText((lock.jet ? 'JET ' : 'RNG ') + Math.round(Math.hypot(lock.x, lock.y, lock.z)), p[0] + s + 6, p[1] + 4); } }
+  }
+  function hud() {
+    ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.font = '700 18px "Share Tech Mono", monospace'; glow('#5ff0ff', 6); ctx.fillText('SCORE ' + String(score).padStart(6, '0'), 70, H * .07); ctx.fillText('FIELD ' + Math.max(1, wave), 70, H * .07 + 24);
+    ctx.textAlign = 'right'; ctx.fillText('JETS ' + jets.length + '   ROCKS ' + rocks.length, W - 110, H * .07); ctx.fillText('SPEED ' + Math.round(Math.hypot(vel[0], vel[1], vel[2])), W - 110, H * .07 + 24);
+    ctx.shadowBlur = 0; const bw = W * .2, bx = W * .06, by = H - 42;
+    ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillText('SHIELD', bx + bw + 16, by - 8); ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.strokeRect(bx + bw + 16, by, W * .12, 14); ctx.fillStyle = shieldLock ? '#ff4d5e' : '#5dffa0'; ctx.fillRect(bx + bw + 18, by + 2, (W * .12 - 4) * energy / 100, 10);
+    ctx.fillStyle = '#ffd23d'; ctx.fillText('BOMBS ' + '\u25CF'.repeat(grenades) + '\u25CB'.repeat(Math.max(0, 5 - grenades)), bx, by - 28);
+    if (target) { const d = Math.round(Math.hypot(target.x, target.y, target.z)); ctx.fillStyle = '#ffe066'; ctx.fillText('TARGET  ' + (target.kind === 'attack' ? 'HUNTER' : 'RUNNER') + '   RNG ' + d + '   CLOSING ' + Math.round(target.close || 0), bx, by - 46); } ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillText('HULL', bx, by - 8);
+    ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.strokeRect(bx, by, bw, 14); ctx.fillStyle = hull > 50 ? '#5dffa0' : hull > 25 ? '#ffb23d' : '#ff4d5e'; ctx.fillRect(bx + 2, by + 2, (bw - 4) * hull / 100, 10);
+    const h = (Math.round(((yaw % TAU) + TAU) % TAU / TAU * 360)); ctx.fillStyle = '#7f93c4'; ctx.textAlign = 'right'; if (incoming && Math.floor(time * 6) % 2) { glow('#ffa23d', 12); ctx.textAlign = 'center'; ctx.font = '700 22px "Share Tech Mono", monospace'; ctx.fillText('INCOMING FIRE', W / 2, H * .17); ctx.textAlign = 'right'; ctx.shadowBlur = 0; }
+    ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; if (!touchMode) { ctx.textAlign = 'right'; ctx.fillText('SPACE shield  B bomb  T target  X turn  H help', W - W * .06, by - 8); } ctx.fillText('HDG ' + String(h).padStart(3, '0') + '   PITCH ' + Math.round(pitch * 57.3), W - W * .06, by + 12);
+  }
+
+  function wrap(text, x, y, maxW, lh) { const words = text.split(' '); let line = ''; for (const w of words) { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { ctx.fillText(line, x, y); y += lh; line = w; } else line = t; } ctx.fillText(line, x, y); return y + lh; }
+  function touchUI() {
+    if (!touchMode || over) return; ctx.lineCap = 'round'; ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#27508f'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(LEVER.x, LEVER.y0); ctx.lineTo(LEVER.x, LEVER.y1); ctx.stroke();
+    const ky = LEVER.y1 - (LEVER.y1 - LEVER.y0) * throttle; ctx.strokeStyle = '#ffb23d'; ctx.beginPath(); ctx.moveTo(LEVER.x, LEVER.y1); ctx.lineTo(LEVER.x, ky); ctx.stroke(); glow('#ffb23d', 14); ctx.beginPath(); ctx.arc(LEVER.x, ky, 26, 0, TAU); ctx.fill();
+    ctx.shadowBlur = 0; ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('THRUST', LEVER.x, LEVER.y0 - 14);
+    for (const b of BTNS) { const on = b.hold ? isHeld(b.id) : (b.id === 'flip' && flipT > 0) || (b.id === 'help' && helpOpen); glow(b.col, on ? 26 : 12); ctx.lineWidth = 4; ctx.globalAlpha = on ? 1 : .78; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); if (on) { ctx.globalAlpha = .35; ctx.fill(); ctx.globalAlpha = 1; } ctx.stroke(); ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.fillStyle = b.col; ctx.font = '700 ' + (b.label.length > 4 ? 14 : b.label.length > 2 ? 18 : 22) + 'px "Space Grotesk", sans-serif'; ctx.fillText(b.label, b.x, b.y + 6); }
+    if (stick.on) { const dx = stick.x - stick.ox, dy = stick.y - stick.oy, m = Math.hypot(dx, dy), k = m > 110 ? 110 / m : 1; ctx.strokeStyle = 'rgba(95,240,255,.5)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(stick.ox, stick.oy, 110, 0, TAU); ctx.stroke(); glow('#5ff0ff', 14); ctx.beginPath(); ctx.arc(stick.ox + dx * k, stick.oy + dy * k, 34, 0, TAU); ctx.fill(); ctx.shadowBlur = 0; }
+    else if (!(tilt.on && tilt.has)) { ctx.fillStyle = 'rgba(95,240,255,.5)'; ctx.font = '14px "Share Tech Mono", monospace'; ctx.fillText('DRAG HERE TO STEER', W * .26, H * .5); }
+    else { ctx.fillStyle = 'rgba(95,240,255,.6)'; ctx.font = '13px "Share Tech Mono", monospace'; ctx.fillText('TILT TO STEER', W * .5, H * .3); }
+  }
+  const HELP = [['TARGETING', 'Press T (or TARGET) to lock the nearest jet, again for the next. A yellow diamond follows it, and the small blue circle is where to aim: shots take time to arrive. Auto-fire shoots when your crosshair is on that circle.'],
+    ['GRENADES', 'Press B (or BOMB). A blast around you destroys rocks and jets that are close and wipes out incoming bolts. You start with 3 and get 1 more each wave.'],
+    ['SHIELD', 'Hold Space, right-click or SHIELD. It soaks hits instead of your hull, but drains energy and your guns stop while it is up. If it empties, it needs time to recharge.'],
+    ['FLYING', 'Trackpad edge, left stick or tilt turns the ship. Up arrow or the lever thrusts. X or 180 spins you around.'],
+    ['WARNINGS', 'Red pulsing arrow: a rock is close and out of sight. Pink arrow: a hunter jet. Orange: a runner. INCOMING FIRE: a bolt is about to hit you.']];
+  function computer() { // onboard computer: short call-outs from the ship, and a help screen you can open any time
+    ctx.shadowBlur = 0; ctx.textAlign = 'center';
+    if (msg.t > 0 && !helpOpen && !over) { ctx.globalAlpha = Math.min(1, msg.t * 2); ctx.fillStyle = 'rgba(4,16,40,.8)'; ctx.font = '15px "Share Tech Mono", monospace'; const w = Math.min(W * .7, ctx.measureText(msg.text).width + 70); ctx.fillRect(W / 2 - w / 2, H * .205, w, 34); ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.strokeRect(W / 2 - w / 2, H * .205, w, 34); ctx.fillStyle = '#5ff0ff'; ctx.fillText(msg.text, W / 2, H * .205 + 22); ctx.globalAlpha = 1; }
+    if (!helpOpen) return;
+    ctx.fillStyle = 'rgba(2,6,18,.92)'; ctx.fillRect(W * .1, H * .08, W * .8, H * .72); glow('#5ff0ff', 12); ctx.strokeStyle = '#5ff0ff'; ctx.lineWidth = 2; ctx.strokeRect(W * .1, H * .08, W * .8, H * .72); ctx.shadowBlur = 0;
+    ctx.textAlign = 'left'; ctx.fillStyle = '#5ff0ff'; ctx.font = '700 26px "Space Grotesk", sans-serif'; ctx.fillText('ONBOARD COMPUTER', W * .13, H * .165);
+    let y = H * .225; for (const [t, d] of HELP) { ctx.fillStyle = '#ffb23d'; ctx.font = '700 15px "Space Grotesk", sans-serif'; ctx.fillText(t, W * .13, y); ctx.fillStyle = '#c9d8ff'; ctx.font = '15px "Space Grotesk", sans-serif'; y = wrap(d, W * .13, y + 22, W * .74, 20) + 12; }
+    ctx.fillStyle = '#7f93c4'; ctx.font = '13px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('GAME PAUSED  -  PRESS H, ESC OR TAP ANYWHERE TO RETURN', W / 2, H * .775);
+  }
+  let last = performance.now();
+  function loop(t) { const dt = Math.min(.05, (t - last) / 1000); last = t; update(dt); draw(); requestAnimationFrame(loop); }
+  reset(); requestAnimationFrame(loop);
+})();
+</script>
+
