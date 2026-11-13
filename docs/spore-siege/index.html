@@ -15,21 +15,20 @@
     -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
   canvas { display:block; margin:0 auto; background:#000; touch-action:none; outline:none;
     width:min(100vw, calc(100vh * 4 / 3)); width:min(100vw, calc(100dvh * 4 / 3)); height:auto; aspect-ratio:4/3; }
-  #rot { display:none; position:fixed; inset:0; z-index:10; background:#000; color:#9ef; text-align:center; align-items:center; justify-content:center;
-    font:600 22px/1.5 "Courier New", monospace; padding:24px; }
-  @media (orientation: portrait) and (pointer: coarse) { #rot { display:flex; } }
 </style>
 </head>
 <body>
 <canvas id="c" width="960" height="720"></canvas>
-<div id="rot">Turn your phone sideways to play.</div>
 <script>
 // ===== Spore Siege: a hive crawler winds down a mushroom field. Original game inspired by classic arcade shooters. =====
 // Mouse / touchpad or finger moves the ship. It fires by itself (F toggles). Shift, Space or click also fire.
 const cv = document.getElementById('c'), ctx = cv.getContext('2d'), TAU = Math.PI * 2;
 // A phone gets a smaller, wider field so everything is drawn bigger on its small screen. Tablets and computers get the full field.
 const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 700;
-const CELL = 32, COLS = 30, ROWS = PHONE ? 13 : 21, OY = PHONE ? 40 : 48, ZONE = ROWS - (PHONE ? 5 : 6), W = COLS * CELL, H = OY + ROWS * CELL; // the bottom rows (ZONE and below) are the ship's zone
+const PORTRAIT = PHONE && innerHeight > innerWidth; // held upright: a narrow, tall field
+const CELL = 32, COLS = PORTRAIT ? 15 : 30, OY = PHONE ? 40 : 48, ROWS = PORTRAIT ? Math.max(18, Math.min(26, Math.floor((COLS * CELL * innerHeight / innerWidth - OY) / CELL))) : PHONE ? 13 : 21;
+const ZONE = ROWS - (PORTRAIT ? 7 : PHONE ? 5 : 6), W = COLS * CELL, H = OY + ROWS * CELL;
+if (PHONE) matchMedia('(orientation: portrait)').addEventListener('change', () => location.reload()); // the bottom rows (ZONE and below) are the ship's zone
 cv.width = W; cv.height = H; cv.style.aspectRatio = W + ' / ' + H; cv.style.width = 'min(100vw, ' + (100 * W / H) + 'vh)'; cv.style.width = 'min(100vw, ' + (100 * W / H) + 'dvh)';
 const rnd = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
 const cx = c => c * CELL + CELL / 2, cyy = r => OY + r * CELL + CELL / 2;
@@ -155,7 +154,7 @@ function update(dt) {
     if (gone) bolts.splice(i, 1); else b.y = b.y;
   }
   // crawler
-  tickLen = Math.max(.05, .115 - wave * .005) * (PHONE ? 1.12 : 1); tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); }
+  tickLen = Math.max(.05, .115 - wave * .005) * (PORTRAIT ? 1.2 : PHONE ? 1.12 : 1); tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); }
   for (const q of queue) q.t -= dt; for (const q of queue.filter(q => q.t <= 0)) worms.push(makeWorm(1, 2 + Math.floor(Math.random() * 3), q.left)); queue = queue.filter(q => q.t > 0);
   if (ship.alive) for (const w of worms) for (const s of w) { const [x, y] = segXY(s); if (Math.hypot(x - ship.x, y - ship.y) < 24) killShip(); }
   enemies(dt);
@@ -194,9 +193,9 @@ function draw() {
   ctx.restore(); ctx.shadowBlur = 0; ctx.textAlign = 'center';
   ctx.font = '700 16px "Courier New", monospace'; for (const t of texts) { ctx.globalAlpha = clamp(t.t * 2, 0, 1); glow('#ffe066', 8); ctx.fillText(t.s, t.x, t.y); ctx.globalAlpha = 1; }
   hud();
-  if (state === 'title') { glow('#b6ff5a', 24); ctx.font = '700 72px "Courier New", monospace'; ctx.fillText('SPORE SIEGE', W / 2, H * .33); glow('#fff', 10); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO START' : 'CLICK OR PRESS ENTER TO START', W / 2, H * .46);
-    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = touchMode ? ['Drag your finger low on the screen to fly the ship.', 'It fires by itself. Shoot the glowing crawler.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to fly the ship.', 'It fires by itself (F turns that off, Shift or click to fire).', 'Shoot the crawler. Every hit leaves a mushroom. Stay alive.'];
-    l.forEach((t, i) => ctx.fillText(t, W / 2, H * .55 + i * 26)); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, H * .55 + 3 * 26 + 24); }
+  if (state === 'title') { glow('#b6ff5a', 24); ctx.font = '700 ' + Math.min(72, Math.floor(W / 7.4)) + 'px "Courier New", monospace'; ctx.fillText('SPORE SIEGE', W / 2, H * .33); glow('#fff', 10); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO START' : 'CLICK OR PRESS ENTER TO START', W / 2, H * .46);
+    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Drag your finger low to fly.', 'The ship fires by itself.', 'Shoot the glowing crawler.', 'Do not let it reach you.'] : touchMode ? ['Drag your finger low on the screen to fly the ship.', 'It fires by itself. Shoot the glowing crawler.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to fly the ship.', 'It fires by itself (F turns that off, Shift or click to fire).', 'Shoot the crawler. Every hit leaves a mushroom. Stay alive.'];
+    l.forEach((t, i) => ctx.fillText(t, W / 2, H * .55 + i * 26)); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, H * .55 + l.length * 26 + 24); }
   else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText('GAME OVER', W / 2, H * .4); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText('SCORE ' + score, W / 2, H * .5); ctx.fillText(touchMode ? 'TAP TO PLAY AGAIN' : 'CLICK OR PRESS ENTER TO PLAY AGAIN', W / 2, H * .58); }
   else if (state === 'pause') { glow('#fff', 14); ctx.font = '700 48px "Courier New", monospace'; ctx.fillText('PAUSED', W / 2, H / 2); ctx.font = '18px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO RESUME' : 'PRESS P OR CLICK TO RESUME', W / 2, H / 2 + 36); }
   else if (banner > 0) { ctx.globalAlpha = clamp(banner, 0, 1); glow('#ffe066', 18); ctx.font = '700 40px "Courier New", monospace'; ctx.fillText('WAVE ' + wave, W / 2, H / 2 - 60); ctx.globalAlpha = 1; }
