@@ -26,8 +26,11 @@
 <script>
 // ===== Spore Siege: a hive crawler winds down a mushroom field. Original game inspired by classic arcade shooters. =====
 // Mouse / touchpad or finger moves the ship. It fires by itself (F toggles). Shift, Space or click also fire.
-const cv = document.getElementById('c'), ctx = cv.getContext('2d'), W = 960, H = 720, TAU = Math.PI * 2;
-const CELL = 32, COLS = 30, ROWS = 21, OY = 48, ZONE = 15; // grid: 30 x 21 cells starting 48px down; the bottom rows (15+) are the ship's zone
+const cv = document.getElementById('c'), ctx = cv.getContext('2d'), TAU = Math.PI * 2;
+// A phone gets a smaller, wider field so everything is drawn bigger on its small screen. Tablets and computers get the full field.
+const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 700;
+const CELL = 32, COLS = 30, ROWS = PHONE ? 13 : 21, OY = PHONE ? 40 : 48, ZONE = ROWS - (PHONE ? 5 : 6), W = COLS * CELL, H = OY + ROWS * CELL; // the bottom rows (ZONE and below) are the ship's zone
+cv.width = W; cv.height = H; cv.style.aspectRatio = W + ' / ' + H; cv.style.width = 'min(100vw, ' + (100 * W / H) + 'vh)'; cv.style.width = 'min(100vw, ' + (100 * W / H) + 'dvh)';
 const rnd = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
 const cx = c => c * CELL + CELL / 2, cyy = r => OY + r * CELL + CELL / 2;
 
@@ -69,7 +72,7 @@ function pulse(dt) { // synth heartbeat when there is no music file for the game
 // ---------- field
 function seedMushrooms() {
   for (let r = 0; r < ROWS; r++) { mush[r].fill(0); pois[r].fill(false); }
-  let n = 0; while (n < 36) { const r = 1 + Math.floor(Math.random() * 13), c = Math.floor(Math.random() * COLS); if (!mush[r][c]) { mush[r][c] = 4; n++; } }
+  let n = 0; const want = Math.round(36 * COLS * ZONE / (30 * 15)); while (n < want) { const r = 1 + Math.floor(Math.random() * (ZONE - 2)), c = Math.floor(Math.random() * COLS); if (!mush[r][c]) { mush[r][c] = 4; n++; } }
 }
 function makeWorm(len, row, fromLeft, delay = 0) {
   const w = []; for (let i = 0; i < len; i++) w.push({ c: fromLeft ? -1 - i : COLS + i, r: row, pc: 0, pr: row, dir: fromLeft ? 1 : -1, vd: 1, dive: false });
@@ -117,7 +120,7 @@ function enemies(dt) {
   if (wave >= 2) { fleaT -= dt; if (!flea && fleaT <= 0) { flea = { x: cx(Math.floor(rnd(1, COLS - 1))), y: OY - 10, hp: wave >= 4 ? 2 : 1 }; fleaT = rnd(14, 22); }
     if (flea) { const f = flea, pr = Math.floor((f.y - OY) / CELL); f.y += 330 * dt; const nr = Math.floor((f.y - OY) / CELL); if (nr !== pr && nr > 0 && nr < ZONE && Math.random() < .35 && !mush[nr][Math.floor(f.x / CELL)]) mush[nr][Math.floor(f.x / CELL)] = 4;
       if (Math.hypot(ship.x - f.x, ship.y - f.y) < 22) killShip(); if (f.y > H + 20) flea = null; } }
-  if (wave >= 3) { scorpT -= dt; if (!scorp && scorpT <= 0) { const L = Math.random() < .5; scorp = { x: L ? -30 : W + 30, row: 2 + Math.floor(Math.random() * 11), vx: (L ? 1 : -1) * 110 }; scorpT = rnd(20, 30); }
+  if (wave >= 3) { scorpT -= dt; if (!scorp && scorpT <= 0) { const L = Math.random() < .5; scorp = { x: L ? -30 : W + 30, row: 2 + Math.floor(Math.random() * Math.max(2, ZONE - 4)), vx: (L ? 1 : -1) * 110 }; scorpT = rnd(20, 30); }
     if (scorp) { const s = scorp; s.x += s.vx * dt; const c = Math.floor(s.x / CELL); if (c >= 0 && c < COLS && mush[s.row][c]) pois[s.row][c] = true; if (s.x < -60 || s.x > W + 60) scorp = null; } }
 }
 
@@ -152,7 +155,7 @@ function update(dt) {
     if (gone) bolts.splice(i, 1); else b.y = b.y;
   }
   // crawler
-  tickLen = Math.max(.05, .115 - wave * .005); tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); }
+  tickLen = Math.max(.05, .115 - wave * .005) * (PHONE ? 1.12 : 1); tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); }
   for (const q of queue) q.t -= dt; for (const q of queue.filter(q => q.t <= 0)) worms.push(makeWorm(1, 2 + Math.floor(Math.random() * 3), q.left)); queue = queue.filter(q => q.t > 0);
   if (ship.alive) for (const w of worms) for (const s of w) { const [x, y] = segXY(s); if (Math.hypot(x - ship.x, y - ship.y) < 24) killShip(); }
   enemies(dt);
@@ -191,10 +194,10 @@ function draw() {
   ctx.restore(); ctx.shadowBlur = 0; ctx.textAlign = 'center';
   ctx.font = '700 16px "Courier New", monospace'; for (const t of texts) { ctx.globalAlpha = clamp(t.t * 2, 0, 1); glow('#ffe066', 8); ctx.fillText(t.s, t.x, t.y); ctx.globalAlpha = 1; }
   hud();
-  if (state === 'title') { glow('#b6ff5a', 24); ctx.font = '700 72px "Courier New", monospace'; ctx.fillText('SPORE SIEGE', W / 2, 240); glow('#fff', 10); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO START' : 'CLICK OR PRESS ENTER TO START', W / 2, 330);
+  if (state === 'title') { glow('#b6ff5a', 24); ctx.font = '700 72px "Courier New", monospace'; ctx.fillText('SPORE SIEGE', W / 2, H * .33); glow('#fff', 10); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO START' : 'CLICK OR PRESS ENTER TO START', W / 2, H * .46);
     glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = touchMode ? ['Drag your finger low on the screen to fly the ship.', 'It fires by itself. Shoot the glowing crawler.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to fly the ship.', 'It fires by itself (F turns that off, Shift or click to fire).', 'Shoot the crawler. Every hit leaves a mushroom. Stay alive.'];
-    l.forEach((t, i) => ctx.fillText(t, W / 2, 390 + i * 28)); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, 520); }
-  else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText('GAME OVER', W / 2, 300); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText('SCORE ' + score, W / 2, 350); ctx.fillText(touchMode ? 'TAP TO PLAY AGAIN' : 'CLICK OR PRESS ENTER TO PLAY AGAIN', W / 2, 400); }
+    l.forEach((t, i) => ctx.fillText(t, W / 2, H * .55 + i * 26)); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, H * .55 + 3 * 26 + 24); }
+  else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText('GAME OVER', W / 2, H * .4); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText('SCORE ' + score, W / 2, H * .5); ctx.fillText(touchMode ? 'TAP TO PLAY AGAIN' : 'CLICK OR PRESS ENTER TO PLAY AGAIN', W / 2, H * .58); }
   else if (state === 'pause') { glow('#fff', 14); ctx.font = '700 48px "Courier New", monospace'; ctx.fillText('PAUSED', W / 2, H / 2); ctx.font = '18px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO RESUME' : 'PRESS P OR CLICK TO RESUME', W / 2, H / 2 + 36); }
   else if (banner > 0) { ctx.globalAlpha = clamp(banner, 0, 1); glow('#ffe066', 18); ctx.font = '700 40px "Courier New", monospace'; ctx.fillText('WAVE ' + wave, W / 2, H / 2 - 60); ctx.globalAlpha = 1; }
   ctx.shadowBlur = 0;
