@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>Bug Bombers</title>
   <style>
     :root { color-scheme: light; }
@@ -64,6 +64,16 @@
       position: absolute; top: 12px; right: 12px;
       padding: 8px 14px; font-size: 14px; box-shadow: none;
       background: rgba(255, 248, 231, 0.92); color: #3a2a1a;
+    }
+    /* short screens (a phone held sideways): use every pixel and keep the panels small */
+    @media (max-height: 560px) {
+      body { padding: 0; }
+      canvas, .overlay { border-radius: 0; }
+      .panel { padding: 12px 20px; max-width: 70%; }
+      .panel h1 { font-size: 26px; } .panel h2 { font-size: 22px; } .panel p { font-size: 14px; margin: 4px 0; }
+      .tips { font-size: 13px; margin: 8px auto 2px; } .tips li { margin: 2px 0; }
+      .buttons { margin-top: 10px; } button { padding: 8px 18px; font-size: 15px; }
+      #restartBtn { top: 8px; right: auto; left: 50%; transform: translateX(-50%); padding: 6px 12px; font-size: 13px; }
     }
   </style>
 </head>

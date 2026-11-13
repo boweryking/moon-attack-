@@ -109,8 +109,21 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-  canvas.width = W * DPR;
-  canvas.height = H * DPR;
+  // On a wide, short screen (a phone held sideways) crop the empty sky off the top so the playfield fills the whole screen
+  // and everything is drawn bigger. VH is how much of the world's height is visible; OFF is the world y at the top of the view.
+  let VH = H, OFF = 0;
+  const wrapEl = document.getElementById('wrap');
+  function fit() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const ar = Math.max(W / H, Math.min(2.3, vw / vh));   // between 16:9 and 2.3:1
+    VH = Math.round(W / ar); OFF = H - VH;
+    const w = Math.min(vw, vh * ar);
+    wrapEl.style.width = w + 'px'; wrapEl.style.height = (w / ar) + 'px';
+    canvas.width = W * DPR; canvas.height = VH * DPR;
+  }
+  fit();
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', () => setTimeout(fit, 250));
 
   const titleEl = document.getElementById('title');
   const endEl = document.getElementById('end');
@@ -418,7 +431,7 @@
   // ---------- Input ----------
   function toLogical(e) {
     const r = canvas.getBoundingClientRect();
-    return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+    return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * VH / r.height + OFF };
   }
 
   canvas.addEventListener('pointerdown', (e) => {
@@ -811,12 +824,12 @@
     // bug queue
     ctx.textAlign = 'left';
     S.queue.forEach((key, i) => {
-      drawBug(BUG[key], 34 + i * 40, H - 34, 0, 0.9);
+      drawBug(BUG[key], 34 + i * 40, VH - 34, 0, 0.9);
     });
   }
 
   function drawFrame() {
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, -OFF * DPR);
     ctx.save();
     if (S.shake > 0.3) {
       ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
@@ -855,6 +868,7 @@
     }
 
     drawEffects();
+    ctx.restore(); ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0); // the HUD sits on the screen, not in the world
     drawHUD();
 
     // hint text
@@ -865,10 +879,10 @@
       ctx.textAlign = 'center';
       ctx.font = 'bold 17px system-ui, sans-serif';
       ctx.fillStyle = 'rgba(25,14,40,0.75)';
-      ctx.fillText(`${BUG[readyKey].name}: ${BUG[readyKey].tip}`, W / 2, 110);
+      ctx.fillText(`${BUG[readyKey].name}: ${BUG[readyKey].tip}`, W / 2, 100);
       if (S.hint > 0) {
         ctx.font = '15px system-ui, sans-serif';
-        ctx.fillText('Drag the bug back in the slingshot, then let go.', W / 2, 134);
+        ctx.fillText('Drag the bug back in the slingshot, then let go.', W / 2, 122);
       }
     }
     ctx.restore();
