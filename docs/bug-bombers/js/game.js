@@ -23,21 +23,32 @@
   };
   const CHAR = { '#': 'stone', '=': 'wood', '~': 'leaf' };
 
+  // Big, colourful beetles. Radius is the physics size (about 1.45x the old bugs); density is lowered to keep each bug's weight about the same.
   const BUG = {
     bombardier: {
-      key: 'bombardier', name: 'Bombardier Beetle', radius: 13, density: 0.0016,
-      bomb: true, tap: 'detonate', blast: { r: 115, power: 70, knock: 12, color: '#ff9f1c' },
-      body: '#1f7a6f', accent: '#ff9f1c', tip: 'Tap or Space mid-flight to detonate early.',
+      key: 'bombardier', name: 'Jewel Beetle', radius: 19, density: 0.00076,
+      bomb: true, tap: 'detonate', blast: { r: 128, power: 70, knock: 12, color: '#ffd23f' },
+      body: '#12a37f', hi: '#7cf0cf', lo: '#07594a', accent: '#ffd166', tip: 'Tap or Space mid-flight to blow up early.',
     },
     hornet: {
-      key: 'hornet', name: 'Hornet', radius: 10, density: 0.0012,
-      bomb: true, tap: 'dive', blast: { r: 62, power: 34, knock: 8, color: '#ffd166' },
-      body: '#f4c430', accent: '#222', tip: 'Tap or Space mid-flight to dive straight down.',
+      key: 'hornet', name: 'Sapphire Diver', radius: 15, density: 0.00057,
+      bomb: true, tap: 'dive', blast: { r: 70, power: 34, knock: 8, color: '#8fd3ff' },
+      body: '#2f6fe0', hi: '#a9c9ff', lo: '#142f75', accent: '#e8f1ff', tip: 'Tap or Space mid-flight to dive straight down.',
     },
     stag: {
-      key: 'stag', name: 'Stag Beetle', radius: 17, density: 0.0035,
+      key: 'stag', name: 'Rhino Beetle', radius: 25, density: 0.00167,
       bomb: false, tap: null, blast: null,
-      body: '#7a4e2d', accent: '#3b2414', tip: 'Heavy. Smashes whatever it lands on.',
+      body: '#8e44d6', hi: '#d1a3ff', lo: '#40166e', accent: '#2f1050', tip: 'Heavy. Smashes whatever it lands on.',
+    },
+    ladybug: {
+      key: 'ladybug', name: 'Ruby Ladybug', radius: 17, density: 0.00065,
+      bomb: true, tap: 'detonate', blast: { r: 96, power: 55, knock: 10, color: '#ff6b6b' },
+      body: '#e5322d', hi: '#ff9a8f', lo: '#8a0f10', accent: '#151515', tip: 'Tap or Space mid-flight to blow up early.',
+    },
+    scarab: {
+      key: 'scarab', name: 'Golden Scarab', radius: 18, density: 0.0008,
+      bomb: true, tap: 'dive', blast: { r: 82, power: 42, knock: 9, color: '#ffe082' },
+      body: '#e6b422', hi: '#fff0a0', lo: '#8a5a00', accent: '#7a4d00', tip: 'Tap or Space mid-flight to dive straight down.',
     },
   };
 
@@ -46,7 +57,7 @@
   const LEVELS = [
     {
       name: 'Crumb Pile',
-      bugs: ['bombardier', 'hornet', 'hornet'],
+      bugs: ['bombardier', 'ladybug', 'scarab'],
       map: [
         '....A.......',
         '...A===A....',
@@ -57,7 +68,7 @@
     },
     {
       name: 'Leaf Pile',
-      bugs: ['hornet', 'bombardier', 'stag', 'hornet'],
+      bugs: ['scarab', 'bombardier', 'stag', 'ladybug'],
       map: [
         '............',
         '...A.A.A....',
@@ -69,7 +80,7 @@
     },
     {
       name: 'Stone Fort',
-      bugs: ['stag', 'bombardier', 'bombardier', 'hornet'],
+      bugs: ['stag', 'ladybug', 'bombardier', 'hornet'],
       map: [
         '...A..A.....',
         '...##.##....',
@@ -80,7 +91,7 @@
     },
     {
       name: 'Hive',
-      bugs: ['bombardier', 'hornet', 'bombardier', 'stag'],
+      bugs: ['ladybug', 'hornet', 'bombardier', 'stag'],
       map: [
         '............',
         '....A.A.....',
@@ -93,7 +104,7 @@
     },
     {
       name: 'Ant Empire',
-      bugs: ['bombardier', 'hornet', 'bombardier', 'stag', 'hornet'],
+      bugs: ['bombardier', 'scarab', 'ladybug', 'stag', 'hornet'],
       map: [
         '....A.A.....',
         '....===.....',
@@ -198,7 +209,7 @@
   }
 
   function makeAnt(x, y) {
-    return Bodies.circle(x, y, 7, {
+    return Bodies.circle(x, y, 11, {
       label: 'ant', friction: 0.8, restitution: 0, density: 0.002, inertia: Infinity,
       userData: { dead: false },
     });
@@ -368,6 +379,7 @@
     S.pull = { x: 0, y: 0 };
     S.dragging = false;
     S.hint = 0;
+    S.boing = 42;
     sfx('launch');
   }
 
@@ -504,7 +516,7 @@
       const o = audioCtx.createOscillator();
       const g = audioCtx.createGain();
       o.connect(g); g.connect(audioCtx.destination);
-      if (name === 'launch') { o.type = 'triangle'; o.frequency.setValueAtTime(260, t); o.frequency.exponentialRampToValueAtTime(620, t + 0.18); g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2); }
+      if (name === 'launch') { o.type = 'triangle'; o.frequency.setValueAtTime(170, t); o.frequency.exponentialRampToValueAtTime(720, t + 0.09); o.frequency.exponentialRampToValueAtTime(230, t + 0.34); g.gain.setValueAtTime(0.18, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.38); }
       else if (name === 'pop') { o.type = 'sine'; o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(300, t + 0.12); g.gain.setValueAtTime(0.14, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.14); }
       else if (name === 'dive') { o.type = 'sawtooth'; o.frequency.setValueAtTime(700, t); o.frequency.exponentialRampToValueAtTime(180, t + 0.4); g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.4); }
       else { o.type = 'sine'; o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(35, t + 0.45); g.gain.setValueAtTime(0.35, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.5); }
@@ -570,42 +582,36 @@
     ctx.fill();
   }
 
+  // The launcher is a big springy mushroom. Drag the bug back and the cap squashes down; let go and it boings the bug away.
   function drawSlingBack() {
-    const x = SLING.x, y = SLING.y;
-    ctx.strokeStyle = '#6b4423';
-    ctx.lineCap = 'round';
-    ctx.lineWidth = 14;
-    ctx.beginPath(); ctx.moveTo(x, GROUND + 4); ctx.lineTo(x, y + 6); ctx.stroke();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#8a5a30';
-    ctx.beginPath(); ctx.moveTo(x - 3, GROUND + 2); ctx.lineTo(x - 3, y + 8); ctx.stroke();
+    const x = SLING.x, base = GROUND + 2;
+    const pull = Math.hypot(S.pull.x, S.pull.y), c = Math.min(1, pull / MAX_PULL);
+    let wob = 0;
+    if (S.boing > 0) { wob = Math.sin((42 - S.boing) * 0.6) * (S.boing / 42) * 0.6; S.boing--; }
+    const squash = c * 0.45 - wob;                       // positive = squashed down, negative = stretched up
+    const capX = x + S.pull.x * 0.12, capY = SLING.y + 54 + squash * 30;
+    const rx = 56 * (1 + squash * 0.45), ry = 26 * (1 - squash * 0.85);
+    // stem
+    ctx.fillStyle = '#f6ecd0'; ctx.strokeStyle = '#c9b27c'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x - 15, capY); ctx.quadraticCurveTo(x - 11, (capY + base) / 2, x - 24, base);
+    ctx.lineTo(x + 24, base); ctx.quadraticCurveTo(x + 11, (capY + base) / 2, x + 15, capY); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // gills under the cap
+    ctx.fillStyle = '#e9d7a8';
+    ctx.beginPath(); ctx.ellipse(capX, capY, rx * 0.98, Math.max(4, ry * 0.3), 0, 0, Math.PI * 2); ctx.fill();
+    // cap
+    const g = ctx.createLinearGradient(0, capY - ry * 1.2, 0, capY);
+    g.addColorStop(0, '#ff7a59'); g.addColorStop(1, '#d92f2f');
+    ctx.fillStyle = g; ctx.strokeStyle = '#8f1d1d'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(capX, capY, rx, ry * 1.15, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // spots
+    ctx.fillStyle = '#fff7e6';
+    for (const [dx, dy, rr] of [[-0.5, 0.55, 7], [0.05, 0.85, 9], [0.55, 0.5, 6], [-0.15, 0.35, 4.5], [0.3, 0.25, 4]]) {
+      ctx.beginPath(); ctx.ellipse(capX + dx * rx, capY - dy * ry * 1.05, rr * (1 + squash * 0.3), rr * (1 - squash * 0.4), 0, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
-  function drawSlingFront(bugPos) {
-    const x = SLING.x, y = SLING.y;
-    const L = { x: x - 16, y: y - 36 }, R = { x: x + 16, y: y - 36 };
-    // prongs
-    ctx.strokeStyle = '#6b4423';
-    ctx.lineWidth = 11;
-    ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(L.x, L.y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(R.x, R.y); ctx.stroke();
-    // band (front)
-    ctx.strokeStyle = '#3b2414';
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(R.x, R.y); ctx.lineTo(bugPos.x + 6, bugPos.y - 2); ctx.stroke();
-    // pouch
-    ctx.fillStyle = '#4b2e18';
-    ctx.beginPath(); ctx.ellipse(bugPos.x - 2, bugPos.y + 12, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.lineCap = 'butt';
-  }
-
-  function drawBandBack(bugPos) {
-    const x = SLING.x;
-    const L = { x: x - 16, y: SLING.y - 36 };
-    ctx.strokeStyle = '#3b2414';
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(bugPos.x - 6, bugPos.y - 2); ctx.stroke();
-  }
+  function drawSlingFront() {}
+  function drawBandBack() {}
 
   function drawTrajectory() {
     const pos = { x: SLING.x + S.pull.x, y: SLING.y + S.pull.y };
@@ -616,7 +622,7 @@
       if (i % 6 === 0) {
         if (pos.y > GROUND || pos.x > W) break;
         ctx.fillStyle = `rgba(255,255,255,${0.85 - i / 160})`;
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, 3.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, 4.4, 0, Math.PI * 2); ctx.fill();
       }
     }
   }
@@ -664,101 +670,101 @@
     const t = S.time * 0.35 + body.id;
     ctx.save();
     ctx.translate(body.position.x, body.position.y);
-    ctx.strokeStyle = '#2b1d12';
-    ctx.fillStyle = '#2b1d12';
+    ctx.scale(1.75, 1.75);
+    ctx.strokeStyle = '#3a1d0e';
+    ctx.fillStyle = '#4a2511';
     ctx.lineWidth = 1.5;
     ctx.lineCap = 'round';
-    // legs
-    for (let i = -1; i <= 1; i++) {
+    for (let i = -1; i <= 1; i++) {   // legs
       const wig = Math.sin(t + i * 2) * 2;
       ctx.beginPath();
       ctx.moveTo(i * 3, -1); ctx.lineTo(i * 3 + wig, -8);
       ctx.moveTo(i * 3, 1); ctx.lineTo(i * 3 - wig, 8);
       ctx.stroke();
     }
-    // antennae
-    ctx.beginPath();
+    ctx.beginPath();                  // antennae
     ctx.moveTo(7, -1); ctx.quadraticCurveTo(10, -8, 13, -7);
     ctx.moveTo(7, 1); ctx.quadraticCurveTo(10, 8, 13, 7);
     ctx.stroke();
-    // body segments
-    ctx.beginPath(); ctx.arc(-5, 0, 4.6, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(1, 0, 3.6, 3, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(6.5, 0, 3.2, 0, Math.PI * 2); ctx.fill();
-    // eye
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(7.6, -1.2, 1.1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-5, 0, 4.8, 0, Math.PI * 2); ctx.fill();            // abdomen
+    ctx.beginPath(); ctx.ellipse(1, 0, 3.6, 3, 0, 0, Math.PI * 2); ctx.fill();   // thorax
+    ctx.fillStyle = '#6b3516';
+    ctx.beginPath(); ctx.arc(6.5, 0, 3.6, 0, Math.PI * 2); ctx.fill();           // head
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath(); ctx.arc(-6, -2, 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff';           // eyes
+    ctx.beginPath(); ctx.arc(7.6, -1.5, 1.3, 0, Math.PI * 2); ctx.arc(7.6, 1.5, 1.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(8, -1.5, 0.6, 0, Math.PI * 2); ctx.arc(8, 1.5, 0.6, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
   function drawBug(type, x, y, facing, scale) {
-    const r = type.radius;   // drawn in local units; ctx.scale handles size
-    const cosF = Math.cos(facing), sinF = Math.sin(facing);
+    const r = type.radius, k = r / 13;
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(scale, scale);
-    // wings
-    if (type.key === 'hornet') {
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.strokeStyle = 'rgba(120,140,160,0.8)';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.ellipse(-3, -r - 2, 8, 4, -0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.rotate(facing);                     // the beetle faces the way it is heading (head to the right)
+    ctx.lineCap = 'round';
+    // legs
+    ctx.strokeStyle = '#2b1d12'; ctx.lineWidth = 2.2 * k;
+    for (const sg of [-1, 1]) for (const i of [-0.55, 0, 0.55]) {
+      ctx.beginPath(); ctx.moveTo(i * r, sg * r * 0.7); ctx.lineTo(i * r + r * 0.25, sg * r * 1.3); ctx.stroke();
     }
-    // body
-    ctx.beginPath(); ctx.arc(0, 0, type.radius, 0, Math.PI * 2);
-    ctx.fillStyle = type.body; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.stroke();
-    // shell highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.22)';
-    ctx.beginPath(); ctx.ellipse(-2, -r * 0.45, r * 0.55, r * 0.25, 0, 0, Math.PI * 2); ctx.fill();
-    // markings
-    ctx.save();
-    ctx.beginPath(); ctx.arc(0, 0, type.radius, 0, Math.PI * 2); ctx.clip();
-    if (type.key === 'bombardier') {
+    // wings peeking out behind (divers, ladybug)
+    if (type.key === 'hornet' || type.key === 'scarab' || type.key === 'ladybug') {
+      ctx.fillStyle = 'rgba(235,245,255,0.75)'; ctx.strokeStyle = 'rgba(120,140,170,0.9)'; ctx.lineWidth = 1.2;
+      for (const sg of [-1, 1]) { ctx.beginPath(); ctx.ellipse(-r * 0.55, sg * r * 0.95, r * 0.95, r * 0.3, sg * -0.35, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    }
+    // rhino horn (behind the head)
+    if (type.key === 'stag') {
+      ctx.fillStyle = type.accent; ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(r * 0.55, -r * 0.3); ctx.quadraticCurveTo(r * 1.45, -r * 0.2, r * 1.75, -r * 0.95); ctx.lineTo(r * 1.3, -r * 0.35); ctx.lineTo(r * 1.5, r * 0.1); ctx.lineTo(r * 0.55, r * 0.3); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    // shell
+    const g = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r * 1.05);
+    g.addColorStop(0, type.hi); g.addColorStop(0.5, type.body); g.addColorStop(1, type.lo);
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 2.4; ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.clip();
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.8 * k;           // wing-case seam
+    ctx.beginPath(); ctx.moveTo(-r, 0); ctx.lineTo(r * 0.3, 0); ctx.stroke();
+    if (type.key === 'bombardier') {            // gold bands across a green jewel
       ctx.fillStyle = type.accent;
-      ctx.beginPath(); ctx.arc(-r * 0.55, 0, r * 0.5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#7a3d00';
-      ctx.fillRect(-r * 0.55 - 2, -2, 4, 4);
-    } else if (type.key === 'hornet') {
+      ctx.fillRect(-r * 0.62, -r, r * 0.2, r * 2); ctx.fillRect(-r * 0.12, -r, r * 0.2, r * 2);
+      ctx.fillStyle = 'rgba(0,60,50,0.45)'; ctx.beginPath(); ctx.ellipse(r * 0.55, 0, r * 0.3, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    } else if (type.key === 'hornet') {          // silver chevrons on blue
+      ctx.strokeStyle = type.accent; ctx.lineWidth = 2.4 * k;
+      for (const x0 of [-0.55, -0.1]) { ctx.beginPath(); ctx.moveTo(r * x0 - r * 0.25, -r * 0.8); ctx.lineTo(r * x0 + r * 0.2, 0); ctx.lineTo(r * x0 - r * 0.25, r * 0.8); ctx.stroke(); }
+    } else if (type.key === 'stag') {            // dark armoured plate behind the horn
+      ctx.fillStyle = 'rgba(30,10,60,0.55)'; ctx.beginPath(); ctx.ellipse(r * 0.45, 0, r * 0.5, r * 0.85, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5 * k;
+      for (const x0 of [-0.7, -0.35, 0]) { ctx.beginPath(); ctx.arc(x0 * r, 0, r * 0.55, -1.1, 1.1); ctx.stroke(); }
+    } else if (type.key === 'ladybug') {         // black spots, black head cap
       ctx.fillStyle = type.accent;
-      ctx.fillRect(-r * 0.2, -r, 4, r * 2);
-      ctx.fillRect(r * 0.25, -r, 4, r * 2);
-      ctx.fillRect(-r * 0.7, -r, 4, r * 2);
-    } else if (type.key === 'stag') {
-      ctx.fillStyle = type.accent;
-      ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.35, r * 0.45, 0, Math.PI * 2); ctx.fill();
+      for (const [dx, dy, rr] of [[-0.5, -0.5, 0.2], [-0.5, 0.5, 0.2], [-0.1, -0.35, 0.17], [-0.1, 0.35, 0.17], [-0.85, 0, 0.14]]) { ctx.beginPath(); ctx.arc(dx * r, dy * r, rr * r, 0, Math.PI * 2); ctx.fill(); }
+      ctx.beginPath(); ctx.ellipse(r * 0.72, 0, r * 0.35, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    } else if (type.key === 'scarab') {          // golden ridges
+      ctx.strokeStyle = type.accent; ctx.lineWidth = 1.8 * k;
+      for (const dy of [-0.55, -0.25, 0.25, 0.55]) { ctx.beginPath(); ctx.moveTo(-r, dy * r); ctx.lineTo(r * 0.3, dy * r * 0.9); ctx.stroke(); }
+      ctx.fillStyle = type.accent; ctx.beginPath(); ctx.moveTo(r * 0.7, -r * 0.7); ctx.lineTo(r * 1.05, -r * 0.45); ctx.lineTo(r * 1.05, r * 0.45); ctx.lineTo(r * 0.7, r * 0.7); ctx.closePath(); ctx.fill();
     }
     ctx.restore();
-    // antennae
-    ctx.strokeStyle = '#2b1d12'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(cosF * r * 0.7 - sinF * 3, sinF * r * 0.7 + cosF * 3);
-    ctx.quadraticCurveTo(cosF * r * 1.2, sinF * r * 1.2 - 8, cosF * r * 1.3 + 6, sinF * r * 1.3 - 9);
-    ctx.stroke();
-    if (type.key === 'stag') {
-      // horns
-      ctx.fillStyle = type.accent;
-      ctx.beginPath();
-      ctx.moveTo(cosF * r * 0.8 - sinF * 6, sinF * r * 0.8 + cosF * -6);
-      ctx.lineTo(cosF * (r + 12) - sinF * 5, sinF * (r + 12) + cosF * -5);
-      ctx.lineTo(cosF * r * 0.9 - sinF * 2, sinF * r * 0.9 + cosF * -2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(cosF * r * 0.8 + sinF * 6, sinF * r * 0.8 - cosF * -6);
-      ctx.lineTo(cosF * (r + 12) + sinF * 5, sinF * (r + 12) - cosF * -5);
-      ctx.lineTo(cosF * r * 0.9 + sinF * 2, sinF * r * 0.9 - cosF * -2);
-      ctx.fill();
+    // antennae with little clubs
+    ctx.strokeStyle = '#2b1d12'; ctx.fillStyle = '#2b1d12'; ctx.lineWidth = 2 * k;
+    for (const sg of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(r * 0.85, sg * r * 0.25); ctx.quadraticCurveTo(r * 1.25, sg * r * 0.4, r * 1.45, sg * r * 0.8); ctx.stroke();
+      ctx.beginPath(); ctx.arc(r * 1.45, sg * r * 0.8, 2.2 * k, 0, Math.PI * 2); ctx.fill();
     }
-    // eyes, looking the way the bug is heading
-    const ex = cosF * r * 0.5, ey = sinF * r * 0.5;
-    const px = -sinF * r * 0.38, py = cosF * r * 0.38;
-    for (const sgn of [1, -1]) {
-      const cx = ex + px * sgn, cy = ey + py * sgn;
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(cx, cy, r * 0.3, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#111';
-      ctx.beginPath(); ctx.arc(cx + cosF * r * 0.1, cy + sinF * r * 0.1, r * 0.14, 0, Math.PI * 2); ctx.fill();
+    // eyes
+    for (const sg of [-1, 1]) {
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(r * 0.55, sg * r * 0.4, r * 0.28, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(r * 0.65, sg * r * 0.4, r * 0.14, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.restore();
+    // glossy highlight stays put while the beetle turns
+    ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+    ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.ellipse(-r * 0.3, -r * 0.42, r * 0.4, r * 0.2, -0.5, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
@@ -824,7 +830,7 @@
     // bug queue
     ctx.textAlign = 'left';
     S.queue.forEach((key, i) => {
-      drawBug(BUG[key], 34 + i * 40, VH - 34, 0, 0.9);
+      drawBug(BUG[key], 44 + i * 54, VH - 38, 0, 0.9);
     });
   }
 
@@ -882,7 +888,7 @@
       ctx.fillText(`${BUG[readyKey].name}: ${BUG[readyKey].tip}`, W / 2, 100);
       if (S.hint > 0) {
         ctx.font = '15px system-ui, sans-serif';
-        ctx.fillText('Drag the bug back in the slingshot, then let go.', W / 2, 122);
+        ctx.fillText('Drag the bug back on the mushroom, then let go.', W / 2, 122);
       }
     }
     ctx.restore();
