@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Spore Siege</title>
-<meta name="description" content="A glowing hive crawler winds down through a mushroom field. Shoot it before it reaches you.">
+<meta name="description" content="A frog guards a mushroom field from a glowing crawler. Spit before it reaches you.">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -38,7 +38,7 @@ let state = 'title', score = 0, hi = 0, lives = 3, wave = 1, nextLife = 12000, t
 try { hi = +localStorage.getItem('spore-hi') || 0; } catch (e) {}
 const mush = Array.from({ length: ROWS }, () => new Array(COLS).fill(0)), pois = Array.from({ length: ROWS }, () => new Array(COLS).fill(false));
 let worms = [], bolts = [], parts = [], texts = [], queue = [], spider = null, flea = null, scorp = null, spiderT = 9, fleaT = 14, scorpT = 22, heal = 0, spiderBeat = 0;
-const ship = { x: W / 2, y: H - 60, alive: true, inv: 0, cool: 0, respawn: 0 };
+const ship = { x: W / 2, y: H - 60, alive: true, inv: 0, cool: 0, respawn: 0, mouth: 0 }; // the player is a frog
 const mouse = { x: W / 2, y: H - 60, in: false, down: false }, keys = {}, touch = { id: null, x: 0, y: 0 };
 let touchMode = matchMedia('(pointer: coarse)').matches;
 
@@ -51,7 +51,7 @@ function tone(f, d, type = 'square', v = .1, to = null, delay = 0) {
 }
 function noise(d, v = .15) { if (!AC || muted) return; const n = AC.sampleRate * d, b = AC.createBuffer(1, n, AC.sampleRate), a = b.getChannelData(0); for (let i = 0; i < n; i++) a[i] = (Math.random() * 2 - 1) * (1 - i / n); const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = b; g.gain.value = v; s.connect(g); g.connect(master); s.start(); }
 const sfx = {
-  shoot: () => tone(1100, .07, 'square', .05, 400), mush: () => tone(240, .04, 'square', .05), pop: () => { tone(420, .12, 'triangle', .14, 120); noise(.08, .08); },
+  shoot: () => { tone(240, .09, 'sine', .14, 640); tone(900, .04, 'triangle', .04, 300, .02); }, mush: () => tone(240, .04, 'square', .05), pop: () => { tone(420, .12, 'triangle', .14, 120); noise(.08, .08); },
   head: () => { tone(600, .25, 'sawtooth', .12, 90); noise(.2, .12); }, spiderHit: () => { tone(200, .3, 'sawtooth', .14, 900); }, fleaHit: () => tone(700, .18, 'triangle', .12, 200),
   die: () => { noise(.7, .25); tone(400, .7, 'sawtooth', .16, 40); }, life: () => { [523, 659, 784, 1047].forEach((f, i) => tone(f, .14, 'square', .08, null, i * .1)); },
   wave: () => { [220, 330, 440].forEach((f, i) => tone(f, .16, 'triangle', .1, null, i * .09)); }, coin: () => { tone(660, .08, 'square', .08); tone(990, .16, 'square', .08, null, .08); },
@@ -97,7 +97,7 @@ function stepSeg(s) {
 }
 const segXY = s => { const k = clamp(tickT / tickLen, 0, 1); return [lerp(cx(s.pc), cx(s.c), k), lerp(cyy(s.pr), cyy(s.r), k)]; };
 
-function pts(n, x, y) { score += n; if (n >= 100) texts.push({ x, y, t: .8, s: String(n) }); if (score >= nextLife) { nextLife += 12000; lives++; sfx.life(); texts.push({ x: W / 2, y: H / 2, t: 1.5, s: 'EXTRA SHIP' }); } if (score > hi) { hi = score; } }
+function pts(n, x, y) { score += n; if (n >= 100) texts.push({ x, y, t: .8, s: String(n) }); if (score >= nextLife) { nextLife += 12000; lives++; sfx.life(); texts.push({ x: W / 2, y: H / 2, t: 1.5, s: 'EXTRA FROG' }); } if (score > hi) { hi = score; } }
 function boom(x, y, n, col, sp = 160) { for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(.2, 1) * sp; parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(.3, .8), col }); } }
 
 function killSeg(wi, si) {
@@ -106,7 +106,7 @@ function killSeg(wi, si) {
   const a = w.slice(0, si), b = w.slice(si + 1); worms.splice(wi, 1); if (a.length) worms.push(a); if (b.length) worms.push(b);
 }
 function killShip() {
-  if (!ship.alive || ship.inv > 0) return; ship.alive = false; boom(ship.x, ship.y, 40, '#7ff', 260); sfx.die(); shake = .6; lives--; ship.respawn = 1.8;
+  if (!ship.alive || ship.inv > 0) return; ship.alive = false; boom(ship.x, ship.y, 40, '#7dff6a', 260); sfx.die(); shake = .6; lives--; ship.respawn = 1.8;
 }
 
 // ---------- enemies
@@ -137,7 +137,7 @@ function update(dt) {
     let vx = clamp((tx - ship.x) * 14, -720, 720), vy = clamp((ty - ship.y) * 14, -720, 720); if (kx || ky) { vx = kx * 420; vy = ky * 420; }
     const move = (ax, ay) => { const nx = clamp(ship.x + ax, 14, W - 14), ny = clamp(ship.y + ay, OY + ZONE * CELL + 12, H - 14), r = Math.floor((ny - OY) / CELL), c = Math.floor(nx / CELL); if (r >= 0 && r < ROWS && c >= 0 && c < COLS && mush[r][c]) return false; ship.x = nx; ship.y = ny; return true; };
     move(vx * dt, 0); move(0, vy * dt);
-    ship.cool -= dt; if (ship.cool <= 0 && (auto || mouse.down || keys.Space || keys.ShiftLeft || keys.ShiftRight || touch.id !== null) && bolts.length < 4) { bolts.push({ x: ship.x, y: ship.y - 16 }); ship.cool = .13; sfx.shoot(); }
+    ship.cool -= dt; if (ship.mouth > 0) ship.mouth -= dt; if (ship.cool <= 0 && (auto || mouse.down || keys.Space || keys.ShiftLeft || keys.ShiftRight || touch.id !== null) && bolts.length < 4) { bolts.push({ x: ship.x, y: ship.y - 18, w: rnd(0, TAU) }); ship.cool = .13; ship.mouth = .12; sfx.shoot(); }
   } else if (ship.respawn > 0) {
     ship.respawn -= dt; if (ship.respawn <= 0) { if (lives <= 0) { state = 'over'; playMusic('over'); if (score >= hi) try { localStorage.setItem('spore-hi', String(hi)); } catch (e) {} return; }
       ship.alive = true; ship.inv = 2.5; ship.x = W / 2; ship.y = H - 60; spider = flea = null; heal = 1; startWave(); } }
@@ -175,8 +175,17 @@ function drawSeg(s, head, idx) {
   const ph = time * 12 + idx * 1.1; ctx.lineWidth = 2; ctx.beginPath(); for (const k of [-1, 1]) { const sw = Math.sin(ph) * 3 * k; ctx.moveTo(x - 6, y + k * 12 + 0); ctx.lineTo(x - 6 + sw, y + k * 17); ctx.moveTo(x + 6, y + k * 12); ctx.lineTo(x + 6 - sw, y + k * 17); } ctx.stroke();
   if (head) { ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; const ex = s.dir > 0 ? 4 : -4; ctx.beginPath(); ctx.arc(x + ex, y - 4, 3, 0, TAU); ctx.arc(x + ex, y + 4, 3, 0, TAU); ctx.fill(); ctx.fillStyle = '#300'; ctx.beginPath(); ctx.arc(x + ex + s.dir, y - 4, 1.4, 0, TAU); ctx.arc(x + ex + s.dir, y + 4, 1.4, 0, TAU); ctx.fill(); }
 }
+function frogPath(x, y, k = 1) { // shared by the player and the life icons
+  ctx.moveTo(x + 13 * k, y + 4 * k); ctx.ellipse(x, y + 4 * k, 13 * k, 10 * k, 0, 0, TAU);
+}
 function drawShip() {
-  if (!ship.alive || (ship.inv > 0 && Math.floor(time * 14) % 2)) return; const x = ship.x, y = ship.y; glow('#6ff', 16); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x, y - 16); ctx.lineTo(x + 13, y + 12); ctx.lineTo(x, y + 6); ctx.lineTo(x - 13, y + 12); ctx.closePath(); ctx.globalAlpha = .3; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
+  if (!ship.alive || (ship.inv > 0 && Math.floor(time * 14) % 2)) return; const x = ship.x, y = ship.y, col = '#7dff6a'; glow(col, 16); ctx.lineWidth = 2.5;
+  ctx.beginPath(); frogPath(x, y); ctx.globalAlpha = .28; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();            // body
+  ctx.beginPath(); ctx.moveTo(x - 13, y + 8); ctx.lineTo(x - 22, y + 18); ctx.lineTo(x - 9, y + 17); ctx.moveTo(x + 13, y + 8); ctx.lineTo(x + 22, y + 18); ctx.lineTo(x + 9, y + 17); // back legs
+  ctx.moveTo(x - 9, y - 1); ctx.lineTo(x - 15, y - 5); ctx.moveTo(x + 9, y - 1); ctx.lineTo(x + 15, y - 5); ctx.stroke();           // front legs
+  for (const d of [-1, 1]) { ctx.beginPath(); ctx.arc(x + d * 8, y - 8, 6, 0, TAU); ctx.globalAlpha = .3; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke(); } // eyes
+  ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; for (const d of [-1, 1]) { ctx.beginPath(); ctx.arc(x + d * 8, y - 9, 2.4, 0, TAU); ctx.fill(); }
+  ctx.strokeStyle = '#ffb3d0'; ctx.lineWidth = 2; ctx.beginPath(); if (ship.mouth > 0) ctx.ellipse(x, y - 1, 5, 3.5, 0, 0, TAU); else ctx.arc(x, y - 2, 6, .2, Math.PI - .2); ctx.stroke(); // mouth opens when it spits
 }
 function draw() {
   ctx.save(); const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#07041a'); g.addColorStop(1, '#0b0620'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
@@ -187,14 +196,14 @@ function draw() {
   if (scorp) { const x = scorp.x, y = cyy(scorp.row), d = Math.sign(scorp.vx); glow('#ff6a6a', 14); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(x, y, 20, 9, 0, 0, TAU); ctx.moveTo(x - d * 18, y); ctx.quadraticCurveTo(x - d * 34, y - 18, x - d * 18, y - 20); ctx.moveTo(x + d * 18, y - 3); ctx.lineTo(x + d * 28, y - 8); ctx.moveTo(x + d * 18, y + 3); ctx.lineTo(x + d * 28, y + 8); ctx.stroke(); }
   if (flea) { const f = flea; glow('#ffd27a', 14); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(f.x, f.y, 10, 0, TAU); ctx.moveTo(f.x - 10, f.y - 4); ctx.lineTo(f.x - 18, f.y - 14); ctx.moveTo(f.x + 10, f.y - 4); ctx.lineTo(f.x + 18, f.y - 14); ctx.stroke(); ctx.fillStyle = '#ffd27a'; for (let i = 1; i < 4; i++) ctx.fillRect(f.x - 1, f.y - 12 - i * 8, 2, 4); }
   if (spider) { const s = spider; glow('#ff9cf6', 16); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(s.x, s.y, 12, 0, TAU); ctx.stroke(); ctx.beginPath(); for (let k = 0; k < 4; k++) { const sw = Math.sin(s.t * 14 + k) * 5; for (const d of [-1, 1]) { ctx.moveTo(s.x + d * 10, s.y - 4 + k * 3); ctx.lineTo(s.x + d * (24 + sw), s.y - 10 + k * 8); } } ctx.stroke(); }
-  for (const b of bolts) { glow('#fff', 10); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, b.y + 14); ctx.stroke(); }
+  for (const b of bolts) { glow('#b6ff5a', 14); ctx.beginPath(); ctx.arc(b.x, b.y, 5 + Math.sin(time * 30 + b.w) * .8, 0, TAU); ctx.fill(); ctx.globalAlpha = .5; ctx.beginPath(); ctx.arc(b.x + Math.sin(b.w) * 2, b.y + 10, 3, 0, TAU); ctx.fill(); ctx.globalAlpha = .25; ctx.beginPath(); ctx.arc(b.x, b.y + 18, 2, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
   drawShip();
   for (const p of parts) { glow(p.col, 6); ctx.globalAlpha = clamp(p.life * 2, 0, 1); ctx.fillRect(p.x, p.y, 3, 3); ctx.globalAlpha = 1; }
   ctx.restore(); ctx.shadowBlur = 0; ctx.textAlign = 'center';
   ctx.font = '700 16px "Courier New", monospace'; for (const t of texts) { ctx.globalAlpha = clamp(t.t * 2, 0, 1); glow('#ffe066', 8); ctx.fillText(t.s, t.x, t.y); ctx.globalAlpha = 1; }
   hud();
   if (state === 'title') { glow('#b6ff5a', 24); ctx.font = '700 ' + Math.min(72, Math.floor(W / 7.4)) + 'px "Courier New", monospace'; ctx.fillText('SPORE SIEGE', W / 2, H * .33); glow('#fff', 10); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO START' : 'CLICK OR PRESS ENTER TO START', W / 2, H * .46);
-    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Drag your finger low to fly.', 'The ship fires by itself.', 'Shoot the glowing crawler.', 'Do not let it reach you.'] : touchMode ? ['Drag your finger low on the screen to fly the ship.', 'It fires by itself. Shoot the glowing crawler.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to fly the ship.', 'It fires by itself (F turns that off, Shift or click to fire).', 'Shoot the crawler. Every hit leaves a mushroom. Stay alive.'];
+    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Drag your finger low to hop.', 'The frog spits by itself.', 'Shoot the glowing crawler.', 'Do not let it reach you.'] : touchMode ? ['Drag your finger low on the screen to move the frog.', 'It spits by itself. Hit the glowing crawler.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to move the frog.', 'It spits by itself (F turns that off, Shift or click to spit).', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.'];
     l.forEach((t, i) => ctx.fillText(t, W / 2, H * .55 + i * 26)); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, H * .55 + l.length * 26 + 24); }
   else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText('GAME OVER', W / 2, H * .4); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText('SCORE ' + score, W / 2, H * .5); ctx.fillText(touchMode ? 'TAP TO PLAY AGAIN' : 'CLICK OR PRESS ENTER TO PLAY AGAIN', W / 2, H * .58); }
   else if (state === 'pause') { glow('#fff', 14); ctx.font = '700 48px "Courier New", monospace'; ctx.fillText('PAUSED', W / 2, H / 2); ctx.font = '18px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO RESUME' : 'PRESS P OR CLICK TO RESUME', W / 2, H / 2 + 36); }
@@ -204,8 +213,8 @@ function draw() {
 function hud() {
   ctx.shadowBlur = 0; ctx.font = '700 20px "Courier New", monospace'; ctx.textAlign = 'left'; glow('#5ff0ff', 6); ctx.fillText(String(score).padStart(6, '0'), 16, 30);
   ctx.textAlign = 'center'; ctx.fillStyle = '#ffe066'; ctx.shadowBlur = 6; ctx.shadowColor = '#ffe066'; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, 30);
-  ctx.textAlign = 'right'; glow('#7ff', 6); for (let i = 0; i < Math.min(lives, 8); i++) { const x = W - 24 - i * 30; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, 12); ctx.lineTo(x + 9, 30); ctx.lineTo(x, 25); ctx.lineTo(x - 9, 30); ctx.closePath(); ctx.stroke(); }
-  ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.font = '12px "Courier New", monospace'; ctx.fillStyle = '#5a6a95'; ctx.fillText('WAVE ' + wave + '   AUTO-FIRE ' + (auto ? 'ON' : 'OFF') + (touchMode ? '' : '   [F] auto  [P] pause  [M] mute'), 16, H - 8);
+  ctx.textAlign = 'right'; glow('#7dff6a', 6); for (let i = 0; i < Math.min(lives, 8); i++) { const x = W - 24 - i * 32; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, 22, 10, 7, 0, 0, TAU); ctx.moveTo(x - 4 + 4, 14); ctx.arc(x - 5, 13, 3.5, 0, TAU); ctx.moveTo(x + 8.5, 13); ctx.arc(x + 5, 13, 3.5, 0, TAU); ctx.stroke(); }
+  ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.font = '12px "Courier New", monospace'; ctx.fillStyle = '#5a6a95'; ctx.fillText('WAVE ' + wave + '   AUTO-SPIT ' + (auto ? 'ON' : 'OFF') + (touchMode ? '' : '   [F] auto  [P] pause  [M] mute'), 16, H - 8);
 }
 
 // ---------- input
