@@ -27,7 +27,7 @@ const cv = document.getElementById('c'), ctx = cv.getContext('2d'), TAU = Math.P
 const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 700;
 const PORTRAIT = PHONE && innerHeight > innerWidth; // held upright: a narrow, tall field
 const CELL = 32, COLS = PORTRAIT ? 15 : 30, OY = PHONE ? 40 : 48, ROWS = PORTRAIT ? Math.max(18, Math.min(26, Math.floor((COLS * CELL * innerHeight / innerWidth - OY) / CELL))) : PHONE ? 13 : 21;
-const ZONE = ROWS - (PORTRAIT ? 7 : PHONE ? 5 : 6), W = COLS * CELL, H = OY + ROWS * CELL;
+const ZONE = ROWS - (PORTRAIT ? 8 : PHONE ? 5 : 8), W = COLS * CELL, H = OY + ROWS * CELL;
 if (PHONE) matchMedia('(orientation: portrait)').addEventListener('change', () => location.reload()); // the bottom rows (ZONE and below) are the ship's zone
 cv.width = W; cv.height = H; cv.style.aspectRatio = W + ' / ' + H; cv.style.width = 'min(100vw, ' + (100 * W / H) + 'vh)'; cv.style.width = 'min(100vw, ' + (100 * W / H) + 'dvh)';
 const rnd = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
@@ -39,7 +39,7 @@ try { hi = +localStorage.getItem('spore-hi') || 0; } catch (e) {}
 const mush = Array.from({ length: ROWS }, () => new Array(COLS).fill(0)), pois = Array.from({ length: ROWS }, () => new Array(COLS).fill(false));
 let dragons = [], dragonT = 12, butter = null, worms = [], bolts = [], parts = [], texts = [], queue = [], spider = null, flea = null, scorp = null, spiderT = 9, fleaT = 14, scorpT = 22, heal = 0, spiderBeat = 0;
 const ship = { x: W / 2, y: H - 60, alive: true, inv: 0, cool: 0, respawn: 0, mouth: 0 }; // the player is a frog
-const mouse = { x: W / 2, y: H - 60, in: false, down: false }, keys = {}, touch = { id: null, x: 0, y: 0 };
+const mouse = { x: W / 2, y: H - 60, in: false, down: false, rx: 0, ry: 0 }, keys = {}, touch = { id: null, x: 0, y: 0 };
 let touchMode = matchMedia('(pointer: coarse)').matches;
 
 // ---------- audio: tiny synth sounds, plus optional music files dropped into audio/music/ (play.mp3, gameover.mp3)
@@ -113,11 +113,11 @@ function killShip() {
 
 // ---------- enemies
 function enemies(dt) {
-  spiderT -= dt; if (!spider && spiderT <= 0 && ship.alive) { const L = Math.random() < .5; spider = { x: L ? -20 : W + 20, y: rnd(OY + ZONE * CELL + 20, H - 30), vx: (L ? 1 : -1) * (150 + wave * 12), vy: rnd(-1, 1) > 0 ? 140 : -140, t: 0 }; spiderT = rnd(10, 18); }
-  if (spider) { const s = spider; s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; if (s.y < OY + ZONE * CELL + 10) { s.y = OY + ZONE * CELL + 10; s.vy = Math.abs(s.vy); } if (s.y > H - 20) { s.y = H - 20; s.vy = -Math.abs(s.vy); } if (Math.random() < dt * 1.2) s.vy = -s.vy;
+  spiderT -= dt; if (!spider && spiderT <= 0 && ship.alive) { const L = Math.random() < .5; spider = { x: L ? -20 : W + 20, y: rnd(OY + ZONE * CELL + 20, H - 30), vx: (L ? 1 : -1) * (125 + wave * 8), vy: rnd(-1, 1) > 0 ? 105 : -105, t: 0 }; spiderT = rnd(10, 18); }
+  if (spider) { const s = spider; s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; if (s.y < OY + ZONE * CELL + 10) { s.y = OY + ZONE * CELL + 10; s.vy = Math.abs(s.vy); } if (s.y > H - 20) { s.y = H - 20; s.vy = -Math.abs(s.vy); } if (Math.random() < dt * .7) s.vy = -s.vy;
     const r = Math.floor((s.y - OY) / CELL), c = Math.floor(s.x / CELL); if (r >= 0 && r < ROWS && c >= 0 && c < COLS && mush[r][c] && Math.random() < dt * 5) mush[r][c] = 0;
     spiderBeat -= dt; if (spiderBeat <= 0 && !muted) { spiderBeat = .12; tone(260 + Math.sin(s.t * 14) * 90, .1, 'sawtooth', .03); }
-    if (Math.hypot(ship.x - s.x, ship.y - s.y) < 26) killShip(); if (s.x < -60 || s.x > W + 60) spider = null; }
+    if (Math.hypot(ship.x - s.x, ship.y - s.y) < 22) killShip(); if (s.x < -60 || s.x > W + 60) spider = null; }
   if (wave >= 2) { fleaT -= dt; if (!flea && fleaT <= 0) { flea = { x: cx(Math.floor(rnd(1, COLS - 1))), y: OY - 10, hp: wave >= 4 ? 2 : 1 }; fleaT = rnd(14, 22); }
     if (flea) { const f = flea, pr = Math.floor((f.y - OY) / CELL); f.y += 330 * dt; const nr = Math.floor((f.y - OY) / CELL); if (nr !== pr && nr > 0 && nr < ZONE && Math.random() < .35 && !mush[nr][Math.floor(f.x / CELL)]) mush[nr][Math.floor(f.x / CELL)] = 4;
       if (Math.hypot(ship.x - f.x, ship.y - f.y) < 22) killShip(); if (f.y > H + 20) flea = null; } }
@@ -149,8 +149,14 @@ function update(dt) {
     if (touch.id !== null) { tx = touch.x; ty = touch.y - 70; } else if (mouse.in) { tx = mouse.x; ty = mouse.y; }
     const kx = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0), ky = (keys.ArrowDown || keys.KeyS ? 1 : 0) - (keys.ArrowUp || keys.KeyW ? 1 : 0);
     let vx = clamp((tx - ship.x) * 14, -720, 720), vy = clamp((ty - ship.y) * 14, -720, 720); if (kx || ky) { vx = kx * 420; vy = ky * 420; }
+    if (touch.id === null && !kx && !ky) { vx = vy = 0; } // a mouse or trackpad moves the frog directly, below
     const move = (ax, ay) => { const nx = clamp(ship.x + ax, 14, W - 14), ny = clamp(ship.y + ay, OY + ZONE * CELL + 12, H - 14), r = Math.floor((ny - OY) / CELL), c = Math.floor(nx / CELL); if (r >= 0 && r < ROWS && c >= 0 && c < COLS && mush[r][c]) return false; ship.x = nx; ship.y = ny; return true; };
     move(vx * dt, 0); move(0, vy * dt);
+    // mouse / trackpad: the frog moves exactly as far as your hand does (no chasing, no lag). Click once to capture the mouse so it can never run off the edge.
+    let mdx = 0, mdy = 0;
+    if (document.pointerLockElement === cv) { mdx = mouse.rx; mdy = mouse.ry; } else if (mouse.in && touch.id === null && !kx && !ky) { mdx = mouse.x - ship.x; mdy = mouse.y - ship.y; }
+    mouse.rx = mouse.ry = 0;
+    if (mdx || mdy) { const n = Math.ceil(Math.max(Math.abs(mdx), Math.abs(mdy)) / 6); for (let i = 0; i < n; i++) { move(mdx / n, 0); move(0, mdy / n); } }
     ship.cool -= dt; if (ship.mouth > 0) ship.mouth -= dt; if (ship.cool <= 0 && (auto || mouse.down || keys.Space || keys.ShiftLeft || keys.ShiftRight || touch.id !== null) && bolts.length < 4) { bolts.push({ x: ship.x, y: ship.y - 18, w: rnd(0, TAU) }); ship.cool = .13; ship.mouth = .12; sfx.shoot(); }
   } else if (ship.respawn > 0) {
     ship.respawn -= dt; if (ship.respawn <= 0) { if (lives <= 0) { state = 'over'; playMusic('over'); if (score >= hi) try { localStorage.setItem('spore-hi', String(hi)); } catch (e) {} return; }
@@ -227,7 +233,7 @@ function draw() {
   ctx.font = '700 16px "Courier New", monospace'; for (const t of texts) { ctx.globalAlpha = clamp(t.t * 2, 0, 1); glow('#ffe066', 8); ctx.fillText(t.s, t.x, t.y); ctx.globalAlpha = 1; }
   hud();
   if (state === 'title') { glow('#b6ff5a', 24); ctx.font = '700 ' + Math.min(72, Math.floor(W / 7.4)) + 'px "Courier New", monospace'; ctx.fillText('SPORE SIEGE', W / 2, H * .33); glow('#fff', 10); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO START' : 'CLICK OR PRESS ENTER TO START', W / 2, H * .46);
-    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Drag your finger low to hop.', 'The frog spits by itself.', 'Shoot the glowing crawler.', 'Do not let it reach you.'] : touchMode ? ['Drag your finger low on the screen to move the frog.', 'It spits by itself. Hit the glowing crawler.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to move the frog.', 'It spits by itself (F turns that off, Shift or click to spit).', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.'];
+    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Drag your finger low to hop.', 'The frog spits by itself.', 'Shoot the glowing crawler.', 'Do not let it reach you.'] : touchMode ? ['Drag your finger low on the screen to move the frog.', 'It spits by itself. Hit the glowing crawler.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to move the frog.', 'Your mouse is captured while you play. Esc lets go.', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.'];
     l.forEach((t, i) => ctx.fillText(t, W / 2, H * .55 + i * 26)); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, H * .55 + l.length * 26 + 24); }
   else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText('GAME OVER', W / 2, H * .4); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText('SCORE ' + score, W / 2, H * .5); ctx.fillText(touchMode ? 'TAP TO PLAY AGAIN' : 'CLICK OR PRESS ENTER TO PLAY AGAIN', W / 2, H * .58); }
   else if (state === 'pause') { glow('#fff', 14); ctx.font = '700 48px "Courier New", monospace'; ctx.fillText('PAUSED', W / 2, H / 2); ctx.font = '18px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO RESUME' : 'PRESS P OR CLICK TO RESUME', W / 2, H / 2 + 36); }
@@ -244,9 +250,9 @@ function hud() {
 // ---------- input
 const xy = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
 function begin() { audio(); if (state === 'title' || state === 'over') { sfx.coin(); newGame(); } else if (state === 'pause') state = 'play'; }
-cv.addEventListener('pointermove', e => { const [x, y] = xy(e); if (e.pointerType === 'touch') { if (e.pointerId === touch.id) { touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; } });
+cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' && document.pointerLockElement === cv) { const k = W / cv.getBoundingClientRect().width * 1.25; mouse.rx += e.movementX * k; mouse.ry += e.movementY * k; return; } const [x, y] = xy(e); if (e.pointerType === 'touch') { if (e.pointerId === touch.id) { touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; } });
 cv.addEventListener('pointerdown', e => { e.preventDefault(); window.focus(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} const [x, y] = xy(e);
-  if (e.pointerType === 'touch') { touchMode = true; if (touch.id === null) { touch.id = e.pointerId; touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; mouse.down = true; }
+  if (e.pointerType === 'touch') { touchMode = true; if (touch.id === null) { touch.id = e.pointerId; touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; mouse.down = true; try { if (cv.requestPointerLock && !document.pointerLockElement) { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } } catch (err) {} }
   begin(); });
 const up = e => { if (e.pointerType === 'touch') { if (e.pointerId === touch.id) touch.id = null; } else mouse.down = false; };
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up); cv.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch' && !mouse.down) mouse.in = false; }); cv.addEventListener('contextmenu', e => e.preventDefault());
@@ -258,6 +264,7 @@ addEventListener('keydown', e => {
   keys[e.code] = true; if (e.code.startsWith('Arrow') || /^Key[WASD]$/.test(e.code)) mouse.in = false;
 });
 addEventListener('keyup', e => { if (e.key === 'Alt' || e.key === 'Meta') { for (const k in keys) keys[k] = false; } keys[e.code] = false; });
+document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && state === 'play') { for (const k in keys) keys[k] = false; mouse.down = false; state = 'pause'; } });
 function autoPause() { for (const k in keys) keys[k] = false; mouse.down = false; if (state === 'play') state = 'pause'; }
 addEventListener('blur', autoPause); document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
 document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
