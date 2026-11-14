@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spore Siege voices</title>
+<style>
+  :root { --bg:#05070f; --panel:#0b1226; --line:#1f3568; --ink:#dce8ff; --dim:#8497c8; --gr:#7dff6a; --pk:#ff7ad9; --cy:#5ff0ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding:max(18px, env(safe-area-inset-top)) 18px 40px; }
+  main { max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:18px; }
+  h1 { margin:0; color:var(--gr); font-size:28px; letter-spacing:.04em; text-transform:uppercase; }
+  p { margin:0; color:var(--dim); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+  .card h2 { margin:0; font-size:19px; color:var(--cy); }
+  .card small { color:var(--dim); }
+  .row { display:flex; flex-wrap:wrap; gap:10px; }
+  button { font:600 15px system-ui; color:#04060f; background:var(--gr); border:0; border-radius:6px; padding:10px 16px; cursor:pointer; flex:1 1 220px; text-align:left; }
+  button.pk { background:var(--pk); }
+  button:active { transform:translateY(1px); }
+  .quote { color:#b9c8ee; font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Spore Siege voices</h1>
+  <p>Tap to listen. Each frog voice says the same two lines so you can compare. Tell me which one is your frog, or if none fit.</p>
+  <h2 style="margin:6px 0 0;color:#fff;font-size:18px">Frog</h2>
+  <div class="card"><h2>1. Chuck - Goblin</h2><small>High-pitched, silly, a little elf-like.</small>
+    <div class="row"><button data-a="audio/voice-test/chuck_a.mp3">Line 1: "Ribbit! Okay, caterpillar..."</button><button data-a="audio/voice-test/chuck_b.mp3">Line 2: "Hey! Watch the legs, pal..."</button></div></div>
+  <div class="card"><h2>2. Pauly - Brooklyn Wise Guy</h2><small>A tough-talking frog from the pond's old neighborhood.</small>
+    <div class="row"><button data-a="audio/voice-test/pauly_a.mp3">Line 1</button><button data-a="audio/voice-test/pauly_b.mp3">Line 2</button></div></div>
+  <div class="card"><h2>3. Sheldon - Quirky and Clever</h2><small>A nerdy, excitable kid with the occasional voice crack.</small>
+    <div class="row"><button data-a="audio/voice-test/sheldon_a.mp3">Line 1</button><button data-a="audio/voice-test/sheldon_b.mp3">Line 2</button></div></div>
+  <div class="card"><h2>4. Callum - Husky Trickster</h2><small>Gravelly and mischievous.</small>
+    <div class="row"><button data-a="audio/voice-test/callum_a.mp3">Line 1</button><button data-a="audio/voice-test/callum_b.mp3">Line 2</button></div></div>
+  <h2 style="margin:10px 0 0;color:#fff;font-size:18px">Caterpillar</h2>
+  <div class="card"><h2>Nom nom nom</h2><small>Two cute voices. The game already uses the first one (Cherry) every so often when the caterpillar crawls.</small>
+    <div class="row"><button class="pk" data-a="audio/voice-test/nom_cherry.mp3">Cherry Twinkle</button><button class="pk" data-a="audio/voice-test/nom_emma.mp3">Emma</button></div></div>
+</main>
+<script>
+  let cur = null;
+  document.querySelectorAll('button[data-a]').forEach(b => b.addEventListener('click', () => { if (cur) cur.pause(); cur = new Audio(b.dataset.a); cur.play().catch(() => {}); }));
+</script>
+</body>
+</html>

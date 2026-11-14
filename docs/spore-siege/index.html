@@ -58,7 +58,7 @@ const sfx = {
   wave: () => { [220, 330, 440].forEach((f, i) => tone(f, .16, 'triangle', .1, null, i * .09)); }, coin: () => { tone(660, .08, 'square', .08); tone(990, .16, 'square', .08, null, .08); },
 };
 // sound clips (audio/sfx/NAME.mp3): chomping, frog croaks, bugs. Anything missing falls back to the little synth sounds above.
-const CLIPS = ['chomp', 'croak', 'croak_happy', 'croak_sad', 'dragonfly', 'fly', 'spider', 'scorpion', 'splat', 'butterfly', 'levelup', 'spit', 'rustle'], cbuf = {};
+const CLIPS = ['chomp', 'croak', 'croak_happy', 'croak_sad', 'dragonfly', 'fly', 'spider', 'scorpion', 'splat', 'butterfly', 'levelup', 'spit', 'rustle', 'nom'], cbuf = {};
 async function loadClips() { for (const k of CLIPS) { try { const r = await fetch('audio/sfx/' + k + '.mp3'); if (!r.ok) continue; cbuf[k] = await AC.decodeAudioData(await r.arrayBuffer()); } catch (e) {} } }
 function clip(name, vol = .6, rate = 1) {
   if (!AC || muted || !cbuf[name]) return false; const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = cbuf[name]; s.playbackRate.value = rate; g.gain.value = vol; s.connect(g); g.connect(master); s.start(); return true;
@@ -68,14 +68,19 @@ function clip(name, vol = .6, rate = 1) {
   sfx.shoot = () => clip('spit', .45, rnd(.9, 1.2)) || base.shoot(); sfx.pop = () => { clip('splat', .5, rnd(.95, 1.25)) || base.pop(); }; sfx.head = () => { clip('splat', .75, .72) || base.head(); };
   sfx.die = () => { base.die(); clip('croak_sad', .8); }; sfx.life = () => { base.life(); clip('croak_happy', .8); }; sfx.wave = () => clip('levelup', .7) || base.wave();
   sfx.magic = () => clip('butterfly', .8) || base.magic(); sfx.dragon = () => clip('dragonfly', .5) || base.dragon();
-  sfx.chomp = () => clip('chomp', .4, rnd(.88, 1.18)); sfx.croak = () => clip('croak', .6, rnd(.85, 1.1)); sfx.fly = () => clip('fly', .45); sfx.spiderIn = () => clip('spider', .5); sfx.scorpIn = () => clip('scorpion', .5); sfx.rustle = () => clip('rustle', .5);
+  sfx.chomp = () => clip('chomp', .4, rnd(.88, 1.18)); sfx.croak = () => clip('croak', .6, rnd(.85, 1.1)); sfx.fly = () => clip('fly', .45); sfx.spiderIn = () => clip('spider', .5); sfx.scorpIn = () => clip('scorpion', .5); sfx.rustle = () => clip('rustle', .5); sfx.nom = () => clip('nom', .55, rnd(.95, 1.08));
 }
 // music: files if present, otherwise a pulse that speeds up as the crawler nears you
-const MUSIC = { play: 'audio/music/play.mp3', over: 'audio/music/gameover.mp3' }, buf = {}; let cur = null, curName = '', pulseT = 0, pulseI = 0;
-async function loadMusic() { for (const k in MUSIC) { try { const r = await fetch(MUSIC[k]); if (!r.ok) continue; buf[k] = await AC.decodeAudioData(await r.arrayBuffer()); if (curName === k) playMusic(k, true); } catch (e) {} } }
+// The soundtrack follows the garden: each theme has its own loop, and from wave 9 on a faster 'frenzy' loop takes over. Tracks crossfade.
+const MUSIC = { play: 'audio/music/play.mp3', over: 'audio/music/gameover.mp3', leaf: 'audio/music/leaf.mp3', swamp: 'audio/music/swamp.mp3', orchard: 'audio/music/orchard.mp3', frenzy: 'audio/music/frenzy.mp3' }, buf = {}; let cur = null, curName = '', pulseT = 0, pulseI = 0;
+const MUSIC_VOL = { play: .42, leaf: .42, swamp: .42, orchard: .42, frenzy: .45, over: .7 };
+function musicFor() { return wave >= 9 ? 'frenzy' : ['play', 'leaf', 'swamp', 'orchard'][(wave - 1) % 4]; }
+async function loadMusic() { for (const k in MUSIC) { try { const r = await fetch(MUSIC[k]); if (!r.ok) continue; buf[k] = await AC.decodeAudioData(await r.arrayBuffer()); if (curName === k || (k === 'play' && !cur && curName)) playMusic(curName, true); } catch (e) {} } }
+function stopMusic(fade = .0) { if (!cur) return; const c = cur; cur = null; curName = ''; try { if (fade > 0) { c.g.gain.cancelScheduledValues(AC.currentTime); c.g.gain.setValueAtTime(c.g.gain.value, AC.currentTime); c.g.gain.linearRampToValueAtTime(0, AC.currentTime + fade); c.s.stop(AC.currentTime + fade + .05); } else c.s.stop(); } catch (e) {} }
 function playMusic(name, force) {
-  if (!AC || (curName === name && !force)) return; curName = name; if (cur) { try { cur.stop(); } catch (e) {} cur = null; }
-  if (buf[name] && !muted) { const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = buf[name]; s.loop = name !== 'over'; g.gain.value = name === 'play' ? .42 : .7; s.connect(g); g.connect(master); s.start(); cur = s; }
+  if (!AC || (curName === name && !force)) return; const track = buf[name] ? name : (name !== 'over' && buf.play ? 'play' : null);
+  stopMusic(1.4); curName = name; if (!track || muted) return;
+  const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = buf[track]; s.loop = name !== 'over'; g.gain.setValueAtTime(0, AC.currentTime); g.gain.linearRampToValueAtTime(MUSIC_VOL[track] || .42, AC.currentTime + (name === 'over' ? .05 : 1.4)); s.connect(g); g.connect(master); s.start(); cur = { s, g };
 }
 function pulse(dt) { // synth heartbeat when there is no music file for the game: quicker as the crawler gets lower
   if (state !== 'play' || muted || !AC || buf.play) return; const low = worms.reduce((m, w) => Math.max(m, ...w.map(s => s.r)), 0), beat = lerp(.52, .17, clamp(low / ROWS, 0, 1)); pulseT -= dt; if (pulseT > 0) return; pulseT = beat;
@@ -118,9 +123,9 @@ function makeWorm(len, row, fromLeft, delay = 0) {
 function startWave(quiet) {
   worms = []; queue = []; const len = Math.max(3, 13 - wave); worms.push(makeWorm(len, 0, true));
   for (let i = 0; i < Math.min(wave - 1, 8); i++) queue.push({ t: 3 + i * 3.5, left: Math.random() < .5 });
-  banner = 2.6; if (!quiet) { sfx.wave(); if (plants.length) setTimeout(sfx.rustle, 500); }
+  banner = 2.6; if (!quiet) { playMusic(musicFor()); sfx.wave(); if (plants.length) setTimeout(sfx.rustle, 500); }
 }
-function newGame() { score = 0; lives = 3; wave = 1; nextLife = 12000; seedMushrooms(); bolts = []; parts = []; texts = []; spider = flea = scorp = butter = null; dragons = []; dragonT = 12; spiderT = 9; fleaT = 14; scorpT = 22; ship.alive = true; ship.inv = 2; ship.x = W / 2; ship.y = H - 60; startWave(); state = 'play'; playMusic('play'); }
+function newGame() { score = 0; lives = 3; wave = 1; nextLife = 12000; seedMushrooms(); bolts = []; parts = []; texts = []; spider = flea = scorp = butter = null; dragons = []; dragonT = 12; spiderT = 9; fleaT = 14; scorpT = 22; ship.alive = true; ship.inv = 2; ship.x = W / 2; ship.y = H - 60; startWave(); state = 'play'; playMusic(musicFor()); }
 
 // ---------- crawler movement (one cell per tick; every segment follows the same rules, so a split worm just keeps going)
 function drop(s) {
@@ -213,7 +218,7 @@ function update(dt) {
     if (gone) bolts.splice(i, 1);
   }
   // crawler
-  tickLen = Math.max(.05, .115 - wave * .005) * (PORTRAIT ? 1.2 : PHONE ? 1.12 : 1); tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); if (worms.length && ++chompN % 3 === 0) sfx.chomp(); }
+  tickLen = Math.max(.05, .115 - wave * .005) * (PORTRAIT ? 1.2 : PHONE ? 1.12 : 1); tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); if (worms.length && ++chompN % 3 === 0) { if (chompN % 21 === 0 && Math.random() < .8) sfx.nom(); else sfx.chomp(); } }
   croakT -= dt; if (croakT <= 0 && ship.alive) { sfx.croak(); croakT = rnd(8, 15); }
   for (const q of queue) q.t -= dt; for (const q of queue.filter(q => q.t <= 0)) worms.push(makeWorm(1, 2 + Math.floor(Math.random() * 3), q.left)); queue = queue.filter(q => q.t > 0);
   if (ship.alive) for (const w of worms) for (const s of w) { const [x, y] = segXY(s); if (Math.hypot(x - ship.x, y - ship.y) < 24) killShip(); }
@@ -313,7 +318,7 @@ const GAME = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'
 addEventListener('keydown', e => {
   if (GAME.has(e.code) || e.key === 'Alt' || e.key === 'Meta') e.preventDefault(); if (e.key === 'Meta') { for (const k in keys) keys[k] = false; return; }
   if (e.key === 'Shift' || e.key === 'Alt' || e.key === 'Control') { if (e.key === 'Shift') keys[e.code] = true; return; }
-  if (!keys[e.code]) { audio(); if (e.code === 'Enter' || e.code === 'Space') begin(); if (e.code === 'KeyP' && (state === 'play' || state === 'pause')) state = state === 'play' ? 'pause' : 'play'; if (e.code === 'KeyM') { muted = !muted; if (muted && cur) { try { cur.stop(); } catch (x) {} cur = null; curName = ''; } else if (!muted) playMusic(state === 'play' ? 'play' : 'over'); } if (e.code === 'KeyF') auto = !auto; }
+  if (!keys[e.code]) { audio(); if (e.code === 'Enter' || e.code === 'Space') begin(); if (e.code === 'KeyP' && (state === 'play' || state === 'pause')) state = state === 'play' ? 'pause' : 'play'; if (e.code === 'KeyM') { muted = !muted; if (muted) stopMusic(); else playMusic(state === 'play' ? musicFor() : 'over'); } if (e.code === 'KeyF') auto = !auto; }
   keys[e.code] = true; if (e.code.startsWith('Arrow') || /^Key[WASD]$/.test(e.code)) mouse.in = false;
 });
 addEventListener('keyup', e => { if (e.key === 'Alt' || e.key === 'Meta') { for (const k in keys) keys[k] = false; } keys[e.code] = false; });
