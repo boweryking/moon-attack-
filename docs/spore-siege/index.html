@@ -25,17 +25,17 @@
 // ---------- language, difficulty and the prize (edit PRIZE to change what she wins)
 const LANG = (() => { const q = /[?&]lang=(es|en)/.exec(location.search); let v = q ? q[1] : null; try { if (v) localStorage.setItem('spore-lang', v); else v = localStorage.getItem('spore-lang'); } catch (e) {} return v === 'es' ? 'es' : 'en'; })();
 document.documentElement.lang = LANG;
-const PRIZE = { es: { wave: 5, title: '¡PREMIO!', lines: ['¡Llegaste al nivel 5!', 'Muéstrale esta pantalla a tu esposo', 'para reclamar tu premio.'], tap: 'Toca para seguir jugando' }, en: null }; // wave = the level she has to reach
+const PRIZE = { es: { saves: 3, title: '¡PREMIO!', lines: ['¡Salvaste a 3 ranas dama!', 'Muéstrale esta pantalla a tu esposo', 'para reclamar tu premio.'], tap: 'Toca para seguir jugando' }, en: null }; // saves = how many lady frogs she has to get safely across
 const DIFFS = { easy: { lives: 5, tick: 1.3, heads: .5, enemy: 1.6, spd: .8 }, normal: { lives: 3, tick: 1, heads: 1, enemy: 1, spd: 1 }, hard: { lives: 2, tick: .8, heads: 1.5, enemy: .7, spd: 1.2 } };
 let diff = 'normal'; try { diff = localStorage.getItem('spore-diff') || 'normal'; } catch (e) {} if (!DIFFS[diff]) diff = 'normal'; let D = DIFFS[diff];
 const TXT = {
   en: { tap_start: 'TAP TO START', click_start: 'CLICK OR PRESS ENTER TO START', hi: 'HI ', over: 'GAME OVER', score: 'SCORE ', tap_again: 'TAP TO PLAY AGAIN', click_again: 'CLICK OR PRESS ENTER TO PLAY AGAIN', paused: 'PAUSED', tap_resume: 'TAP TO RESUME', click_resume: 'PRESS P OR CLICK TO RESUME', wave: 'WAVE ', autospit: 'AUTO-SPIT ', on: 'ON', off: 'OFF', keys: '   hold click / Shift to spit  [F] auto  [P] pause  [M] mute',
-    extra: 'EXTRA FROG', ghost: 'GHOST BUTTERFLY', freed: 'FREED!', lost: 'LOST HER', cursed: 'CURSED! NO SPITTING', made: 'SHE MADE IT! +2000', hexed: 'HEXED ', dont: "DON'T SPIT!", ladyfrog: 'LADY FROG!', donther: "DON'T SPIT HER.", keepaway: 'KEEP THE CATERPILLAR AWAY!', easy: 'EASY', normal: 'NORMAL', hard: 'HARD', diff: 'DIFFICULTY', lang: 'LANGUAGE', prizewon: 'PRIZE WON', loaded: 'LOADING...',
+    extra: 'EXTRA FROG', ghost: 'GHOST BUTTERFLY', freed: 'FREED!', lost: 'LOST HER', cursed: 'CURSED! NO SPITTING', made: 'SHE MADE IT! +2000', hexed: 'HEXED ', dont: "DON'T SPIT!", ladyfrog: 'LADY FROG!', donther: "DON'T SPIT HER.", keepaway: 'KEEP THE CATERPILLAR AWAY!', easy: 'EASY', normal: 'NORMAL', hard: 'HARD', diff: 'DIFFICULTY', lang: 'LANGUAGE', prizewon: 'PRIZE WON', ladies: 'LADIES ', loaded: 'LOADING...',
     l_portrait: ['Touch and drag to move the frog.', 'He spits while your finger is down.', 'Hit the glowing crawler.', 'Do not let it reach you.', 'A pink lady frog will hop by.', 'DO NOT SPIT HER. Protect her!'], l_touch: ['Touch and drag to move the frog. He spits while your finger is down.', 'Hit the glowing crawler. Do not let it reach you.', 'A pink lady frog hops by now and then.', 'DO NOT SPIT HER. Keep the caterpillar off her!'], l_desk: ['Move the mouse or trackpad to move the frog.', 'Hold the mouse button to spit. Your mouse is captured, Esc lets go.', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.', 'A pink lady frog hops by now and then. DO NOT SPIT HER.', 'Keep the caterpillar off her and she pays you well.'],
     themes: ['SPRING MEADOW', 'SUMMER GARDEN', 'AUTUMN ORCHARD', 'WINTER POND'] },
   es: { tap_start: 'TOCA PARA EMPEZAR', click_start: 'CLIC O ENTER PARA EMPEZAR', hi: 'MÁX ', over: 'FIN DEL JUEGO', score: 'PUNTOS ', tap_again: 'TOCA PARA JUGAR DE NUEVO', click_again: 'CLIC O ENTER PARA JUGAR DE NUEVO', paused: 'PAUSA', tap_resume: 'TOCA PARA SEGUIR', click_resume: 'PULSA P O HAZ CLIC PARA SEGUIR', wave: 'NIVEL ', autospit: 'AUTO-ESCUPIR ', on: 'SÍ', off: 'NO', keys: '   mantén clic / Shift para escupir  [F] auto  [P] pausa  [M] mudo',
-    extra: '¡RANA EXTRA!', ghost: 'MARIPOSA FANTASMA', freed: '¡LIBRE!', lost: '¡LA PERDISTE!', cursed: '¡MALDITO! NO PUEDES ESCUPIR', made: '¡LO LOGRÓ! +2000', hexed: 'HECHIZO ', dont: '¡NO ESCUPAS!', ladyfrog: '¡RANA DAMA!', donther: 'NO LA ESCUPAS.', keepaway: '¡ALEJA A LA ORUGA!', easy: 'FÁCIL', normal: 'NORMAL', hard: 'DIFÍCIL', diff: 'DIFICULTAD', lang: 'IDIOMA', prizewon: 'PREMIO GANADO', loaded: 'CARGANDO...',
-    l_portrait: ['Toca y arrastra para mover la rana.', 'Escupe mientras tu dedo toca la pantalla.', 'Pégale a la oruga brillante.', 'No dejes que te alcance.', 'Pasará una rana dama rosa.', '¡NO LA ESCUPAS! ¡Protégela!'], l_touch: ['Toca y arrastra para mover la rana. Escupe mientras tu dedo toca.', 'Pégale a la oruga brillante. No dejes que te alcance.', 'De vez en cuando pasa una rana dama rosa.', '¡NO LA ESCUPAS! ¡Aleja a la oruga de ella!'], l_desk: ['Mueve el mouse o el trackpad para mover la rana.', 'Mantén el botón para escupir. El mouse se captura, Esc lo suelta.', 'Escúpele a la oruga. Cada golpe deja un hongo. Sigue con vida.', 'De vez en cuando pasa una rana dama rosa. ¡NO LA ESCUPAS!', 'Aleja a la oruga de ella y te paga muy bien.'],
+    extra: '¡RANA EXTRA!', ghost: 'MARIPOSA FANTASMA', freed: '¡LIBRE!', lost: '¡LA PERDISTE!', cursed: '¡MALDITO! NO PUEDES ESCUPIR', made: '¡LO LOGRÓ! +2000', hexed: 'HECHIZO ', dont: '¡NO ESCUPAS!', ladyfrog: '¡RANA DAMA!', donther: 'NO LA ESCUPAS.', keepaway: '¡ALEJA A LA ORUGA!', easy: 'FÁCIL', normal: 'NORMAL', hard: 'DIFÍCIL', diff: 'DIFICULTAD', lang: 'IDIOMA', prizewon: 'PREMIO GANADO', ladies: 'RANAS DAMA ', loaded: 'CARGANDO...',
+    l_portrait: ['Toca y arrastra para mover la rana.', 'Escupe mientras tu dedo toca la pantalla.', 'Pégale a la oruga brillante.', 'No dejes que te alcance.', 'Pasará una rana dama rosa.', '¡NO LA ESCUPAS! Salva a 3 y ganas un premio.'], l_touch: ['Toca y arrastra para mover la rana. Escupe mientras tu dedo toca.', 'Pégale a la oruga brillante. No dejes que te alcance.', 'De vez en cuando pasa una rana dama rosa.', '¡NO LA ESCUPAS! Salva a 3 y ganas un premio.'], l_desk: ['Mueve el mouse o el trackpad para mover la rana.', 'Mantén el botón para escupir. El mouse se captura, Esc lo suelta.', 'Escúpele a la oruga. Cada golpe deja un hongo. Sigue con vida.', 'De vez en cuando pasa una rana dama rosa. ¡NO LA ESCUPAS!', 'Salva a 3 ranas dama y ganas un premio.'],
     themes: ['PRADO DE PRIMAVERA', 'JARDÍN DE VERANO', 'HUERTO DE OTOÑO', 'ESTANQUE DE INVIERNO'] },
 };
 const t = k => (TXT[LANG] && TXT[LANG][k]) || TXT.en[k] || k;
@@ -160,7 +160,7 @@ function startWave(quiet) {
   for (let i = 0; i < Math.round(Math.min(wave - 1, 8) * D.heads); i++) queue.push({ t: 3 + i * 3.5, left: Math.random() < .5 });
   banner = 2.6; if (!quiet) { lady = null; playMusic(musicFor()); sfx.wave(); if (wave > 1) frogSay('frog_wave', false, 1500); if (plants.length) setTimeout(sfx.rustle, 500); }
 }
-function newGame() { prizeShown = false; frogSay('frog_start', true, 700); tauntT = rnd(40, 70); lady = null; ladyT = rnd(22, 32); hexT = 0; ladyMsg.t = 0; score = 0; lives = D.lives; wave = 1; nextLife = 12000; seedMushrooms(); bolts = []; parts = []; texts = []; spider = flea = scorp = butter = null; dragons = []; dragonT = 12; spiderT = 9; fleaT = 14; scorpT = 22; ship.alive = true; ship.inv = 2; ship.x = W / 2; ship.y = H - 60; startWave(); state = 'play'; playMusic(musicFor()); }
+function newGame() { prizeShown = false; ladySaved = 0; frogSay('frog_start', true, 700); tauntT = rnd(40, 70); lady = null; ladyT = rnd(15, 22); hexT = 0; ladyMsg.t = 0; score = 0; lives = D.lives; wave = 1; nextLife = 12000; seedMushrooms(); bolts = []; parts = []; texts = []; spider = flea = scorp = butter = null; dragons = []; dragonT = 12; spiderT = 9; fleaT = 14; scorpT = 22; ship.alive = true; ship.inv = 2; ship.x = W / 2; ship.y = H - 60; startWave(); state = 'play'; playMusic(musicFor()); }
 
 // ---------- crawler movement (one cell per tick; every segment follows the same rules, so a split worm just keeps going)
 function drop(s) {
@@ -182,20 +182,20 @@ function spawnLady() {
   lady = { x: dir > 0 ? -22 : W + 22, y: cyy(row), row, dir, hopT: 0, talkT: 4.5, taunt: 0, dead: 0, tag: seen < 4 }; ladyTip = seen < 4 ? 6 : 0; ladySay('lady_enter');
 }
 function killLady(by) {
-  const l = lady; if (!l || l.dead) return; l.dead = .9; boom(l.x, l.y, 26, by === 'player' ? '#c58bff' : '#ff7ad9', 200);
+  const l = lady; if (!l || l.dead) return; ladyT = rnd(12, 20); l.dead = .9; boom(l.x, l.y, 26, by === 'player' ? '#c58bff' : '#ff7ad9', 200);
   if (by === 'player') { score = Math.max(0, score - 500); hexT = 4; texts.push({ x: l.x, y: l.y - 20, t: 1.4, s: '-500' }); texts.push({ x: W / 2, y: H * .55, t: 1.8, s: t('cursed') }); ladySay(Math.random() < .5 ? 'lady_curse' : 'lady_curse2'); tone(300, .5, 'sawtooth', .12, 60); }
   else { texts.push({ x: l.x, y: l.y - 20, t: 1.4, s: t('lost') }); ladySay('lady_dead'); sfx.pop(); }
 }
 function updateLady(dt) {
   if (ladyMsg.t > 0) ladyMsg.t -= dt; if (ladyTip > 0) ladyTip -= dt; if (hexT > 0) hexT -= dt; ladyEekT -= dt;
-  if (!lady) { ladyT -= dt; if (ladyT <= 0 && ship.alive && worms.length && !butter) { spawnLady(); ladyT = rnd(40, 70); } return; }
+  if (!lady) { ladyT -= dt; if (ladyT <= 0 && ship.alive && worms.length && !butter) { spawnLady(); ladyT = rnd(30, 45); } return; }
   const l = lady; if (l.dead > 0) { l.dead -= dt; if (l.dead <= 0) lady = null; return; }
   const HOP = .5, CYC = .72, ph = l.hopT % CYC, moving = ph < HOP; l.hopT += dt;
   if (moving) l.x += l.dir * (W / 11) * (CYC / HOP) * dt; l.y = cyy(l.row) - (moving ? Math.sin(Math.PI * ph / HOP) * 20 : 0);
   let near = 1e9; for (const w of worms) for (const sg of w) { const [x, y] = segXY(sg), d = Math.hypot(x - l.x, y - cyy(l.row)); near = Math.min(near, d); if (d < 22) { killLady('worm'); return; } }
   if (near < 150 && ladyEekT <= 0) { ladySay('lady_eek'); ladyEekT = 8; }
   l.talkT -= dt; if (l.talkT <= 0) { ladySay(['lady_taunt1', 'lady_taunt2', 'lady_taunt3', 'lady_taunt4'][l.taunt++ % 4]); l.talkT = rnd(6, 8); }
-  if ((l.dir > 0 && l.x > W + 26) || (l.dir < 0 && l.x < -26)) { lady = null; score += 2000; if (score > hi) hi = score; texts.push({ x: W / 2, y: H * .45, t: 2, s: t('made') }); boom(W / 2, H * .45, 30, '#ff7ad9', 160); ladySay('lady_saved'); sfx.life(); }
+  if ((l.dir > 0 && l.x > W + 26) || (l.dir < 0 && l.x < -26)) { lady = null; ladySaved++; ladyT = rnd(24, 38); score += 2000; if (score > hi) hi = score; texts.push({ x: W / 2, y: H * .45, t: 2, s: t('made') }); boom(W / 2, H * .45, 30, '#ff7ad9', 160); ladySay('lady_saved'); sfx.life(); checkPrize(); }
 }
 function pts(n, x, y) { score += n; if (n >= 100) texts.push({ x, y, t: .8, s: String(n) }); if (score >= nextLife) { nextLife += 12000; lives++; sfx.life(); frogSay('frog_life', true, 500); texts.push({ x: W / 2, y: H / 2, t: 1.5, s: t('extra') }); } if (score > hi) { hi = score; } }
 function boom(x, y, n, col, sp = 160) { for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(.2, 1) * sp; parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(.3, .8), col }); } }
@@ -212,15 +212,15 @@ function killShip() {
 
 // ---------- enemies
 function enemies(dt) {
-  spiderT -= dt; if (!spider && spiderT <= 0 && ship.alive) { const L = Math.random() < .5; sfx.spiderIn(); if (Math.random() < .5) frogSay('frog_spider', false, 900); spider = { x: L ? -20 : W + 20, y: rnd(OY + ZONE * CELL + 20, H - 30), vx: (L ? 1 : -1) * (125 + wave * 8) * D.spd, vy: rnd(-1, 1) > 0 ? 105 : -105, t: 0 }; spiderT = rnd(10, 18) * D.enemy; }
+  spiderT -= dt; if (!spider && spiderT <= 0 && ship.alive) { const L = Math.random() < .5; sfx.spiderIn(); if (Math.random() < .5) frogSay('frog_spider', false, 900); spider = { x: L ? -20 : W + 20, y: rnd(OY + ZONE * CELL + 20, H - 30), vx: (L ? 1 : -1) * (125 + wave * 8) * D.spd, vy: rnd(-1, 1) > 0 ? 105 : -105, t: 0 }; spiderT = rnd(10, 18) * D.enemy * heat(); }
   if (spider) { const s = spider; s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; if (s.y < OY + ZONE * CELL + 10) { s.y = OY + ZONE * CELL + 10; s.vy = Math.abs(s.vy); } if (s.y > H - 20) { s.y = H - 20; s.vy = -Math.abs(s.vy); } if (Math.random() < dt * .7) s.vy = -s.vy;
     const r = Math.floor((s.y - OY) / CELL), c = Math.floor(s.x / CELL); if (r >= 0 && r < ROWS && c >= 0 && c < COLS && mush[r][c] && Math.random() < dt * 5) mush[r][c] = 0;
     spiderBeat -= dt; if (spiderBeat <= 0 && !muted) { spiderBeat = .12; tone(260 + Math.sin(s.t * 14) * 90, .1, 'sawtooth', .03); }
     if (Math.hypot(ship.x - s.x, ship.y - s.y) < 22) killShip(); if (s.x < -60 || s.x > W + 60) spider = null; }
-  if (wave >= 2) { fleaT -= dt; if (!flea && fleaT <= 0) { sfx.fly(); flea = { x: cx(Math.floor(rnd(1, COLS - 1))), y: OY - 10, hp: wave >= 4 ? 2 : 1 }; fleaT = rnd(14, 22) * D.enemy; }
+  if (wave >= 2) { fleaT -= dt; if (!flea && fleaT <= 0) { sfx.fly(); flea = { x: cx(Math.floor(rnd(1, COLS - 1))), y: OY - 10, hp: wave >= 4 ? 2 : 1 }; fleaT = rnd(14, 22) * D.enemy * heat(); }
     if (flea) { const f = flea, pr = Math.floor((f.y - OY) / CELL); f.y += 330 * dt; const nr = Math.floor((f.y - OY) / CELL); if (nr !== pr && nr > 0 && nr < ZONE && Math.random() < .35 && !mush[nr][Math.floor(f.x / CELL)] && !plant[nr][Math.floor(f.x / CELL)]) mush[nr][Math.floor(f.x / CELL)] = 4;
       if (Math.hypot(ship.x - f.x, ship.y - f.y) < 22) killShip(); if (f.y > H + 20) flea = null; } }
-  if (wave >= 2) { dragonT -= dt; if (dragons.length < (wave >= 5 ? 2 : 1) && dragonT <= 0 && ship.alive) { const L = Math.random() < .5; dragons.push({ x: L ? -40 : W + 40, y: OY + CELL * (2 + Math.random() * (ZONE - 5)), vx: (L ? 1 : -1) * (150 + wave * 8) * D.spd, vy: 0, t: 0, dart: rnd(.6, 1.4), pause: 0, dive: false }); dragonT = rnd(12, 20) * D.enemy; sfx.dragon(); if (Math.random() < .5) frogSay('frog_dragon', false, 700); } }
+  if (wave >= 2) { dragonT -= dt; if (dragons.length < (wave >= 5 ? 2 : 1) && dragonT <= 0 && ship.alive) { const L = Math.random() < .5; dragons.push({ x: L ? -40 : W + 40, y: OY + CELL * (2 + Math.random() * (ZONE - 5)), vx: (L ? 1 : -1) * (150 + wave * 8) * D.spd, vy: 0, t: 0, dart: rnd(.6, 1.4), pause: 0, dive: false }); dragonT = rnd(12, 20) * D.enemy * heat(); sfx.dragon(); if (Math.random() < .5) frogSay('frog_dragon', false, 700); } }
   for (let i = dragons.length - 1; i >= 0; i--) {
     const d = dragons[i]; d.t += dt;
     if (!d.dive) { d.pause -= dt; if (d.pause <= 0) d.x += d.vx * dt; d.y += Math.sin(d.t * 3) * 36 * dt; d.dart -= dt;
@@ -232,7 +232,7 @@ function enemies(dt) {
     if (d.x < -80 || d.x > W + 80 || d.y > H + 40) dragons.splice(i, 1);
   }
   if (butter) { const b = butter; b.t += dt; b.y -= 42 * dt; b.x += Math.sin(b.t * 2 + b.seed) * 55 * dt; if (Math.random() < dt * 20) parts.push({ x: b.x + rnd(-10, 10), y: b.y + rnd(-6, 10), vx: rnd(-10, 10), vy: rnd(5, 30), life: rnd(.4, .9), col: '#bfe9ff' }); if (b.t > b.life || b.y < OY - 30) butter = null; }
-  if (wave >= 3) { scorpT -= dt; if (!scorp && scorpT <= 0) { const L = Math.random() < .5; sfx.scorpIn(); scorp = { x: L ? -30 : W + 30, row: 2 + Math.floor(Math.random() * Math.max(2, ZONE - 4)), vx: (L ? 1 : -1) * 110 }; scorpT = rnd(20, 30) * D.enemy; }
+  if (wave >= 3) { scorpT -= dt; if (!scorp && scorpT <= 0) { const L = Math.random() < .5; sfx.scorpIn(); scorp = { x: L ? -30 : W + 30, row: 2 + Math.floor(Math.random() * Math.max(2, ZONE - 4)), vx: (L ? 1 : -1) * 110 }; scorpT = rnd(20, 30) * D.enemy * heat(); }
     if (scorp) { const s = scorp; s.x += s.vx * dt; const c = Math.floor(s.x / CELL); if (c >= 0 && c < COLS && mush[s.row][c]) pois[s.row][c] = true; if (s.x < -60 || s.x > W + 60) scorp = null; } }
 }
 
@@ -276,13 +276,13 @@ function update(dt) {
     if (gone) bolts.splice(i, 1);
   }
   // crawler
-  tickLen = Math.max(.05, .115 - wave * .005) * (PORTRAIT ? 1.2 : PHONE ? 1.12 : 1) * D.tick; tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); if (worms.length && ++chompN % 3 === 0) { if (chompN % 21 === 0 && Math.random() < .8) sfx.nom(); else sfx.chomp(); } }
+  tickLen = Math.max(.05, .115 - wave * .005) * (PORTRAIT ? 1.2 : PHONE ? 1.12 : 1) * D.tick * Math.pow(.94, ladySaved); tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); if (worms.length && ++chompN % 3 === 0) { if (chompN % 21 === 0 && Math.random() < .8) sfx.nom(); else sfx.chomp(); } }
   croakT -= dt; if (croakT <= 0 && ship.alive) { sfx.croak(); croakT = rnd(8, 15); }
   frogT -= dt; tauntT -= dt; if (tauntT <= 0 && ship.alive) { frogSay(Math.random() < .5 ? 'frog_hungry' : 'frog_hey'); tauntT = rnd(45, 80); }
   for (const q of queue) q.t -= dt; for (const q of queue.filter(q => q.t <= 0)) worms.push(makeWorm(1, 2 + Math.floor(Math.random() * 3), q.left)); queue = queue.filter(q => q.t > 0);
   if (ship.alive) for (const w of worms) for (const s of w) { const [x, y] = segXY(s); if (Math.hypot(x - ship.x, y - ship.y) < 24) killShip(); }
   enemies(dt); updateLady(dt);
-  if (!worms.length && !queue.length && !butter) { wave++; seedMushrooms(); pts(wave * 50, W / 2, H / 2); startWave(); checkPrize(); }
+  if (!worms.length && !queue.length && !butter) { wave++; seedMushrooms(); pts(wave * 50, W / 2, H / 2); startWave(); }
   pulse(dt);
 }
 
@@ -418,9 +418,10 @@ function draw() {
   else if (banner > 0) { ctx.globalAlpha = clamp(banner, 0, 1); glow('#ffe066', 18); ctx.font = '700 40px "Courier New", monospace'; ctx.fillText(t('wave') + wave, W / 2, H / 2 - 60); ctx.font = '700 ' + Math.min(22, Math.floor(W / 20)) + 'px "Courier New", monospace'; glow('#b6ff5a', 10); ctx.fillText(TXT[LANG].themes[THEMES.indexOf(theme)] || theme.name, W / 2, H / 2 - 28); ctx.globalAlpha = 1; }
   ctx.shadowBlur = 0;
 }
-let prizeShown = false, prizeCode = '';
+let ladySaved = 0, prizeShown = false, prizeCode = '';
+const heat = () => Math.pow(.85, ladySaved); // every lady you save makes the garden a little harder
 function checkPrize() {
-  const P = PRIZE[LANG]; if (!P || prizeShown || wave < P.wave) return; prizeShown = true; state = 'prize';
+  const P = PRIZE[LANG]; if (!P || prizeShown || ladySaved < P.saves) return; prizeShown = true; state = 'prize';
   prizeCode = 'PREMIO-' + String(score).padStart(5, '0') + '-' + new Date().toLocaleDateString('es').replace(/\//g, ''); try { localStorage.setItem('spore-prize-' + LANG, prizeCode); } catch (e) {}
   frogSay('frog_prize', true, 300); sfx.life(); for (let i = 0; i < 6; i++) setTimeout(() => boom(rnd(60, W - 60), rnd(OY + 40, H * .6), 24, ['#ffe066', '#ff7ad9', '#5ff0ff', '#b6ff5a'][i % 4], 240), i * 220);
 }
@@ -449,6 +450,7 @@ function drawTitle() {
 }
 function titleTap(x, y) { for (const b of titleBtns) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { b.act(); return true; } return false; }
 function hud() {
+  if (PRIZE[LANG]) { ctx.textAlign = 'left'; glow('#ff7ad9', 6); ctx.fillStyle = '#ff7ad9'; ctx.font = '700 13px "Courier New", monospace'; ctx.fillText(t('ladies') + Math.min(ladySaved, PRIZE[LANG].saves) + '/' + PRIZE[LANG].saves, 16, 48); }
   ctx.shadowBlur = 0; ctx.font = '700 20px "Courier New", monospace'; ctx.textAlign = 'left'; glow('#5ff0ff', 6); ctx.fillText(String(score).padStart(6, '0'), 16, 30);
   ctx.textAlign = 'center'; ctx.fillStyle = '#ffe066'; ctx.shadowBlur = 6; ctx.shadowColor = '#ffe066'; ctx.fillText(t('hi') + String(hi).padStart(6, '0'), W / 2, 30);
   ctx.textAlign = 'right'; glow('#7dff6a', 6); for (let i = 0; i < Math.min(lives, 8); i++) { const x = W - 24 - i * 32; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, 22, 10, 7, 0, 0, TAU); ctx.moveTo(x - 4 + 4, 14); ctx.arc(x - 5, 13, 3.5, 0, TAU); ctx.moveTo(x + 8.5, 13); ctx.arc(x + 5, 13, 3.5, 0, TAU); ctx.stroke(); }
