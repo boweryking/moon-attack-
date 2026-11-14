@@ -519,7 +519,7 @@ let nextExtra = 10000, ship, rocks = [], bullets = [], ufoBullets = [], ufo = nu
 let waveDelay = 0, respawnT = 0, startHi = 0, ufoSeen = 0, fromRestart = false;
 
 // Upgrades are earned by clearing fields and persist across lives.
-const freshUp = () => ({ maxPower: 100, recharge: 15, turn: 4.2, thrust: 260, maxSpeed: 420, maxBullets: 4, shots: 1, grenades: 2, n: 0 });
+const freshUp = () => ({ maxPower: 100, recharge: 15, turn: 4.2, thrust: 260, maxSpeed: 420, maxBullets: 4, shots: 1, grenades: 2, n: 0, spread: false, spreadT: 0, spreadCool: 0 });
 let up = freshUp();
 const tier = () => Math.min(3, Math.floor(up.n / 3));
 const shipCol = () => ['#bff', '#7ff', '#9f9', '#fd6'][tier()];
@@ -585,7 +585,7 @@ const UPGRADES = [
   ['ENGINE BOOST', () => { up.turn += 0.8; up.thrust += 60; up.maxSpeed += 60; }],
   ['RAPID FIRE', () => up.maxBullets = Math.min(10, up.maxBullets + 2)],
   ['GRENADES +2', () => up.grenades += 2],
-  ['SPREAD SHOT', () => up.shots = 3],
+  ['SPREAD SHOT', () => { up.spread = true; up.spreadT = 12; up.spreadCool = 0; }],   // triple shot comes in bursts, not all the time
   ['POWER CELL +25', () => up.maxPower = Math.min(200, up.maxPower + 25)],
   ['RAPID FIRE', () => up.maxBullets = Math.min(10, up.maxBullets + 2)],
   ['GRENADES +2', () => up.grenades += 2],
@@ -605,8 +605,9 @@ function applyWell(o, dt, k) { // pull toward the gravity well, with a soft core
 
 // ---------- Actions ----------
 function fire() {
-  if (bullets.length >= up.maxBullets * up.shots || ship.shield) return; // no firing with the shield up
-  const angles = up.shots === 3 ? [-0.2, 0, 0.2] : [0], offs = up.shots === 2 ? [-6, 6] : [0];
+  const triple = up.spread && up.spreadT > 0;
+  if (bullets.length >= up.maxBullets * (triple ? 3 : up.shots) || ship.shield) return; // no firing with the shield up
+  const angles = triple ? [-0.2, 0, 0.2] : [0], offs = up.shots === 2 && !triple ? [-6, 6] : [0];
   for (const da of angles) for (const off of offs) { const ang = ship.a + da;
     bullets.push({ x: ship.x + Math.cos(ship.a) * 14 - Math.sin(ship.a) * off, y: ship.y + Math.sin(ship.a) * 14 + Math.cos(ship.a) * off,
       vx: ship.vx + Math.cos(ang) * 520, vy: ship.vy + Math.sin(ang) * 520, life: 0.95 }); }
@@ -727,6 +728,11 @@ function shieldCollisions() { // rocks bounce off, saucer shots are absorbed; ea
 
 // ---------- Update ----------
 function update(dt) {
+  // spread shot comes in bursts: 10 seconds on, then 25 to 40 seconds off, at random
+  if (up.spread && ship.alive) {
+    if (up.spreadT > 0) { up.spreadT -= dt; if (up.spreadT <= 0) { up.spreadT = 0; up.spreadCool = rnd(25, 40); } }
+    else { up.spreadCool -= dt; if (up.spreadCool <= 0) { up.spreadT = 10; sfx.upgrade(); upBanner = { text: 'SPREAD SHOT!', t: 1.6 }; } }
+  }
   // ship
   if (ship.alive) {
     const kTurn = keys.ArrowLeft || keys.ArrowRight || keys.KeyA || keys.KeyD || tkeys.ArrowLeft || tkeys.ArrowRight;
@@ -905,6 +911,7 @@ function render() {
     ctx.globalAlpha = 0.6; for (const f of [1 / 3, 2 / 3]) { ctx.beginPath(); ctx.moveTo(61 + bw * f, 98); ctx.lineTo(61 + bw * f, 110); ctx.stroke(); } ctx.globalAlpha = 1; ctx.lineWidth = 2;
     neon('#9ef', 4); text(ship.locked ? 'POWER LOW - SHIELD RECHARGING' : ship.shield ? 'SHIELD UP' : 'POWER   [S] SHIELD', 61, 124, 11, 'left');
     neon('#ff7', 6); text('GRENADES ' + up.grenades + '   [B]', 61, 142, 11, 'left');
+    if (up.spread && up.spreadT > 0) { neon('#f9f', 8); text('SPREAD SHOT ' + Math.ceil(up.spreadT), 61, 160, 11, 'left'); }
   }
   if (well) { neon('#c7f', 22); for (let k = 0; k < 4; k++) { const ph = t * 1.6 + k * 1.57, rad = 14 + k * 9 + 3 * Math.sin(t * 3 + k);
       ctx.globalAlpha = 0.9 - k * 0.18; ctx.beginPath(); ctx.arc(well.x, well.y, rad, ph, ph + 3.6); ctx.stroke(); } ctx.globalAlpha = 1; }
