@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Last Line Arcade</title>
+<meta name="description" content="Neon arcade games you can play on a laptop, a phone or an iPad.">
+<meta name="theme-color" content="#04060f">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Share+Tech+Mono&display=swap">
+<style>
+  /* Layout: a header, a grid of game cards (one per game, each with art, a short description and where it plays), then a how-to-play strip. Neon on black, one look. */
+  :root { --bg:#04060f; --panel:#0a1126; --line:#1f3568; --ink:#dce8ff; --dim:#8497c8; --cy:#5ff0ff; --am:#ffb23d; --gr:#7dff6a; --pk:#ff7ad9; --rd:#ff5a6e;
+    --ui:"Space Grotesk", system-ui, sans-serif; --mono:"Share Tech Mono", ui-monospace, "Courier New", monospace; }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 var(--ui); padding-block:max(20px, env(safe-area-inset-top)) max(28px, env(safe-area-inset-bottom));
+    padding-left:max(18px, env(safe-area-inset-left)); padding-right:max(18px, env(safe-area-inset-right));
+    background-image:radial-gradient(900px 420px at 50% -120px, rgba(60,120,255,.20), transparent 70%); }
+  .wrap { max-width:1040px; margin:0 auto; display:flex; flex-direction:column; gap:30px; }
+  header h1 { margin:0; font:700 clamp(28px, 6vw, 46px)/1.1 var(--ui); letter-spacing:.06em; text-transform:uppercase; color:var(--cy); text-shadow:0 0 22px rgba(95,240,255,.45); }
+  header p { margin:8px 0 0; color:var(--dim); max-width:60ch; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 310px), 1fr)); gap:18px; }
+  .card { display:flex; flex-direction:column; min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; text-decoration:none; color:inherit; transition:border-color .15s, transform .15s, box-shadow .15s; }
+  .card:hover, .card:focus-visible { border-color:var(--c); box-shadow:0 0 0 1px var(--c), 0 10px 30px rgba(0,0,0,.45); transform:translateY(-3px); outline:none; }
+  .art { aspect-ratio:16/9; display:block; background:#02040b; border-bottom:1px solid var(--line); }
+  .art svg { display:block; width:100%; height:100%; }
+  .body { padding:14px 16px 16px; display:flex; flex-direction:column; gap:8px; flex:1; }
+  .body h2 { margin:0; font:700 20px/1.2 var(--ui); color:var(--c); display:flex; justify-content:space-between; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  .tag { font:12px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--dim); border:1px solid var(--line); border-radius:3px; padding:1px 6px; }
+  .tag.proto { color:var(--am); border-color:#5a4318; }
+  .body p { margin:0; color:#b9c8ee; font-size:15px; }
+  .devs { margin-top:auto; padding-top:8px; display:flex; gap:6px 14px; flex-wrap:wrap; font:13px var(--mono); color:var(--dim); }
+  .devs b { color:var(--ink); font-weight:400; }
+  .play { margin-top:6px; font:700 14px var(--ui); letter-spacing:.1em; text-transform:uppercase; color:#04060f; background:var(--c); border-radius:4px; padding:9px 14px; text-align:center; }
+  .how { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap:18px; }
+  .how div { min-width:0; border-top:2px solid var(--line); padding-top:10px; }
+  .how h3 { margin:0 0 4px; font:700 13px var(--ui); letter-spacing:.14em; text-transform:uppercase; color:var(--am); }
+  .how p { margin:0; color:#b9c8ee; font-size:15px; }
+  kbd { font:12px var(--mono); border:1px solid var(--line); border-radius:3px; padding:1px 5px; background:#0a1126; }
+  footer { color:var(--dim); font:13px var(--mono); }
+  @media (prefers-reduced-motion: reduce) { .card { transition:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Last Line Arcade</h1>
+    <p>Neon arcade games you can play right here in the browser. Pick one. Each runs on a laptop, and most also work on a phone or iPad.</p>
+  </header>
+
+  <main class="grid">
+    <a class="card" style="--c:#5ff0ff" href="../">
+      <span class="art"><svg viewBox="0 0 320 180" aria-hidden="true"><g fill="none" stroke-width="2.5" stroke-linejoin="round"><path d="M46 62l26-12 24 14 4 30-22 20-30-8z" stroke="#7fb2ff"/><path d="M220 38l22 8 6 26-18 16-24-10z" stroke="#7fb2ff"/><path d="M250 120l14 6 2 16-14 8-14-8z" stroke="#9fc6ff"/><path d="M160 132l10 30h-20z" stroke="#5ff0ff"/><path d="M160 20v90" stroke="#ff5a6e" stroke-dasharray="4 6"/></g><g fill="#fff" opacity=".7"><circle cx="30" cy="150" r="1.4"/><circle cx="288" cy="30" r="1.4"/><circle cx="110" cy="20" r="1.2"/><circle cx="196" cy="150" r="1.2"/></g></svg></span>
+      <span class="body"><h2>Last Line Asteroids <span class="tag">Playable</span></h2>
+        <p>Defend Earth from the asteroid swarm. Clear each field, upgrade your ship, and raise the force field when it gets tight. A story, a voice and a soundtrack.</p>
+        <span class="devs"><span><b>Laptop</b> keys or trackpad</span><span><b>Phone</b> sideways</span><span><b>Voice</b> V</span></span>
+        <span class="play">Play</span></span></a>
+
+    <a class="card" style="--c:#ffb23d" href="../last-colony/">
+      <span class="art"><svg viewBox="0 0 320 180" aria-hidden="true"><g fill="none" stroke-width="2.5" stroke-linejoin="round"><path d="M0 150l30-18 26 10 34-26 30 22 40-16 34 20 32-12 34 14 30-10v42H0z" stroke="#ffb23d" fill="rgba(255,178,61,.10)"/><path d="M96 70l30-8-8 12 8 6z" stroke="#5ff0ff"/><path d="M222 54l8 10-10 4-10-8z" stroke="#ff5cf0"/><path d="M254 88l8 10-10 4-10-8z" stroke="#ff5cf0"/></g><g stroke="#7dff6a" stroke-width="2.5"><path d="M60 142v-9M120 148v-9M190 150v-9"/></g></svg></span>
+      <span class="body"><h2>Last Colony <span class="tag">Playable</span></h2>
+        <p>Fly low over the planet and shoot the invaders before they snatch the colonists. Catch the falling people. Lose them all and the planet goes.</p>
+        <span class="devs"><span><b>Laptop</b> A/D, mouse up and down</span><span><b>Phone</b> joystick</span></span>
+        <span class="play">Play</span></span></a>
+
+    <a class="card" style="--c:#7dff6a" href="../spore-siege/">
+      <span class="art"><svg viewBox="0 0 320 180" aria-hidden="true"><g fill="none" stroke-width="2.5" stroke-linejoin="round"><g stroke="#5dffa0"><path d="M40 50a12 10 0 0 1 24 0z"/><path d="M96 80a12 10 0 0 1 24 0z"/><path d="M230 60a12 10 0 0 1 24 0z"/><path d="M200 106a12 10 0 0 1 24 0z"/><path d="M60 110a12 10 0 0 1 24 0z"/></g><g stroke="#b6ff5a"><circle cx="120" cy="34" r="9"/><circle cx="140" cy="34" r="9"/><circle cx="160" cy="34" r="9"/></g><circle cx="100" cy="34" r="10" stroke="#ff8a3d"/><g stroke="#7dff6a"><ellipse cx="160" cy="150" rx="15" ry="11"/><circle cx="152" cy="138" r="5"/><circle cx="168" cy="138" r="5"/></g></g><g fill="#b6ff5a"><circle cx="160" cy="112" r="4"/><circle cx="160" cy="88" r="3"/><circle cx="160" cy="66" r="2.4"/></g></svg></span>
+      <span class="body"><h2>Spore Siege <span class="tag">Playable</span></h2>
+        <p>A frog guards a mushroom field. Spit at the glowing caterpillar as it winds down the screen. Watch for the spider, the dragonflies and the scorpion. Free the ghost butterfly.</p>
+        <span class="devs"><span><b>Laptop</b> mouse or trackpad</span><span><b>Phone</b> upright, drag a finger</span></span>
+        <span class="play">Play</span></span></a>
+
+    <a class="card" style="--c:#ff7ad9" href="../bug-bombers/">
+      <span class="art"><svg viewBox="0 0 320 180" aria-hidden="true"><rect width="320" height="180" fill="#061018"/><path d="M0 150h320v30H0z" fill="#3a2414"/><g><path d="M40 150v-22" stroke="#f6ecd0" stroke-width="12" stroke-linecap="round"/><path d="M14 130a26 14 0 0 1 52 0z" fill="#d92f2f" stroke="#8f1d1d" stroke-width="2.5"/><circle cx="30" cy="124" r="4" fill="#fff7e6"/><circle cx="46" cy="122" r="3" fill="#fff7e6"/><circle cx="40" cy="108" r="12" fill="#12a37f" stroke="#7cf0cf" stroke-width="2.5"/></g><g fill="none" stroke="#fff" stroke-dasharray="2 8" stroke-linecap="round" stroke-width="3" opacity=".7"><path d="M52 104Q130 20 220 104"/></g><g stroke="#ff7ad9" stroke-width="2.5" fill="rgba(255,122,217,.15)"><rect x="228" y="124" width="26" height="26"/><rect x="254" y="124" width="26" height="26"/><rect x="241" y="98" width="26" height="26"/></g><circle cx="254" cy="88" r="6" fill="#4a2511" stroke="#ff7ad9" stroke-width="2"/></svg></span>
+      <span class="body"><h2>Bug Bombers <span class="tag">Playable</span></h2>
+        <p>Bounce colorful beetles off a springy mushroom and blow up the ants. Tap in the air to make the bombers go off or the divers dive. Five nests.</p>
+        <span class="devs"><span><b>Laptop</b> mouse drag</span><span><b>Phone</b> sideways, touch</span></span>
+        <span class="play">Play</span></span></a>
+
+    <a class="card" style="--c:#5ff0ff" href="../cockpit/">
+      <span class="art"><svg viewBox="0 0 320 180" aria-hidden="true"><rect width="320" height="180" fill="#02030a"/><g fill="none" stroke-width="2.2" stroke-linejoin="round"><path d="M70 60l26-8 20 14-4 24-24 10-22-16z" stroke="#7fb2ff"/><path d="M214 100l10-18 14 4 4 16-14 10z" stroke="#7fb2ff"/><path d="M160 54l26 6-26 6-26-6z" stroke="#ff5cf0"/><path d="M160 46v20M134 60h52" stroke="#ff5cf0" opacity=".6"/></g><g stroke="#5dffa0" stroke-width="2" fill="none"><circle cx="160" cy="92" r="12"/><path d="M160 74v10M160 100v10M142 92h10M168 92h10"/></g><path d="M0 180V150l60 14 100 8 100-8 60-14v30z" fill="#070a18" stroke="#1b2f63" stroke-width="2"/><circle cx="160" cy="166" r="14" fill="rgba(2,10,24,.9)" stroke="#27508f" stroke-width="2"/></svg></span>
+      <span class="body"><h2>Cockpit Asteroids <span class="tag proto">Prototype</span></h2>
+        <p>First-person space fighter. Hunt the orange jets, dodge the pink ones, and watch for rocks all around you. Shield, grenades, targeting and an onboard computer.</p>
+        <span class="devs"><span><b>Laptop</b> trackpad</span><span><b>iPad</b> tilt steering</span></span>
+        <span class="play">Play</span></span></a>
+  </main>
+
+  <section class="how" aria-label="How to play">
+    <div><h3>On a laptop</h3><p>Click a game and play. Most use the mouse or trackpad plus a few keys. In Asteroids, <kbd>Shift</kbd> fires, <kbd>Space</kbd> raises the shield and <kbd>V</kbd> turns on voice commands.</p></div>
+    <div><h3>On a phone</h3><p>Hold it sideways for most games, or upright for Spore Siege. Tap Share, then <b>Add to Home Screen</b>, and open it from there to hide the browser bars.</p></div>
+    <div><h3>On an iPad</h3><p>Cockpit Asteroids can steer by tilting the iPad. Tap <b>Tilt steering</b> under the game and allow motion when asked.</p></div>
+  </section>
+
+  <footer>Games are made by hand and still changing. Tell us what is too hard, too small or too slow.</footer>
+</div>
+</body>
+</html>
