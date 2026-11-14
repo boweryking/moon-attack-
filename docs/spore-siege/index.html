@@ -22,6 +22,23 @@
 <script>
 // ===== Spore Siege: a hive crawler winds down a mushroom field. Original game inspired by classic arcade shooters. =====
 // Mouse / touchpad or finger moves the ship. It fires by itself (F toggles). Shift, Space or click also fire.
+// ---------- language, difficulty and the prize (edit PRIZE to change what she wins)
+const LANG = (() => { const q = /[?&]lang=(es|en)/.exec(location.search); let v = q ? q[1] : null; try { if (v) localStorage.setItem('spore-lang', v); else v = localStorage.getItem('spore-lang'); } catch (e) {} return v === 'es' ? 'es' : 'en'; })();
+document.documentElement.lang = LANG;
+const PRIZE = { es: { wave: 5, title: '¡PREMIO!', lines: ['¡Llegaste al nivel 5!', 'Muéstrale esta pantalla a tu esposo', 'para reclamar tu premio.'], tap: 'Toca para seguir jugando' }, en: null }; // wave = the level she has to reach
+const DIFFS = { easy: { lives: 5, tick: 1.3, heads: .5, enemy: 1.6, spd: .8 }, normal: { lives: 3, tick: 1, heads: 1, enemy: 1, spd: 1 }, hard: { lives: 2, tick: .8, heads: 1.5, enemy: .7, spd: 1.2 } };
+let diff = 'normal'; try { diff = localStorage.getItem('spore-diff') || 'normal'; } catch (e) {} if (!DIFFS[diff]) diff = 'normal'; let D = DIFFS[diff];
+const TXT = {
+  en: { tap_start: 'TAP TO START', click_start: 'CLICK OR PRESS ENTER TO START', hi: 'HI ', over: 'GAME OVER', score: 'SCORE ', tap_again: 'TAP TO PLAY AGAIN', click_again: 'CLICK OR PRESS ENTER TO PLAY AGAIN', paused: 'PAUSED', tap_resume: 'TAP TO RESUME', click_resume: 'PRESS P OR CLICK TO RESUME', wave: 'WAVE ', autospit: 'AUTO-SPIT ', on: 'ON', off: 'OFF', keys: '   hold click / Shift to spit  [F] auto  [P] pause  [M] mute',
+    extra: 'EXTRA FROG', ghost: 'GHOST BUTTERFLY', freed: 'FREED!', lost: 'LOST HER', cursed: 'CURSED! NO SPITTING', made: 'SHE MADE IT! +2000', hexed: 'HEXED ', dont: "DON'T SPIT!", ladyfrog: 'LADY FROG!', donther: "DON'T SPIT HER.", keepaway: 'KEEP THE CATERPILLAR AWAY!', easy: 'EASY', normal: 'NORMAL', hard: 'HARD', diff: 'DIFFICULTY', lang: 'LANGUAGE', prizewon: 'PRIZE WON', loaded: 'LOADING...',
+    l_portrait: ['Touch and drag to move the frog.', 'He spits while your finger is down.', 'Hit the glowing crawler.', 'Do not let it reach you.', 'A pink lady frog will hop by.', 'DO NOT SPIT HER. Protect her!'], l_touch: ['Touch and drag to move the frog. He spits while your finger is down.', 'Hit the glowing crawler. Do not let it reach you.', 'A pink lady frog hops by now and then.', 'DO NOT SPIT HER. Keep the caterpillar off her!'], l_desk: ['Move the mouse or trackpad to move the frog.', 'Hold the mouse button to spit. Your mouse is captured, Esc lets go.', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.', 'A pink lady frog hops by now and then. DO NOT SPIT HER.', 'Keep the caterpillar off her and she pays you well.'],
+    themes: ['SPRING MEADOW', 'SUMMER GARDEN', 'AUTUMN ORCHARD', 'WINTER POND'] },
+  es: { tap_start: 'TOCA PARA EMPEZAR', click_start: 'CLIC O ENTER PARA EMPEZAR', hi: 'MÁX ', over: 'FIN DEL JUEGO', score: 'PUNTOS ', tap_again: 'TOCA PARA JUGAR DE NUEVO', click_again: 'CLIC O ENTER PARA JUGAR DE NUEVO', paused: 'PAUSA', tap_resume: 'TOCA PARA SEGUIR', click_resume: 'PULSA P O HAZ CLIC PARA SEGUIR', wave: 'NIVEL ', autospit: 'AUTO-ESCUPIR ', on: 'SÍ', off: 'NO', keys: '   mantén clic / Shift para escupir  [F] auto  [P] pausa  [M] mudo',
+    extra: '¡RANA EXTRA!', ghost: 'MARIPOSA FANTASMA', freed: '¡LIBRE!', lost: '¡LA PERDISTE!', cursed: '¡MALDITO! NO PUEDES ESCUPIR', made: '¡LO LOGRÓ! +2000', hexed: 'HECHIZO ', dont: '¡NO ESCUPAS!', ladyfrog: '¡RANA DAMA!', donther: 'NO LA ESCUPAS.', keepaway: '¡ALEJA A LA ORUGA!', easy: 'FÁCIL', normal: 'NORMAL', hard: 'DIFÍCIL', diff: 'DIFICULTAD', lang: 'IDIOMA', prizewon: 'PREMIO GANADO', loaded: 'CARGANDO...',
+    l_portrait: ['Toca y arrastra para mover la rana.', 'Escupe mientras tu dedo toca la pantalla.', 'Pégale a la oruga brillante.', 'No dejes que te alcance.', 'Pasará una rana dama rosa.', '¡NO LA ESCUPAS! ¡Protégela!'], l_touch: ['Toca y arrastra para mover la rana. Escupe mientras tu dedo toca.', 'Pégale a la oruga brillante. No dejes que te alcance.', 'De vez en cuando pasa una rana dama rosa.', '¡NO LA ESCUPAS! ¡Aleja a la oruga de ella!'], l_desk: ['Mueve el mouse o el trackpad para mover la rana.', 'Mantén el botón para escupir. El mouse se captura, Esc lo suelta.', 'Escúpele a la oruga. Cada golpe deja un hongo. Sigue con vida.', 'De vez en cuando pasa una rana dama rosa. ¡NO LA ESCUPAS!', 'Aleja a la oruga de ella y te paga muy bien.'],
+    themes: ['PRADO DE PRIMAVERA', 'JARDÍN DE VERANO', 'HUERTO DE OTOÑO', 'ESTANQUE DE INVIERNO'] },
+};
+const t = k => (TXT[LANG] && TXT[LANG][k]) || TXT.en[k] || k;
 const cv = document.getElementById('c'), ctx = cv.getContext('2d'), TAU = Math.PI * 2;
 // A phone gets a smaller, wider field so everything is drawn bigger on its small screen. Tablets and computers get the full field.
 const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 700;
@@ -59,11 +76,12 @@ const sfx = {
 };
 // sound clips (audio/sfx/NAME.mp3): chomping, frog croaks, bugs. Anything missing falls back to the little synth sounds above.
 const CLIPS = ['chomp', 'croak', 'croak_happy', 'croak_sad', 'dragonfly', 'fly', 'spider', 'scorpion', 'splat', 'butterfly', 'levelup', 'spit', 'rustle', 'nom', 'frog_start', 'frog_hurt', 'frog_life', 'frog_wave', 'frog_free', 'frog_spider', 'frog_dragon', 'frog_over', 'frog_hungry', 'frog_hey', 'lady_enter', 'lady_taunt1', 'lady_taunt2', 'lady_taunt3', 'lady_taunt4', 'lady_eek', 'lady_curse', 'lady_curse2', 'lady_saved', 'lady_dead'], cbuf = {};
+const LADY_ES = { lady_enter: 'Vaya, vaya, vaya. Mira nada más al gran héroe. Procura no arruinarlo, cariño.', lady_taunt1: 'Muévete, lentorro. Tengo un estanque al que llegar.', lady_taunt2: '¿Eso es lo mejor que tienes? Mi abuela escupe mejor, ¡y es un renacuajo!', lady_taunt3: 'Ojos en la maldita oruga, cielo. No en mis piernas.', lady_taunt4: 'Tú tranquilo, yo salto por aquí mientras averiguas cuál lado es arriba.', lady_eek: '¡Ay, diablos, no! ¡La oruga! ¡Haz algo, grandísimo tonto!', lady_curse: '¡Baboso, cara de verruga, sapo de charco! ¡Que se te pudran los nenúfares y que tus moscas sepan a jabón!', lady_curse2: '¡Mal rayo te parta, cerebro de bicho! ¡Que una libélula se te siente en la cara por cien años!', lady_saved: 'Caray. Mi héroe. Que no se te suba a la cabeza. Ribbit.', lady_dead: '¡Inútil verruga! ¡Confié en ti y ahora soy el almuerzo! ¡Maldito seas!' };
 const LADY_LINES = { lady_enter: "Well, well, well. Look at you, big hero. Try not to screw it up, sweetie.", lady_taunt1: 'Move your slimy ass, slowpoke. I have a pond to get to.', lady_taunt2: "Is that the best you've got? My grandmother spits better, and she's a tadpole.", lady_taunt3: 'Eyes on the damn caterpillar, darling. Not on my legs.', lady_taunt4: "Oh, don't mind me. I'll just hop around while you figure out which end is up.", lady_eek: 'Oh hell no! Caterpillar! Do something, you big dumb lump!', lady_curse: 'You slimy, wart-faced, pond-scum son of a toad! May your lily pads rot and your flies taste like soap!', lady_curse2: 'A hex on you, you bug-brained bastard! May a dragonfly sit on your face for a hundred years!', lady_saved: "Well, damn. My hero. Don't let it go to your head. Ribbit.", lady_dead: "You useless wart! I trusted you, and now I'm lunch! Damn you!" };
-function ladySay(name) { ladyMsg = { text: LADY_LINES[name] || '', t: 4.2 }; frogT = Math.max(frogT, 4); clip(name, 1); }
+function ladySay(name) { ladyMsg = { text: (LANG === 'es' ? LADY_ES : LADY_LINES)[name] || '', t: 4.2 }; frogT = Math.max(frogT, 4); clip(name, 1); }
 let frogT = 0, tauntT = 45;
 function frogSay(name, force, delay = 0) { const go = () => { if (!force && frogT > 0) return; if (clip(name, .95)) frogT = 6; }; delay ? setTimeout(go, delay) : go(); } // the frog talks now and then, never twice in a row
-async function loadClips() { await Promise.all(CLIPS.map(async k => { try { const r = await fetch('audio/sfx/' + k + '.mp3'); if (!r.ok) return; cbuf[k] = await AC.decodeAudioData(await r.arrayBuffer()); } catch (e) {} })); }
+async function loadClips() { await Promise.all(CLIPS.concat(LANG === 'es' ? ['frog_prize'] : []).map(async k => { try { const r = await fetch((LANG === 'es' && /^(frog_|lady_|nom$)/.test(k) ? 'audio/sfx/es/' : 'audio/sfx/') + k + '.mp3'); if (!r.ok) return; cbuf[k] = await AC.decodeAudioData(await r.arrayBuffer()); } catch (e) {} })); }
 function clip(name, vol = .6, rate = 1) {
   if (!AC || muted || !cbuf[name]) return false; const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = cbuf[name]; s.playbackRate.value = rate; g.gain.value = vol; s.connect(g); g.connect(master); s.start(); return true;
 }
@@ -139,10 +157,10 @@ function makeWorm(len, row, fromLeft, delay = 0) {
 }
 function startWave(quiet) {
   worms = []; queue = []; const len = Math.max(3, 13 - wave); worms.push(makeWorm(len, 0, true));
-  for (let i = 0; i < Math.min(wave - 1, 8); i++) queue.push({ t: 3 + i * 3.5, left: Math.random() < .5 });
+  for (let i = 0; i < Math.round(Math.min(wave - 1, 8) * D.heads); i++) queue.push({ t: 3 + i * 3.5, left: Math.random() < .5 });
   banner = 2.6; if (!quiet) { lady = null; playMusic(musicFor()); sfx.wave(); if (wave > 1) frogSay('frog_wave', false, 1500); if (plants.length) setTimeout(sfx.rustle, 500); }
 }
-function newGame() { frogSay('frog_start', true, 700); tauntT = rnd(40, 70); lady = null; ladyT = rnd(22, 32); hexT = 0; ladyMsg.t = 0; score = 0; lives = 3; wave = 1; nextLife = 12000; seedMushrooms(); bolts = []; parts = []; texts = []; spider = flea = scorp = butter = null; dragons = []; dragonT = 12; spiderT = 9; fleaT = 14; scorpT = 22; ship.alive = true; ship.inv = 2; ship.x = W / 2; ship.y = H - 60; startWave(); state = 'play'; playMusic(musicFor()); }
+function newGame() { prizeShown = false; frogSay('frog_start', true, 700); tauntT = rnd(40, 70); lady = null; ladyT = rnd(22, 32); hexT = 0; ladyMsg.t = 0; score = 0; lives = D.lives; wave = 1; nextLife = 12000; seedMushrooms(); bolts = []; parts = []; texts = []; spider = flea = scorp = butter = null; dragons = []; dragonT = 12; spiderT = 9; fleaT = 14; scorpT = 22; ship.alive = true; ship.inv = 2; ship.x = W / 2; ship.y = H - 60; startWave(); state = 'play'; playMusic(musicFor()); }
 
 // ---------- crawler movement (one cell per tick; every segment follows the same rules, so a split worm just keeps going)
 function drop(s) {
@@ -165,8 +183,8 @@ function spawnLady() {
 }
 function killLady(by) {
   const l = lady; if (!l || l.dead) return; l.dead = .9; boom(l.x, l.y, 26, by === 'player' ? '#c58bff' : '#ff7ad9', 200);
-  if (by === 'player') { score = Math.max(0, score - 500); hexT = 4; texts.push({ x: l.x, y: l.y - 20, t: 1.4, s: '-500' }); texts.push({ x: W / 2, y: H * .55, t: 1.8, s: 'CURSED! NO SPITTING' }); ladySay(Math.random() < .5 ? 'lady_curse' : 'lady_curse2'); tone(300, .5, 'sawtooth', .12, 60); }
-  else { texts.push({ x: l.x, y: l.y - 20, t: 1.4, s: 'LOST HER' }); ladySay('lady_dead'); sfx.pop(); }
+  if (by === 'player') { score = Math.max(0, score - 500); hexT = 4; texts.push({ x: l.x, y: l.y - 20, t: 1.4, s: '-500' }); texts.push({ x: W / 2, y: H * .55, t: 1.8, s: t('cursed') }); ladySay(Math.random() < .5 ? 'lady_curse' : 'lady_curse2'); tone(300, .5, 'sawtooth', .12, 60); }
+  else { texts.push({ x: l.x, y: l.y - 20, t: 1.4, s: t('lost') }); ladySay('lady_dead'); sfx.pop(); }
 }
 function updateLady(dt) {
   if (ladyMsg.t > 0) ladyMsg.t -= dt; if (ladyTip > 0) ladyTip -= dt; if (hexT > 0) hexT -= dt; ladyEekT -= dt;
@@ -177,16 +195,16 @@ function updateLady(dt) {
   let near = 1e9; for (const w of worms) for (const sg of w) { const [x, y] = segXY(sg), d = Math.hypot(x - l.x, y - cyy(l.row)); near = Math.min(near, d); if (d < 22) { killLady('worm'); return; } }
   if (near < 150 && ladyEekT <= 0) { ladySay('lady_eek'); ladyEekT = 8; }
   l.talkT -= dt; if (l.talkT <= 0) { ladySay(['lady_taunt1', 'lady_taunt2', 'lady_taunt3', 'lady_taunt4'][l.taunt++ % 4]); l.talkT = rnd(6, 8); }
-  if ((l.dir > 0 && l.x > W + 26) || (l.dir < 0 && l.x < -26)) { lady = null; score += 2000; if (score > hi) hi = score; texts.push({ x: W / 2, y: H * .45, t: 2, s: 'SHE MADE IT! +2000' }); boom(W / 2, H * .45, 30, '#ff7ad9', 160); ladySay('lady_saved'); sfx.life(); }
+  if ((l.dir > 0 && l.x > W + 26) || (l.dir < 0 && l.x < -26)) { lady = null; score += 2000; if (score > hi) hi = score; texts.push({ x: W / 2, y: H * .45, t: 2, s: t('made') }); boom(W / 2, H * .45, 30, '#ff7ad9', 160); ladySay('lady_saved'); sfx.life(); }
 }
-function pts(n, x, y) { score += n; if (n >= 100) texts.push({ x, y, t: .8, s: String(n) }); if (score >= nextLife) { nextLife += 12000; lives++; sfx.life(); frogSay('frog_life', true, 500); texts.push({ x: W / 2, y: H / 2, t: 1.5, s: 'EXTRA FROG' }); } if (score > hi) { hi = score; } }
+function pts(n, x, y) { score += n; if (n >= 100) texts.push({ x, y, t: .8, s: String(n) }); if (score >= nextLife) { nextLife += 12000; lives++; sfx.life(); frogSay('frog_life', true, 500); texts.push({ x: W / 2, y: H / 2, t: 1.5, s: t('extra') }); } if (score > hi) { hi = score; } }
 function boom(x, y, n, col, sp = 160) { for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(.2, 1) * sp; parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(.3, .8), col }); } }
 
 function killSeg(wi, si) {
   const w = worms[wi], s = w[si], [x, y] = segXY(s), head = si === 0; boom(x, y, head ? 26 : 14, head ? '#ffd27a' : '#b6ff5a'); head ? sfx.head() : sfx.pop(); pts(head ? 100 : 10, x, y);
   if (s.r >= 0 && s.r < ROWS && s.c >= 0 && s.c < COLS && !plant[s.r][s.c]) { mush[s.r][s.c] = 4; pois[s.r][s.c] = false; }
   const a = w.slice(0, si), b = w.slice(si + 1); worms.splice(wi, 1); if (a.length) worms.push(a); if (b.length) worms.push(b);
-  if (!worms.length && !queue.length) { butter = { x, y, t: 0, life: 4.5, seed: rnd(0, TAU) }; sfx.magic(); texts.push({ x: W / 2, y: Math.max(OY + 40, y - 40), t: 1.8, s: 'GHOST BUTTERFLY' }); boom(x, y, 30, '#bfe9ff', 120); }
+  if (!worms.length && !queue.length) { butter = { x, y, t: 0, life: 4.5, seed: rnd(0, TAU) }; sfx.magic(); texts.push({ x: W / 2, y: Math.max(OY + 40, y - 40), t: 1.8, s: t('ghost') }); boom(x, y, 30, '#bfe9ff', 120); }
 }
 function killShip() {
   if (!ship.alive || ship.inv > 0) return; ship.alive = false; boom(ship.x, ship.y, 40, '#7dff6a', 260); sfx.die(); frogSay('frog_hurt', true, 350); shake = .6; lives--; ship.respawn = 1.8;
@@ -194,15 +212,15 @@ function killShip() {
 
 // ---------- enemies
 function enemies(dt) {
-  spiderT -= dt; if (!spider && spiderT <= 0 && ship.alive) { const L = Math.random() < .5; sfx.spiderIn(); if (Math.random() < .5) frogSay('frog_spider', false, 900); spider = { x: L ? -20 : W + 20, y: rnd(OY + ZONE * CELL + 20, H - 30), vx: (L ? 1 : -1) * (125 + wave * 8), vy: rnd(-1, 1) > 0 ? 105 : -105, t: 0 }; spiderT = rnd(10, 18); }
+  spiderT -= dt; if (!spider && spiderT <= 0 && ship.alive) { const L = Math.random() < .5; sfx.spiderIn(); if (Math.random() < .5) frogSay('frog_spider', false, 900); spider = { x: L ? -20 : W + 20, y: rnd(OY + ZONE * CELL + 20, H - 30), vx: (L ? 1 : -1) * (125 + wave * 8) * D.spd, vy: rnd(-1, 1) > 0 ? 105 : -105, t: 0 }; spiderT = rnd(10, 18) * D.enemy; }
   if (spider) { const s = spider; s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; if (s.y < OY + ZONE * CELL + 10) { s.y = OY + ZONE * CELL + 10; s.vy = Math.abs(s.vy); } if (s.y > H - 20) { s.y = H - 20; s.vy = -Math.abs(s.vy); } if (Math.random() < dt * .7) s.vy = -s.vy;
     const r = Math.floor((s.y - OY) / CELL), c = Math.floor(s.x / CELL); if (r >= 0 && r < ROWS && c >= 0 && c < COLS && mush[r][c] && Math.random() < dt * 5) mush[r][c] = 0;
     spiderBeat -= dt; if (spiderBeat <= 0 && !muted) { spiderBeat = .12; tone(260 + Math.sin(s.t * 14) * 90, .1, 'sawtooth', .03); }
     if (Math.hypot(ship.x - s.x, ship.y - s.y) < 22) killShip(); if (s.x < -60 || s.x > W + 60) spider = null; }
-  if (wave >= 2) { fleaT -= dt; if (!flea && fleaT <= 0) { sfx.fly(); flea = { x: cx(Math.floor(rnd(1, COLS - 1))), y: OY - 10, hp: wave >= 4 ? 2 : 1 }; fleaT = rnd(14, 22); }
+  if (wave >= 2) { fleaT -= dt; if (!flea && fleaT <= 0) { sfx.fly(); flea = { x: cx(Math.floor(rnd(1, COLS - 1))), y: OY - 10, hp: wave >= 4 ? 2 : 1 }; fleaT = rnd(14, 22) * D.enemy; }
     if (flea) { const f = flea, pr = Math.floor((f.y - OY) / CELL); f.y += 330 * dt; const nr = Math.floor((f.y - OY) / CELL); if (nr !== pr && nr > 0 && nr < ZONE && Math.random() < .35 && !mush[nr][Math.floor(f.x / CELL)] && !plant[nr][Math.floor(f.x / CELL)]) mush[nr][Math.floor(f.x / CELL)] = 4;
       if (Math.hypot(ship.x - f.x, ship.y - f.y) < 22) killShip(); if (f.y > H + 20) flea = null; } }
-  if (wave >= 2) { dragonT -= dt; if (dragons.length < (wave >= 5 ? 2 : 1) && dragonT <= 0 && ship.alive) { const L = Math.random() < .5; dragons.push({ x: L ? -40 : W + 40, y: OY + CELL * (2 + Math.random() * (ZONE - 5)), vx: (L ? 1 : -1) * (150 + wave * 8), vy: 0, t: 0, dart: rnd(.6, 1.4), pause: 0, dive: false }); dragonT = rnd(12, 20); sfx.dragon(); if (Math.random() < .5) frogSay('frog_dragon', false, 700); } }
+  if (wave >= 2) { dragonT -= dt; if (dragons.length < (wave >= 5 ? 2 : 1) && dragonT <= 0 && ship.alive) { const L = Math.random() < .5; dragons.push({ x: L ? -40 : W + 40, y: OY + CELL * (2 + Math.random() * (ZONE - 5)), vx: (L ? 1 : -1) * (150 + wave * 8) * D.spd, vy: 0, t: 0, dart: rnd(.6, 1.4), pause: 0, dive: false }); dragonT = rnd(12, 20) * D.enemy; sfx.dragon(); if (Math.random() < .5) frogSay('frog_dragon', false, 700); } }
   for (let i = dragons.length - 1; i >= 0; i--) {
     const d = dragons[i]; d.t += dt;
     if (!d.dive) { d.pause -= dt; if (d.pause <= 0) d.x += d.vx * dt; d.y += Math.sin(d.t * 3) * 36 * dt; d.dart -= dt;
@@ -214,7 +232,7 @@ function enemies(dt) {
     if (d.x < -80 || d.x > W + 80 || d.y > H + 40) dragons.splice(i, 1);
   }
   if (butter) { const b = butter; b.t += dt; b.y -= 42 * dt; b.x += Math.sin(b.t * 2 + b.seed) * 55 * dt; if (Math.random() < dt * 20) parts.push({ x: b.x + rnd(-10, 10), y: b.y + rnd(-6, 10), vx: rnd(-10, 10), vy: rnd(5, 30), life: rnd(.4, .9), col: '#bfe9ff' }); if (b.t > b.life || b.y < OY - 30) butter = null; }
-  if (wave >= 3) { scorpT -= dt; if (!scorp && scorpT <= 0) { const L = Math.random() < .5; sfx.scorpIn(); scorp = { x: L ? -30 : W + 30, row: 2 + Math.floor(Math.random() * Math.max(2, ZONE - 4)), vx: (L ? 1 : -1) * 110 }; scorpT = rnd(20, 30); }
+  if (wave >= 3) { scorpT -= dt; if (!scorp && scorpT <= 0) { const L = Math.random() < .5; sfx.scorpIn(); scorp = { x: L ? -30 : W + 30, row: 2 + Math.floor(Math.random() * Math.max(2, ZONE - 4)), vx: (L ? 1 : -1) * 110 }; scorpT = rnd(20, 30) * D.enemy; }
     if (scorp) { const s = scorp; s.x += s.vx * dt; const c = Math.floor(s.x / CELL); if (c >= 0 && c < COLS && mush[s.row][c]) pois[s.row][c] = true; if (s.x < -60 || s.x > W + 60) scorp = null; } }
 }
 
@@ -254,17 +272,17 @@ function update(dt) {
     if (!gone && scorp && Math.abs(b.x - scorp.x) < 28 && Math.abs(b.y - cyy(scorp.row)) < 18) { pts(1000, scorp.x, cyy(scorp.row)); boom(scorp.x, cyy(scorp.row), 24, '#ff6a6a', 200); sfx.fleaHit(); scorp = null; gone = true; }
     for (let di = dragons.length - 1; di >= 0 && !gone; di--) { const d = dragons[di]; if (Math.hypot(b.x - d.x, b.y - d.y) < 24) { pts(500, d.x, d.y); boom(d.x, d.y, 24, '#5ff0ff', 220); sfx.dragonHit(); dragons.splice(di, 1); gone = true; } }
     if (!gone && lady && !lady.dead && Math.hypot(b.x - lady.x, b.y - lady.y) < 26) { killLady('player'); gone = true; }
-    if (!gone && butter && Math.hypot(b.x - butter.x, b.y - butter.y) < 26) { pts(1000, butter.x, butter.y); boom(butter.x, butter.y, 40, '#ffffff', 200); sfx.free(); frogSay('frog_free', true, 400); texts.push({ x: butter.x, y: butter.y - 20, t: 1.2, s: 'FREED!' }); butter = null; gone = true; }
+    if (!gone && butter && Math.hypot(b.x - butter.x, b.y - butter.y) < 26) { pts(1000, butter.x, butter.y); boom(butter.x, butter.y, 40, '#ffffff', 200); sfx.free(); frogSay('frog_free', true, 400); texts.push({ x: butter.x, y: butter.y - 20, t: 1.2, s: t('freed') }); butter = null; gone = true; }
     if (gone) bolts.splice(i, 1);
   }
   // crawler
-  tickLen = Math.max(.05, .115 - wave * .005) * (PORTRAIT ? 1.2 : PHONE ? 1.12 : 1); tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); if (worms.length && ++chompN % 3 === 0) { if (chompN % 21 === 0 && Math.random() < .8) sfx.nom(); else sfx.chomp(); } }
+  tickLen = Math.max(.05, .115 - wave * .005) * (PORTRAIT ? 1.2 : PHONE ? 1.12 : 1) * D.tick; tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); if (worms.length && ++chompN % 3 === 0) { if (chompN % 21 === 0 && Math.random() < .8) sfx.nom(); else sfx.chomp(); } }
   croakT -= dt; if (croakT <= 0 && ship.alive) { sfx.croak(); croakT = rnd(8, 15); }
   frogT -= dt; tauntT -= dt; if (tauntT <= 0 && ship.alive) { frogSay(Math.random() < .5 ? 'frog_hungry' : 'frog_hey'); tauntT = rnd(45, 80); }
   for (const q of queue) q.t -= dt; for (const q of queue.filter(q => q.t <= 0)) worms.push(makeWorm(1, 2 + Math.floor(Math.random() * 3), q.left)); queue = queue.filter(q => q.t > 0);
   if (ship.alive) for (const w of worms) for (const s of w) { const [x, y] = segXY(s); if (Math.hypot(x - ship.x, y - ship.y) < 24) killShip(); }
   enemies(dt); updateLady(dt);
-  if (!worms.length && !queue.length && !butter) { wave++; seedMushrooms(); pts(wave * 50, W / 2, H / 2); startWave(); }
+  if (!worms.length && !queue.length && !butter) { wave++; seedMushrooms(); pts(wave * 50, W / 2, H / 2); startWave(); checkPrize(); }
   pulse(dt);
 }
 
@@ -341,9 +359,9 @@ function drawLady() {
   ctx.restore();
 }
 function drawLadyTip() { // the first few times she shows up, say plainly what to do
-  if (lady && lady.tag && !lady.dead) { ctx.save(); glow('#ff7ad9', 8); ctx.fillStyle = '#ff7ad9'; ctx.font = '700 13px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.fillText("DON'T SPIT!", clamp(lady.x, 50, W - 50), lady.y - 34); ctx.restore(); }
+  if (lady && lady.tag && !lady.dead) { ctx.save(); glow('#ff7ad9', 8); ctx.fillStyle = '#ff7ad9'; ctx.font = '700 13px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.fillText(t('dont'), clamp(lady.x, 50, W - 50), lady.y - 34); ctx.restore(); }
   if (ladyTip <= 0) return; ctx.save(); ctx.globalAlpha = clamp(ladyTip, 0, 1) * (.75 + .25 * Math.sin(time * 8)); ctx.textAlign = 'center'; glow('#ff7ad9', 14); ctx.fillStyle = '#ff7ad9';
-  const fs = Math.min(26, Math.floor(W / 20)); ctx.font = '700 ' + fs + 'px "Courier New", monospace'; ctx.fillText('LADY FROG!', W / 2, H * .38); ctx.font = '700 ' + Math.floor(fs * .62) + 'px "Courier New", monospace'; ctx.fillText("DON'T SPIT HER.", W / 2, H * .38 + fs * 1.1); ctx.fillText('KEEP THE CATERPILLAR AWAY!', W / 2, H * .38 + fs * 1.9); ctx.restore();
+  const fs = Math.min(26, Math.floor(W / 20)); ctx.font = '700 ' + fs + 'px "Courier New", monospace'; ctx.fillText(t('ladyfrog'), W / 2, H * .38); ctx.font = '700 ' + Math.floor(fs * .62) + 'px "Courier New", monospace'; ctx.fillText(t('donther'), W / 2, H * .38 + fs * 1.1); ctx.fillText(t('keepaway'), W / 2, H * .38 + fs * 1.9); ctx.restore();
 }
 function drawLadyMsg() {
   if (ladyMsg.t <= 0 || !ladyMsg.text) return; ctx.save(); ctx.globalAlpha = clamp(ladyMsg.t * 2, 0, 1); ctx.font = '700 ' + Math.min(15, Math.floor(W / 30)) + 'px "Courier New", monospace'; ctx.textAlign = 'center';
@@ -391,28 +409,57 @@ function draw() {
   for (const p of parts) { glow(p.col, 6); ctx.globalAlpha = clamp(p.life * 2, 0, 1); ctx.fillRect(p.x, p.y, 3, 3); ctx.globalAlpha = 1; }
   ctx.restore(); ctx.shadowBlur = 0; ctx.textAlign = 'center';
   ctx.font = '700 16px "Courier New", monospace'; for (const t of texts) { ctx.globalAlpha = clamp(t.t * 2, 0, 1); glow('#ffe066', 8); ctx.fillText(t.s, t.x, t.y); ctx.globalAlpha = 1; }
-  if (hexT > 0) { ctx.fillStyle = 'rgba(140,60,220,' + (.16 + .06 * Math.sin(time * 14)) + ')'; ctx.fillRect(0, 0, W, H); glow('#c58bff', 12); ctx.font = '700 22px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.fillText('HEXED ' + Math.ceil(hexT), clamp(ship.x, 70, W - 70), ship.y - 34); ctx.shadowBlur = 0; }
+  if (hexT > 0) { ctx.fillStyle = 'rgba(140,60,220,' + (.16 + .06 * Math.sin(time * 14)) + ')'; ctx.fillRect(0, 0, W, H); glow('#c58bff', 12); ctx.font = '700 22px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.fillText(t('hexed') + Math.ceil(hexT), clamp(ship.x, 70, W - 70), ship.y - 34); ctx.shadowBlur = 0; }
   drawLadyTip(); drawLadyMsg(); hud(); ctx.textAlign = 'center';
-  if (state === 'title') { glow('#b6ff5a', 24); ctx.font = '700 ' + Math.min(72, Math.floor(W / 7.4)) + 'px "Courier New", monospace'; ctx.fillText('SPORE SIEGE', W / 2, H * .33); glow('#fff', 10); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO START' : 'CLICK OR PRESS ENTER TO START', W / 2, H * .46);
-    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Touch and drag to move the frog.', 'He spits while your finger is down.', 'Hit the glowing crawler.', 'Do not let it reach you.', 'A pink lady frog will hop by.', 'DO NOT SPIT HER. Protect her!'] : touchMode ? ['Touch and drag to move the frog. He spits while your finger is down.', 'Hit the glowing crawler. Do not let it reach you.', 'A pink lady frog hops by now and then.', 'DO NOT SPIT HER. Keep the caterpillar off her!'] : ['Move the mouse or trackpad to move the frog.', 'Hold the mouse button to spit. Your mouse is captured, Esc lets go.', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.', 'A pink lady frog hops by now and then. DO NOT SPIT HER.', 'Keep the caterpillar off her and she pays you well.'];
-    l.forEach((t, i) => { const warn = /LADY|lady|SPIT HER|Protect|Keep the cat/.test(t); if (warn) glow('#ff7ad9', 8); else glow('#9ef', 6); ctx.fillText(t, W / 2, H * .55 + i * 26); }); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, H * .55 + l.length * 26 + 24); }
-  else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText('GAME OVER', W / 2, H * .4); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText('SCORE ' + score, W / 2, H * .5); ctx.fillText(touchMode ? 'TAP TO PLAY AGAIN' : 'CLICK OR PRESS ENTER TO PLAY AGAIN', W / 2, H * .58); }
-  else if (state === 'pause') { glow('#fff', 14); ctx.font = '700 48px "Courier New", monospace'; ctx.fillText('PAUSED', W / 2, H / 2); ctx.font = '18px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO RESUME' : 'PRESS P OR CLICK TO RESUME', W / 2, H / 2 + 36); }
-  else if (banner > 0) { ctx.globalAlpha = clamp(banner, 0, 1); glow('#ffe066', 18); ctx.font = '700 40px "Courier New", monospace'; ctx.fillText('WAVE ' + wave, W / 2, H / 2 - 60); ctx.font = '700 ' + Math.min(22, Math.floor(W / 20)) + 'px "Courier New", monospace'; glow('#b6ff5a', 10); ctx.fillText(theme.name, W / 2, H / 2 - 28); ctx.globalAlpha = 1; }
+  if (state === 'title') drawTitle();
+  else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText(t('over'), W / 2, H * .4); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(t('score') + score, W / 2, H * .5); ctx.fillText(touchMode ? t('tap_again') : t('click_again'), W / 2, H * .58); }
+  else if (state === 'prize') drawPrize();
+  else if (state === 'pause') { glow('#fff', 14); ctx.font = '700 48px "Courier New", monospace'; ctx.fillText(t('paused'), W / 2, H / 2); ctx.font = '18px "Courier New", monospace'; ctx.fillText(touchMode ? t('tap_resume') : t('click_resume'), W / 2, H / 2 + 36); }
+  else if (banner > 0) { ctx.globalAlpha = clamp(banner, 0, 1); glow('#ffe066', 18); ctx.font = '700 40px "Courier New", monospace'; ctx.fillText(t('wave') + wave, W / 2, H / 2 - 60); ctx.font = '700 ' + Math.min(22, Math.floor(W / 20)) + 'px "Courier New", monospace'; glow('#b6ff5a', 10); ctx.fillText(TXT[LANG].themes[THEMES.indexOf(theme)] || theme.name, W / 2, H / 2 - 28); ctx.globalAlpha = 1; }
   ctx.shadowBlur = 0;
 }
+let prizeShown = false, prizeCode = '';
+function checkPrize() {
+  const P = PRIZE[LANG]; if (!P || prizeShown || wave < P.wave) return; prizeShown = true; state = 'prize';
+  prizeCode = 'PREMIO-' + String(score).padStart(5, '0') + '-' + new Date().toLocaleDateString('es').replace(/\//g, ''); try { localStorage.setItem('spore-prize-' + LANG, prizeCode); } catch (e) {}
+  frogSay('frog_prize', true, 300); sfx.life(); for (let i = 0; i < 6; i++) setTimeout(() => boom(rnd(60, W - 60), rnd(OY + 40, H * .6), 24, ['#ffe066', '#ff7ad9', '#5ff0ff', '#b6ff5a'][i % 4], 240), i * 220);
+}
+function drawPrize() {
+  const P = PRIZE[LANG]; if (!P) return; ctx.fillStyle = 'rgba(4,2,16,.82)'; ctx.fillRect(0, 0, W, H); ctx.textAlign = 'center'; const fs = Math.min(54, Math.floor(W / 9));
+  glow('#ffe066', 24); ctx.font = '700 ' + fs + 'px "Courier New", monospace'; ctx.fillText('★ ' + P.title + ' ★', W / 2, H * .22);
+  ctx.font = '700 ' + Math.min(22, Math.floor(W / 20)) + 'px "Courier New", monospace'; glow('#ff7ad9', 10); ctx.fillStyle = '#ff7ad9'; P.lines.forEach((tx, i) => ctx.fillText(tx, W / 2, H * .36 + i * Math.min(34, H / 13)));
+  glow('#ffffff', 6); ctx.fillStyle = '#ffffff'; ctx.font = '700 ' + Math.min(26, Math.floor(W / 17)) + 'px "Courier New", monospace'; ctx.fillText(prizeCode, W / 2, H * .66);
+  glow('#9ef', 6); ctx.fillStyle = '#9ef'; ctx.font = Math.min(16, Math.floor(W / 28)) + 'px "Courier New", monospace'; ctx.fillText(P.tap, W / 2, H * .8); ctx.shadowBlur = 0;
+}
+let titleBtns = [];
+function drawTitle() {
+  titleBtns = []; const fs = Math.min(72, Math.floor(W / 7.4)); glow('#b6ff5a', 24); ctx.font = '700 ' + fs + 'px "Courier New", monospace'; ctx.fillText('SPORE SIEGE', W / 2, H * .24);
+  glow('#fff', 10); ctx.font = '700 ' + Math.min(22, Math.floor(W / 22)) + 'px "Courier New", monospace'; ctx.fillText(touchMode ? t('tap_start') : t('click_start'), W / 2, H * .33);
+  // difficulty buttons, then the language switch
+  const bw = Math.min(150, (W - 40) / 3 - 8), bh = 34, y0 = H * .40; ctx.font = '700 ' + Math.min(16, Math.floor(W / 30)) + 'px "Courier New", monospace';
+  ['easy', 'normal', 'hard'].forEach((k, i) => { const x = W / 2 + (i - 1) * (bw + 8) - bw / 2, on = diff === k; titleBtns.push({ x, y: y0, w: bw, h: bh, act: () => { diff = k; D = DIFFS[k]; try { localStorage.setItem('spore-diff', k); } catch (e) {} sfx.mush(); } });
+    glow(on ? '#ffe066' : '#5a6a95', on ? 12 : 0); ctx.lineWidth = on ? 3 : 1.5; ctx.strokeRect(x, y0, bw, bh); if (on) { ctx.globalAlpha = .2; ctx.fillRect(x, y0, bw, bh); ctx.globalAlpha = 1; } ctx.shadowBlur = 0; ctx.fillStyle = on ? '#ffe066' : '#8fa0cc'; ctx.fillText(t(k), x + bw / 2, y0 + bh / 2 + 6); });
+  const lw = Math.min(110, (W - 40) / 2 - 8), ly = y0 + bh + 12;
+  [['en', 'ENGLISH'], ['es', 'ESPAÑOL']].forEach(([k, label], i) => { const x = W / 2 + (i - .5) * (lw + 8) - (i === 0 ? lw : 0) + (i === 0 ? 0 : 0); const bx = i === 0 ? W / 2 - lw - 4 : W / 2 + 4, on = LANG === k;
+    titleBtns.push({ x: bx, y: ly, w: lw, h: 28, act: () => { if (k !== LANG) location.search = '?lang=' + k; } }); glow(on ? '#7dff6a' : '#5a6a95', on ? 10 : 0); ctx.lineWidth = on ? 2.5 : 1.2; ctx.strokeRect(bx, ly, lw, 28); ctx.shadowBlur = 0; ctx.fillStyle = on ? '#7dff6a' : '#8fa0cc'; ctx.font = '700 ' + Math.min(13, Math.floor(W / 36)) + 'px "Courier New", monospace'; ctx.fillText(label, bx + lw / 2, ly + 19); });
+  // instructions
+  ctx.font = Math.min(15, Math.floor(W / 31)) + 'px "Courier New", monospace'; const l = PORTRAIT ? t('l_portrait') : touchMode ? t('l_touch') : t('l_desk'), step = Math.min(24, Math.floor(H / 22)), y1 = ly + 28 + step * 1.3;
+  l.forEach((tx, i) => { const warn = /LADY|lady|SPIT HER|Protect|Keep the cat|DAMA|dama|ESCUPAS|Protégela|Aleja a la oruga/.test(tx); if (warn) glow('#ff7ad9', 8); else glow('#9ef', 6); ctx.fillStyle = warn ? '#ff7ad9' : '#9ef'; ctx.fillText(tx, W / 2, y1 + i * step); });
+  let won = false; try { won = !!localStorage.getItem('spore-prize-' + LANG); } catch (e) {} if (won && PRIZE[LANG]) { glow('#ffe066', 10); ctx.fillStyle = '#ffe066'; ctx.fillText('★ ' + t('prizewon') + ' ★', W / 2, y1 + l.length * step + step * .6); }
+}
+function titleTap(x, y) { for (const b of titleBtns) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { b.act(); return true; } return false; }
 function hud() {
   ctx.shadowBlur = 0; ctx.font = '700 20px "Courier New", monospace'; ctx.textAlign = 'left'; glow('#5ff0ff', 6); ctx.fillText(String(score).padStart(6, '0'), 16, 30);
-  ctx.textAlign = 'center'; ctx.fillStyle = '#ffe066'; ctx.shadowBlur = 6; ctx.shadowColor = '#ffe066'; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, 30);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#ffe066'; ctx.shadowBlur = 6; ctx.shadowColor = '#ffe066'; ctx.fillText(t('hi') + String(hi).padStart(6, '0'), W / 2, 30);
   ctx.textAlign = 'right'; glow('#7dff6a', 6); for (let i = 0; i < Math.min(lives, 8); i++) { const x = W - 24 - i * 32; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, 22, 10, 7, 0, 0, TAU); ctx.moveTo(x - 4 + 4, 14); ctx.arc(x - 5, 13, 3.5, 0, TAU); ctx.moveTo(x + 8.5, 13); ctx.arc(x + 5, 13, 3.5, 0, TAU); ctx.stroke(); }
-  ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.font = '12px "Courier New", monospace'; ctx.fillStyle = '#5a6a95'; ctx.fillText('WAVE ' + wave + '   AUTO-SPIT ' + (auto ? 'ON' : 'OFF') + (touchMode ? '' : '   hold click / Shift to spit  [F] auto  [P] pause  [M] mute'), 16, H - 8);
+  ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.font = '12px "Courier New", monospace'; ctx.fillStyle = '#5a6a95'; ctx.fillText(t('wave') + wave + '   ' + t('autospit') + (auto ? t('on') : t('off')) + (touchMode ? '' : t('keys')), 16, H - 8);
 }
 
 // ---------- input
 const xy = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
-function begin() { audio(); if (state === 'title' || state === 'over') { sfx.coin(); newGame(); } else if (state === 'pause') state = 'play'; }
+function begin() { audio(); if (state === 'title' || state === 'over') { sfx.coin(); newGame(); } else if (state === 'pause' || state === 'prize') state = 'play'; }
 cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' && document.pointerLockElement === cv) { const k = W / cv.getBoundingClientRect().width * 1.25; mouse.rx += e.movementX * k; mouse.ry += e.movementY * k; return; } const [x, y] = xy(e); if (e.pointerType === 'touch') { if (e.pointerId === touch.id) { touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; } });
-cv.addEventListener('pointerdown', e => { e.preventDefault(); window.focus(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} const [x, y] = xy(e);
+cv.addEventListener('pointerdown', e => { e.preventDefault(); window.focus(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} const [x, y] = xy(e); if (state === 'title' && titleTap(x, y)) return;
   if (e.pointerType === 'touch') { touchMode = true; if (touch.id === null) { touch.id = e.pointerId; touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; mouse.down = true; try { if (cv.requestPointerLock && !document.pointerLockElement) { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } } catch (err) {} }
   begin(); });
 const up = e => { if (e.pointerType === 'touch') { if (e.pointerId === touch.id) touch.id = null;  } else mouse.down = false; };
@@ -421,7 +468,7 @@ const GAME = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'
 addEventListener('keydown', e => {
   if (GAME.has(e.code) || e.key === 'Alt' || e.key === 'Meta') e.preventDefault(); if (e.key === 'Meta') { for (const k in keys) keys[k] = false; return; }
   if (e.key === 'Shift' || e.key === 'Alt' || e.key === 'Control') { if (e.key === 'Shift') keys[e.code] = true; return; }
-  if (!keys[e.code]) { audio(); if (e.code === 'Enter' || e.code === 'Space') begin(); if (e.code === 'KeyP' && (state === 'play' || state === 'pause')) state = state === 'play' ? 'pause' : 'play'; if (e.code === 'KeyM') { muted = !muted; if (muted) stopMusic(); else playMusic(state === 'play' ? musicFor() : 'over'); } if (e.code === 'KeyF') auto = !auto; }
+  if (!keys[e.code]) { audio(); if (state === 'title') { const dk = { Digit1: 'easy', Digit2: 'normal', Digit3: 'hard' }[e.code]; if (dk) { diff = dk; D = DIFFS[dk]; try { localStorage.setItem('spore-diff', dk); } catch (x) {} } } if (e.code === 'Enter' || e.code === 'Space') begin(); if (e.code === 'KeyP' && (state === 'play' || state === 'pause')) state = state === 'play' ? 'pause' : 'play'; if (e.code === 'KeyM') { muted = !muted; if (muted) stopMusic(); else playMusic(state === 'play' ? musicFor() : 'over'); } if (e.code === 'KeyF') auto = !auto; }
   keys[e.code] = true; if (e.code.startsWith('Arrow') || /^Key[WASD]$/.test(e.code)) mouse.in = false;
 });
 addEventListener('keyup', e => { if (e.key === 'Alt' || e.key === 'Meta') { for (const k in keys) keys[k] = false; } keys[e.code] = false; });
