@@ -39,7 +39,6 @@ try { hi = +localStorage.getItem('spore-hi') || 0; } catch (e) {}
 const mush = Array.from({ length: ROWS }, () => new Array(COLS).fill(0)), pois = Array.from({ length: ROWS }, () => new Array(COLS).fill(false));
 let chompN = 0, croakT = 6, dragons = [], dragonT = 12, butter = null, worms = [], bolts = [], parts = [], texts = [], queue = [], spider = null, flea = null, scorp = null, spiderT = 9, fleaT = 14, scorpT = 22, heal = 0, spiderBeat = 0;
 const ship = { x: W / 2, y: H - 60, alive: true, inv: 0, cool: 0, respawn: 0, mouth: 0 }; // the player is a frog
-let fireId = null; const SPIT = { x: W - 66, y: H - 66, r: 50 }; // on a phone the right thumb holds this button
 const mouse = { x: W / 2, y: H - 60, in: false, down: false, rx: 0, ry: 0 }, keys = {}, touch = { id: null, x: 0, y: 0 };
 let touchMode = matchMedia('(pointer: coarse)').matches;
 
@@ -202,7 +201,7 @@ function update(dt) {
     if (document.pointerLockElement === cv) { mdx = mouse.rx; mdy = mouse.ry; } else if (mouse.in && touch.id === null && !kx && !ky) { mdx = mouse.x - ship.x; mdy = mouse.y - ship.y; }
     mouse.rx = mouse.ry = 0;
     if (mdx || mdy) { const n = Math.ceil(Math.max(Math.abs(mdx), Math.abs(mdy)) / 6); for (let i = 0; i < n; i++) { move(mdx / n, 0); move(0, mdy / n); } }
-    ship.cool -= dt; if (ship.mouth > 0) ship.mouth -= dt; if (ship.cool <= 0 && (auto || mouse.down || keys.Space || keys.ShiftLeft || keys.ShiftRight || fireId !== null) && bolts.length < 4) { bolts.push({ x: ship.x, y: ship.y - 18, w: rnd(0, TAU) }); ship.cool = .13; ship.mouth = .12; sfx.shoot(); }
+    ship.cool -= dt; if (ship.mouth > 0) ship.mouth -= dt; if (ship.cool <= 0 && (auto || mouse.down || keys.Space || keys.ShiftLeft || keys.ShiftRight || touch.id !== null) && bolts.length < 4) { bolts.push({ x: ship.x, y: ship.y - 18, w: rnd(0, TAU) }); ship.cool = .13; ship.mouth = .12; sfx.shoot(); }
   } else if (ship.respawn > 0) {
     ship.respawn -= dt; if (ship.respawn <= 0) { if (lives <= 0) { state = 'over'; playMusic('over'); frogSay('frog_over', true, 900); if (score >= hi) try { localStorage.setItem('spore-hi', String(hi)); } catch (e) {} return; }
       ship.alive = true; ship.inv = 2.5; ship.x = W / 2; ship.y = H - 60; spider = flea = butter = null; dragons = []; heal = 1; startWave(true); } }
@@ -293,18 +292,14 @@ function draw() {
   for (const p of parts) { glow(p.col, 6); ctx.globalAlpha = clamp(p.life * 2, 0, 1); ctx.fillRect(p.x, p.y, 3, 3); ctx.globalAlpha = 1; }
   ctx.restore(); ctx.shadowBlur = 0; ctx.textAlign = 'center';
   ctx.font = '700 16px "Courier New", monospace'; for (const t of texts) { ctx.globalAlpha = clamp(t.t * 2, 0, 1); glow('#ffe066', 8); ctx.fillText(t.s, t.x, t.y); ctx.globalAlpha = 1; }
-  hud(); drawSpit();
+  hud();
   if (state === 'title') { glow('#b6ff5a', 24); ctx.font = '700 ' + Math.min(72, Math.floor(W / 7.4)) + 'px "Courier New", monospace'; ctx.fillText('SPORE SIEGE', W / 2, H * .33); glow('#fff', 10); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO START' : 'CLICK OR PRESS ENTER TO START', W / 2, H * .46);
-    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Drag a finger to move the frog.', 'Hold the SPIT button to spit.', 'Hit the glowing crawler.', 'Do not let it reach you.'] : touchMode ? ['Drag a finger to move the frog. Hold SPIT to spit.', 'Hit the glowing crawler. Do not let it reach you.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to move the frog.', 'Hold the mouse button to spit. Your mouse is captured, Esc lets go.', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.'];
+    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Touch and drag to move the frog.', 'He spits while your finger is down.', 'Hit the glowing crawler.', 'Do not let it reach you.'] : touchMode ? ['Touch and drag to move the frog. He spits while your finger is down.', 'Hit the glowing crawler. Do not let it reach you.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to move the frog.', 'Hold the mouse button to spit. Your mouse is captured, Esc lets go.', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.'];
     l.forEach((t, i) => ctx.fillText(t, W / 2, H * .55 + i * 26)); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, H * .55 + l.length * 26 + 24); }
   else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText('GAME OVER', W / 2, H * .4); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText('SCORE ' + score, W / 2, H * .5); ctx.fillText(touchMode ? 'TAP TO PLAY AGAIN' : 'CLICK OR PRESS ENTER TO PLAY AGAIN', W / 2, H * .58); }
   else if (state === 'pause') { glow('#fff', 14); ctx.font = '700 48px "Courier New", monospace'; ctx.fillText('PAUSED', W / 2, H / 2); ctx.font = '18px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO RESUME' : 'PRESS P OR CLICK TO RESUME', W / 2, H / 2 + 36); }
   else if (banner > 0) { ctx.globalAlpha = clamp(banner, 0, 1); glow('#ffe066', 18); ctx.font = '700 40px "Courier New", monospace'; ctx.fillText('WAVE ' + wave, W / 2, H / 2 - 60); ctx.font = '700 ' + Math.min(22, Math.floor(W / 20)) + 'px "Courier New", monospace'; glow('#b6ff5a', 10); ctx.fillText(theme.name, W / 2, H / 2 - 28); ctx.globalAlpha = 1; }
   ctx.shadowBlur = 0;
-}
-function drawSpit() {
-  if (!touchMode || (state !== 'play' && state !== 'pause')) return; const on = fireId !== null; ctx.save(); glow('#b6ff5a', on ? 26 : 12); ctx.lineWidth = 4; ctx.globalAlpha = on ? 1 : .8;
-  ctx.beginPath(); ctx.arc(SPIT.x, SPIT.y, SPIT.r, 0, TAU); if (on) { ctx.globalAlpha = .35; ctx.fill(); ctx.globalAlpha = 1; } ctx.stroke(); ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.fillStyle = '#b6ff5a'; ctx.font = '700 20px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.fillText('SPIT', SPIT.x, SPIT.y + 7); ctx.restore();
 }
 function hud() {
   ctx.shadowBlur = 0; ctx.font = '700 20px "Courier New", monospace'; ctx.textAlign = 'left'; glow('#5ff0ff', 6); ctx.fillText(String(score).padStart(6, '0'), 16, 30);
@@ -318,9 +313,9 @@ const xy = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.l
 function begin() { audio(); if (state === 'title' || state === 'over') { sfx.coin(); newGame(); } else if (state === 'pause') state = 'play'; }
 cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' && document.pointerLockElement === cv) { const k = W / cv.getBoundingClientRect().width * 1.25; mouse.rx += e.movementX * k; mouse.ry += e.movementY * k; return; } const [x, y] = xy(e); if (e.pointerType === 'touch') { if (e.pointerId === touch.id) { touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; } });
 cv.addEventListener('pointerdown', e => { e.preventDefault(); window.focus(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} const [x, y] = xy(e);
-  if (e.pointerType === 'touch') { touchMode = true; if (Math.hypot(x - SPIT.x, y - SPIT.y) < SPIT.r + 14) { fireId = e.pointerId; } else if (touch.id === null) { touch.id = e.pointerId; touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; mouse.down = true; try { if (cv.requestPointerLock && !document.pointerLockElement) { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } } catch (err) {} }
+  if (e.pointerType === 'touch') { touchMode = true; if (touch.id === null) { touch.id = e.pointerId; touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; mouse.down = true; try { if (cv.requestPointerLock && !document.pointerLockElement) { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } } catch (err) {} }
   begin(); });
-const up = e => { if (e.pointerType === 'touch') { if (e.pointerId === touch.id) touch.id = null; if (e.pointerId === fireId) fireId = null; } else mouse.down = false; };
+const up = e => { if (e.pointerType === 'touch') { if (e.pointerId === touch.id) touch.id = null;  } else mouse.down = false; };
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up); cv.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch' && !mouse.down) mouse.in = false; }); cv.addEventListener('contextmenu', e => e.preventDefault());
 const GAME = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Enter', 'KeyP', 'KeyM', 'KeyF', 'KeyW', 'KeyA', 'KeyS', 'KeyD']);
 addEventListener('keydown', e => {
@@ -331,7 +326,7 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { if (e.key === 'Alt' || e.key === 'Meta') { for (const k in keys) keys[k] = false; } keys[e.code] = false; });
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && state === 'play') { for (const k in keys) keys[k] = false; mouse.down = false; state = 'pause'; } });
-function autoPause() { for (const k in keys) keys[k] = false; mouse.down = false; fireId = null; if (state === 'play') state = 'pause'; }
+function autoPause() { for (const k in keys) keys[k] = false; mouse.down = false; if (state === 'play') state = 'pause'; }
 addEventListener('blur', autoPause); document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
 document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
 document.addEventListener('dblclick', e => e.preventDefault());
