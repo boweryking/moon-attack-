@@ -37,7 +37,7 @@ const cx = c => c * CELL + CELL / 2, cyy = r => OY + r * CELL + CELL / 2;
 let state = 'title', score = 0, hi = 0, lives = 3, wave = 1, nextLife = 12000, time = 0, shake = 0, muted = false, auto = false, banner = 0, tickT = 0, tickLen = .11;
 try { hi = +localStorage.getItem('spore-hi') || 0; } catch (e) {}
 const mush = Array.from({ length: ROWS }, () => new Array(COLS).fill(0)), pois = Array.from({ length: ROWS }, () => new Array(COLS).fill(false));
-let fdt = .016, lady = null, ladyT = 28, hexT = 0, ladyMsg = { text: '', t: 0 }, ladyEekT = 0, chompN = 0, croakT = 6, dragons = [], dragonT = 12, butter = null, worms = [], bolts = [], parts = [], texts = [], queue = [], spider = null, flea = null, scorp = null, spiderT = 9, fleaT = 14, scorpT = 22, heal = 0, spiderBeat = 0;
+let ladyTip = 0, fdt = .016, lady = null, ladyT = 28, hexT = 0, ladyMsg = { text: '', t: 0 }, ladyEekT = 0, chompN = 0, croakT = 6, dragons = [], dragonT = 12, butter = null, worms = [], bolts = [], parts = [], texts = [], queue = [], spider = null, flea = null, scorp = null, spiderT = 9, fleaT = 14, scorpT = 22, heal = 0, spiderBeat = 0;
 const ship = { x: W / 2, y: H - 60, alive: true, inv: 0, cool: 0, respawn: 0, mouth: 0 }; // the player is a frog
 const mouse = { x: W / 2, y: H - 60, in: false, down: false, rx: 0, ry: 0 }, keys = {}, touch = { id: null, x: 0, y: 0 };
 let touchMode = matchMedia('(pointer: coarse)').matches;
@@ -160,7 +160,8 @@ const segXY = s => { const k = clamp(tickT / tickLen, 0, 1); return [lerp(cx(s.p
 // The lady frog: she hops across the field, trash-talking. Get her across safely for a big bonus. Spit her and you are hexed; let the caterpillar eat her and you lose the bonus.
 function spawnLady() {
   const dir = Math.random() < .5 ? 1 : -1, low = worms.reduce((m, w) => Math.max(m, ...w.map(s => s.r)), 0), row = clamp(low + 2, 3, ZONE - 1);
-  lady = { x: dir > 0 ? -22 : W + 22, y: cyy(row), row, dir, hopT: 0, talkT: 4.5, taunt: 0, dead: 0 }; ladySay('lady_enter');
+  let seen = 0; try { seen = +localStorage.getItem('spore-lady') || 0; localStorage.setItem('spore-lady', String(seen + 1)); } catch (e) {}
+  lady = { x: dir > 0 ? -22 : W + 22, y: cyy(row), row, dir, hopT: 0, talkT: 4.5, taunt: 0, dead: 0, tag: seen < 4 }; ladyTip = seen < 4 ? 6 : 0; ladySay('lady_enter');
 }
 function killLady(by) {
   const l = lady; if (!l || l.dead) return; l.dead = .9; boom(l.x, l.y, 26, by === 'player' ? '#c58bff' : '#ff7ad9', 200);
@@ -168,7 +169,7 @@ function killLady(by) {
   else { texts.push({ x: l.x, y: l.y - 20, t: 1.4, s: 'LOST HER' }); ladySay('lady_dead'); sfx.pop(); }
 }
 function updateLady(dt) {
-  if (ladyMsg.t > 0) ladyMsg.t -= dt; if (hexT > 0) hexT -= dt; ladyEekT -= dt;
+  if (ladyMsg.t > 0) ladyMsg.t -= dt; if (ladyTip > 0) ladyTip -= dt; if (hexT > 0) hexT -= dt; ladyEekT -= dt;
   if (!lady) { ladyT -= dt; if (ladyT <= 0 && ship.alive && worms.length && !butter) { spawnLady(); ladyT = rnd(40, 70); } return; }
   const l = lady; if (l.dead > 0) { l.dead -= dt; if (l.dead <= 0) lady = null; return; }
   const HOP = .5, CYC = .72, ph = l.hopT % CYC, moving = ph < HOP; l.hopT += dt;
@@ -339,6 +340,11 @@ function drawLady() {
   glow('#ffe066', 10); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y - 17); ctx.lineTo(x - 8, y - 24); ctx.lineTo(x - 8, y - 14); ctx.closePath(); ctx.moveTo(x, y - 17); ctx.lineTo(x + 8, y - 24); ctx.lineTo(x + 8, y - 14); ctx.closePath(); ctx.stroke(); // bow
   ctx.restore();
 }
+function drawLadyTip() { // the first few times she shows up, say plainly what to do
+  if (lady && lady.tag && !lady.dead) { ctx.save(); glow('#ff7ad9', 8); ctx.fillStyle = '#ff7ad9'; ctx.font = '700 13px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.fillText("DON'T SPIT!", clamp(lady.x, 50, W - 50), lady.y - 34); ctx.restore(); }
+  if (ladyTip <= 0) return; ctx.save(); ctx.globalAlpha = clamp(ladyTip, 0, 1) * (.75 + .25 * Math.sin(time * 8)); ctx.textAlign = 'center'; glow('#ff7ad9', 14); ctx.fillStyle = '#ff7ad9';
+  const fs = Math.min(26, Math.floor(W / 20)); ctx.font = '700 ' + fs + 'px "Courier New", monospace'; ctx.fillText('LADY FROG!', W / 2, H * .38); ctx.font = '700 ' + Math.floor(fs * .62) + 'px "Courier New", monospace'; ctx.fillText("DON'T SPIT HER.", W / 2, H * .38 + fs * 1.1); ctx.fillText('KEEP THE CATERPILLAR AWAY!', W / 2, H * .38 + fs * 1.9); ctx.restore();
+}
 function drawLadyMsg() {
   if (ladyMsg.t <= 0 || !ladyMsg.text) return; ctx.save(); ctx.globalAlpha = clamp(ladyMsg.t * 2, 0, 1); ctx.font = '700 ' + Math.min(15, Math.floor(W / 30)) + 'px "Courier New", monospace'; ctx.textAlign = 'center';
   const words = ladyMsg.text.split(' '), lines = []; let line = ''; for (const w of words) { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > W - 50 && line) { lines.push(line); line = w; } else line = t; } lines.push(line);
@@ -386,10 +392,10 @@ function draw() {
   ctx.restore(); ctx.shadowBlur = 0; ctx.textAlign = 'center';
   ctx.font = '700 16px "Courier New", monospace'; for (const t of texts) { ctx.globalAlpha = clamp(t.t * 2, 0, 1); glow('#ffe066', 8); ctx.fillText(t.s, t.x, t.y); ctx.globalAlpha = 1; }
   if (hexT > 0) { ctx.fillStyle = 'rgba(140,60,220,' + (.16 + .06 * Math.sin(time * 14)) + ')'; ctx.fillRect(0, 0, W, H); glow('#c58bff', 12); ctx.font = '700 22px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.fillText('HEXED ' + Math.ceil(hexT), clamp(ship.x, 70, W - 70), ship.y - 34); ctx.shadowBlur = 0; }
-  drawLadyMsg(); hud();
+  drawLadyTip(); drawLadyMsg(); hud(); ctx.textAlign = 'center';
   if (state === 'title') { glow('#b6ff5a', 24); ctx.font = '700 ' + Math.min(72, Math.floor(W / 7.4)) + 'px "Courier New", monospace'; ctx.fillText('SPORE SIEGE', W / 2, H * .33); glow('#fff', 10); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO START' : 'CLICK OR PRESS ENTER TO START', W / 2, H * .46);
-    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Touch and drag to move the frog.', 'He spits while your finger is down.', 'Hit the glowing crawler.', 'Do not let it reach you.'] : touchMode ? ['Touch and drag to move the frog. He spits while your finger is down.', 'Hit the glowing crawler. Do not let it reach you.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to move the frog.', 'Hold the mouse button to spit. Your mouse is captured, Esc lets go.', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.'];
-    l.forEach((t, i) => ctx.fillText(t, W / 2, H * .55 + i * 26)); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, H * .55 + l.length * 26 + 24); }
+    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Touch and drag to move the frog.', 'He spits while your finger is down.', 'Hit the glowing crawler.', 'Do not let it reach you.', 'A pink lady frog will hop by.', 'DO NOT SPIT HER. Protect her!'] : touchMode ? ['Touch and drag to move the frog. He spits while your finger is down.', 'Hit the glowing crawler. Do not let it reach you.', 'A pink lady frog hops by now and then.', 'DO NOT SPIT HER. Keep the caterpillar off her!'] : ['Move the mouse or trackpad to move the frog.', 'Hold the mouse button to spit. Your mouse is captured, Esc lets go.', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.', 'A pink lady frog hops by now and then. DO NOT SPIT HER.', 'Keep the caterpillar off her and she pays you well.'];
+    l.forEach((t, i) => { const warn = /LADY|lady|SPIT HER|Protect|Keep the cat/.test(t); if (warn) glow('#ff7ad9', 8); else glow('#9ef', 6); ctx.fillText(t, W / 2, H * .55 + i * 26); }); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, H * .55 + l.length * 26 + 24); }
   else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText('GAME OVER', W / 2, H * .4); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText('SCORE ' + score, W / 2, H * .5); ctx.fillText(touchMode ? 'TAP TO PLAY AGAIN' : 'CLICK OR PRESS ENTER TO PLAY AGAIN', W / 2, H * .58); }
   else if (state === 'pause') { glow('#fff', 14); ctx.font = '700 48px "Courier New", monospace'; ctx.fillText('PAUSED', W / 2, H / 2); ctx.font = '18px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO RESUME' : 'PRESS P OR CLICK TO RESUME', W / 2, H / 2 + 36); }
   else if (banner > 0) { ctx.globalAlpha = clamp(banner, 0, 1); glow('#ffe066', 18); ctx.font = '700 40px "Courier New", monospace'; ctx.fillText('WAVE ' + wave, W / 2, H / 2 - 60); ctx.font = '700 ' + Math.min(22, Math.floor(W / 20)) + 'px "Courier New", monospace'; glow('#b6ff5a', 10); ctx.fillText(theme.name, W / 2, H / 2 - 28); ctx.globalAlpha = 1; }
