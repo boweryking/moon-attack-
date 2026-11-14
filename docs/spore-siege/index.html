@@ -37,14 +37,14 @@ const cx = c => c * CELL + CELL / 2, cyy = r => OY + r * CELL + CELL / 2;
 let state = 'title', score = 0, hi = 0, lives = 3, wave = 1, nextLife = 12000, time = 0, shake = 0, muted = false, auto = true, banner = 0, tickT = 0, tickLen = .11;
 try { hi = +localStorage.getItem('spore-hi') || 0; } catch (e) {}
 const mush = Array.from({ length: ROWS }, () => new Array(COLS).fill(0)), pois = Array.from({ length: ROWS }, () => new Array(COLS).fill(false));
-let dragons = [], dragonT = 12, butter = null, worms = [], bolts = [], parts = [], texts = [], queue = [], spider = null, flea = null, scorp = null, spiderT = 9, fleaT = 14, scorpT = 22, heal = 0, spiderBeat = 0;
+let chompN = 0, croakT = 6, dragons = [], dragonT = 12, butter = null, worms = [], bolts = [], parts = [], texts = [], queue = [], spider = null, flea = null, scorp = null, spiderT = 9, fleaT = 14, scorpT = 22, heal = 0, spiderBeat = 0;
 const ship = { x: W / 2, y: H - 60, alive: true, inv: 0, cool: 0, respawn: 0, mouth: 0 }; // the player is a frog
 const mouse = { x: W / 2, y: H - 60, in: false, down: false, rx: 0, ry: 0 }, keys = {}, touch = { id: null, x: 0, y: 0 };
 let touchMode = matchMedia('(pointer: coarse)').matches;
 
 // ---------- audio: tiny synth sounds, plus optional music files dropped into audio/music/ (play.mp3, gameover.mp3)
 let AC = null, master = null;
-function audio() { if (AC) { if (AC.state === 'suspended') AC.resume(); return; } try { AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = .6; master.connect(AC.destination); loadMusic(); } catch (e) {} }
+function audio() { if (AC) { if (AC.state === 'suspended') AC.resume(); return; } try { AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = .6; master.connect(AC.destination); loadMusic(); loadClips(); } catch (e) {} }
 function tone(f, d, type = 'square', v = .1, to = null, delay = 0) {
   if (!AC || muted) return; const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (to) o.frequency.exponentialRampToValueAtTime(to, t + d);
   g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g); g.connect(master); o.start(t); o.stop(t + d + .02);
@@ -57,12 +57,25 @@ const sfx = {
   dragon: () => tone(1500, .35, 'sawtooth', .04, 700), dragonHit: () => { tone(900, .2, 'sawtooth', .12, 200); noise(.12, .1); }, magic: () => [659, 880, 1175, 1568, 1976].forEach((f, i) => tone(f, .5, 'sine', .07, null, i * .12)), free: () => [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, .25, 'triangle', .08, null, i * .07)),
   wave: () => { [220, 330, 440].forEach((f, i) => tone(f, .16, 'triangle', .1, null, i * .09)); }, coin: () => { tone(660, .08, 'square', .08); tone(990, .16, 'square', .08, null, .08); },
 };
+// sound clips (audio/sfx/NAME.mp3): chomping, frog croaks, bugs. Anything missing falls back to the little synth sounds above.
+const CLIPS = ['chomp', 'croak', 'croak_happy', 'croak_sad', 'dragonfly', 'fly', 'spider', 'scorpion', 'splat', 'butterfly', 'levelup', 'spit', 'rustle'], cbuf = {};
+async function loadClips() { for (const k of CLIPS) { try { const r = await fetch('audio/sfx/' + k + '.mp3'); if (!r.ok) continue; cbuf[k] = await AC.decodeAudioData(await r.arrayBuffer()); } catch (e) {} } }
+function clip(name, vol = .6, rate = 1) {
+  if (!AC || muted || !cbuf[name]) return false; const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = cbuf[name]; s.playbackRate.value = rate; g.gain.value = vol; s.connect(g); g.connect(master); s.start(); return true;
+}
+{ // clip-backed versions of the sounds; the synth versions above stay as the fallback
+  const base = Object.assign({}, sfx);
+  sfx.shoot = () => clip('spit', .45, rnd(.9, 1.2)) || base.shoot(); sfx.pop = () => { clip('splat', .5, rnd(.95, 1.25)) || base.pop(); }; sfx.head = () => { clip('splat', .75, .72) || base.head(); };
+  sfx.die = () => { base.die(); clip('croak_sad', .8); }; sfx.life = () => { base.life(); clip('croak_happy', .8); }; sfx.wave = () => clip('levelup', .7) || base.wave();
+  sfx.magic = () => clip('butterfly', .8) || base.magic(); sfx.dragon = () => clip('dragonfly', .5) || base.dragon();
+  sfx.chomp = () => clip('chomp', .4, rnd(.88, 1.18)); sfx.croak = () => clip('croak', .6, rnd(.85, 1.1)); sfx.fly = () => clip('fly', .45); sfx.spiderIn = () => clip('spider', .5); sfx.scorpIn = () => clip('scorpion', .5); sfx.rustle = () => clip('rustle', .5);
+}
 // music: files if present, otherwise a pulse that speeds up as the crawler nears you
 const MUSIC = { play: 'audio/music/play.mp3', over: 'audio/music/gameover.mp3' }, buf = {}; let cur = null, curName = '', pulseT = 0, pulseI = 0;
 async function loadMusic() { for (const k in MUSIC) { try { const r = await fetch(MUSIC[k]); if (!r.ok) continue; buf[k] = await AC.decodeAudioData(await r.arrayBuffer()); if (curName === k) playMusic(k, true); } catch (e) {} } }
 function playMusic(name, force) {
   if (!AC || (curName === name && !force)) return; curName = name; if (cur) { try { cur.stop(); } catch (e) {} cur = null; }
-  if (buf[name] && !muted) { const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = buf[name]; s.loop = name !== 'over'; g.gain.value = .7; s.connect(g); g.connect(master); s.start(); cur = s; }
+  if (buf[name] && !muted) { const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = buf[name]; s.loop = name !== 'over'; g.gain.value = name === 'play' ? .42 : .7; s.connect(g); g.connect(master); s.start(); cur = s; }
 }
 function pulse(dt) { // synth heartbeat when there is no music file for the game: quicker as the crawler gets lower
   if (state !== 'play' || muted || !AC || buf.play) return; const low = worms.reduce((m, w) => Math.max(m, ...w.map(s => s.r)), 0), beat = lerp(.52, .17, clamp(low / ROWS, 0, 1)); pulseT -= dt; if (pulseT > 0) return; pulseT = beat;
@@ -70,18 +83,42 @@ function pulse(dt) { // synth heartbeat when there is no music file for the game
 }
 
 // ---------- field
+// Each wave plants a different garden. Plants never break: the caterpillar crawls around their leaves and you shoot it off them (spit passes through leaves).
+const THEMES = [
+  { name: 'MUSHROOM MEADOW', mush: 1, plants: 0, poison: 0, bg: ['#07041a', '#0b0620'] },
+  { name: 'LEAF GARDEN', mush: .45, plants: 2, poison: 0, bg: ['#031a0f', '#062812'] },
+  { name: 'SWAMP NIGHT', mush: .8, plants: 1, poison: .3, bg: ['#0a0420', '#18093a'] },
+  { name: 'THE ORCHARD', mush: .35, plants: 3, poison: .1, bg: ['#1a1204', '#2a1c08'] },
+];
+let theme = THEMES[0]; const plant = Array.from({ length: ROWS }, () => new Array(COLS).fill(0)); let plants = [];
+function placePlants(n) {
+  plants = []; for (let r = 0; r < ROWS; r++) plant[r].fill(0);
+  const cols = []; let tries = 0;
+  while (plants.length < n && tries++ < 60) {
+    const c = 2 + Math.floor(Math.random() * (COLS - 4)); if (cols.some(x => Math.abs(x - c) < (COLS < 20 ? 6 : 5))) continue; cols.push(c);
+    const rb = ZONE - 2, h = Math.min(rb - 2, 4 + Math.floor(Math.random() * 4)), rt = rb - h + 1, leaves = [];
+    for (let r = rb - 1, d = Math.random() < .5 ? 1 : -1; r >= rt + 1; r -= 2, d = -d) leaves.push({ row: r, dir: d });
+    const cells = []; for (let r = rt; r <= rb; r++) cells.push([r, c]); cells.push([rt - 1, c]);
+    for (const l of leaves) for (const k of [1, 2]) { const lc = c + l.dir * k; if (lc >= 0 && lc < COLS) cells.push([l.row, lc]); }
+    for (const [r, cc] of cells) { if (r >= 1) { plant[r][cc] = 1; mush[r][cc] = 0; } }
+    plants.push({ c, rt, rb, leaves, sway: Math.random() * 6 });
+  }
+}
 function seedMushrooms() {
+  theme = THEMES[(wave - 1) % THEMES.length];
   for (let r = 0; r < ROWS; r++) { mush[r].fill(0); pois[r].fill(false); }
-  let n = 0; const want = Math.round(36 * COLS * ZONE / (30 * 15)); while (n < want) { const r = 1 + Math.floor(Math.random() * (ZONE - 2)), c = Math.floor(Math.random() * COLS); if (!mush[r][c]) { mush[r][c] = 4; n++; } }
+  placePlants(theme.plants + Math.floor((wave - 1) / 4));
+  let n = 0; const want = Math.round(36 * COLS * ZONE / (30 * 15) * theme.mush);
+  while (n < want) { const r = 1 + Math.floor(Math.random() * (ZONE - 2)), c = Math.floor(Math.random() * COLS); if (!mush[r][c] && !plant[r][c]) { mush[r][c] = 4; pois[r][c] = Math.random() < theme.poison; n++; } }
 }
 function makeWorm(len, row, fromLeft, delay = 0) {
   const w = []; for (let i = 0; i < len; i++) w.push({ c: fromLeft ? -1 - i : COLS + i, r: row, pc: 0, pr: row, dir: fromLeft ? 1 : -1, vd: 1, dive: false });
   for (const s of w) { s.pc = s.c; } return w;
 }
-function startWave() {
+function startWave(quiet) {
   worms = []; queue = []; const len = Math.max(3, 13 - wave); worms.push(makeWorm(len, 0, true));
   for (let i = 0; i < Math.min(wave - 1, 8); i++) queue.push({ t: 3 + i * 3.5, left: Math.random() < .5 });
-  banner = 2.2; sfx.wave();
+  banner = 2.6; if (!quiet) { sfx.wave(); if (plants.length) setTimeout(sfx.rustle, 500); }
 }
 function newGame() { score = 0; lives = 3; wave = 1; nextLife = 12000; seedMushrooms(); bolts = []; parts = []; texts = []; spider = flea = scorp = butter = null; dragons = []; dragonT = 12; spiderT = 9; fleaT = 14; scorpT = 22; ship.alive = true; ship.inv = 2; ship.x = W / 2; ship.y = H - 60; startWave(); state = 'play'; playMusic('play'); }
 
@@ -93,8 +130,8 @@ function stepSeg(s) {
   s.pc = s.c; s.pr = s.r;
   if (s.c < 0 || s.c >= COLS) { s.c += s.dir; return; } // still coming in from off screen
   if (s.dive) { if (s.r < ROWS - 1) s.r++; else { s.dive = false; s.vd = -1; s.r = ROWS - 2; } return; }
-  const nc = s.c + s.dir, out = nc < 0 || nc >= COLS, hit = !out && mush[s.r][nc] > 0;
-  if (out || hit) { if (hit && pois[s.r][nc]) { s.dive = true; s.dir *= -1; if (s.r < ROWS - 1) s.r++; } else drop(s); } else s.c = nc;
+  const nc = s.c + s.dir, out = nc < 0 || nc >= COLS, hit = !out && (mush[s.r][nc] > 0 || plant[s.r][nc] > 0);
+  if (out || hit) { if (hit && mush[s.r][nc] > 0 && pois[s.r][nc]) { s.dive = true; s.dir *= -1; if (s.r < ROWS - 1) s.r++; } else drop(s); } else s.c = nc;
 }
 const segXY = s => { const k = clamp(tickT / tickLen, 0, 1); return [lerp(cx(s.pc), cx(s.c), k), lerp(cyy(s.pr), cyy(s.r), k)]; };
 
@@ -103,7 +140,7 @@ function boom(x, y, n, col, sp = 160) { for (let i = 0; i < n; i++) { const a = 
 
 function killSeg(wi, si) {
   const w = worms[wi], s = w[si], [x, y] = segXY(s), head = si === 0; boom(x, y, head ? 26 : 14, head ? '#ffd27a' : '#b6ff5a'); head ? sfx.head() : sfx.pop(); pts(head ? 100 : 10, x, y);
-  if (s.r >= 0 && s.r < ROWS && s.c >= 0 && s.c < COLS) { mush[s.r][s.c] = 4; pois[s.r][s.c] = false; }
+  if (s.r >= 0 && s.r < ROWS && s.c >= 0 && s.c < COLS && !plant[s.r][s.c]) { mush[s.r][s.c] = 4; pois[s.r][s.c] = false; }
   const a = w.slice(0, si), b = w.slice(si + 1); worms.splice(wi, 1); if (a.length) worms.push(a); if (b.length) worms.push(b);
   if (!worms.length && !queue.length) { butter = { x, y, t: 0, life: 4.5, seed: rnd(0, TAU) }; sfx.magic(); texts.push({ x: W / 2, y: Math.max(OY + 40, y - 40), t: 1.8, s: 'GHOST BUTTERFLY' }); boom(x, y, 30, '#bfe9ff', 120); }
 }
@@ -113,13 +150,13 @@ function killShip() {
 
 // ---------- enemies
 function enemies(dt) {
-  spiderT -= dt; if (!spider && spiderT <= 0 && ship.alive) { const L = Math.random() < .5; spider = { x: L ? -20 : W + 20, y: rnd(OY + ZONE * CELL + 20, H - 30), vx: (L ? 1 : -1) * (125 + wave * 8), vy: rnd(-1, 1) > 0 ? 105 : -105, t: 0 }; spiderT = rnd(10, 18); }
+  spiderT -= dt; if (!spider && spiderT <= 0 && ship.alive) { const L = Math.random() < .5; sfx.spiderIn(); spider = { x: L ? -20 : W + 20, y: rnd(OY + ZONE * CELL + 20, H - 30), vx: (L ? 1 : -1) * (125 + wave * 8), vy: rnd(-1, 1) > 0 ? 105 : -105, t: 0 }; spiderT = rnd(10, 18); }
   if (spider) { const s = spider; s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; if (s.y < OY + ZONE * CELL + 10) { s.y = OY + ZONE * CELL + 10; s.vy = Math.abs(s.vy); } if (s.y > H - 20) { s.y = H - 20; s.vy = -Math.abs(s.vy); } if (Math.random() < dt * .7) s.vy = -s.vy;
     const r = Math.floor((s.y - OY) / CELL), c = Math.floor(s.x / CELL); if (r >= 0 && r < ROWS && c >= 0 && c < COLS && mush[r][c] && Math.random() < dt * 5) mush[r][c] = 0;
     spiderBeat -= dt; if (spiderBeat <= 0 && !muted) { spiderBeat = .12; tone(260 + Math.sin(s.t * 14) * 90, .1, 'sawtooth', .03); }
     if (Math.hypot(ship.x - s.x, ship.y - s.y) < 22) killShip(); if (s.x < -60 || s.x > W + 60) spider = null; }
-  if (wave >= 2) { fleaT -= dt; if (!flea && fleaT <= 0) { flea = { x: cx(Math.floor(rnd(1, COLS - 1))), y: OY - 10, hp: wave >= 4 ? 2 : 1 }; fleaT = rnd(14, 22); }
-    if (flea) { const f = flea, pr = Math.floor((f.y - OY) / CELL); f.y += 330 * dt; const nr = Math.floor((f.y - OY) / CELL); if (nr !== pr && nr > 0 && nr < ZONE && Math.random() < .35 && !mush[nr][Math.floor(f.x / CELL)]) mush[nr][Math.floor(f.x / CELL)] = 4;
+  if (wave >= 2) { fleaT -= dt; if (!flea && fleaT <= 0) { sfx.fly(); flea = { x: cx(Math.floor(rnd(1, COLS - 1))), y: OY - 10, hp: wave >= 4 ? 2 : 1 }; fleaT = rnd(14, 22); }
+    if (flea) { const f = flea, pr = Math.floor((f.y - OY) / CELL); f.y += 330 * dt; const nr = Math.floor((f.y - OY) / CELL); if (nr !== pr && nr > 0 && nr < ZONE && Math.random() < .35 && !mush[nr][Math.floor(f.x / CELL)] && !plant[nr][Math.floor(f.x / CELL)]) mush[nr][Math.floor(f.x / CELL)] = 4;
       if (Math.hypot(ship.x - f.x, ship.y - f.y) < 22) killShip(); if (f.y > H + 20) flea = null; } }
   if (wave >= 2) { dragonT -= dt; if (dragons.length < (wave >= 5 ? 2 : 1) && dragonT <= 0 && ship.alive) { const L = Math.random() < .5; dragons.push({ x: L ? -40 : W + 40, y: OY + CELL * (2 + Math.random() * (ZONE - 5)), vx: (L ? 1 : -1) * (150 + wave * 8), vy: 0, t: 0, dart: rnd(.6, 1.4), pause: 0, dive: false }); dragonT = rnd(12, 20); sfx.dragon(); } }
   for (let i = dragons.length - 1; i >= 0; i--) {
@@ -133,7 +170,7 @@ function enemies(dt) {
     if (d.x < -80 || d.x > W + 80 || d.y > H + 40) dragons.splice(i, 1);
   }
   if (butter) { const b = butter; b.t += dt; b.y -= 42 * dt; b.x += Math.sin(b.t * 2 + b.seed) * 55 * dt; if (Math.random() < dt * 20) parts.push({ x: b.x + rnd(-10, 10), y: b.y + rnd(-6, 10), vx: rnd(-10, 10), vy: rnd(5, 30), life: rnd(.4, .9), col: '#bfe9ff' }); if (b.t > b.life || b.y < OY - 30) butter = null; }
-  if (wave >= 3) { scorpT -= dt; if (!scorp && scorpT <= 0) { const L = Math.random() < .5; scorp = { x: L ? -30 : W + 30, row: 2 + Math.floor(Math.random() * Math.max(2, ZONE - 4)), vx: (L ? 1 : -1) * 110 }; scorpT = rnd(20, 30); }
+  if (wave >= 3) { scorpT -= dt; if (!scorp && scorpT <= 0) { const L = Math.random() < .5; sfx.scorpIn(); scorp = { x: L ? -30 : W + 30, row: 2 + Math.floor(Math.random() * Math.max(2, ZONE - 4)), vx: (L ? 1 : -1) * 110 }; scorpT = rnd(20, 30); }
     if (scorp) { const s = scorp; s.x += s.vx * dt; const c = Math.floor(s.x / CELL); if (c >= 0 && c < COLS && mush[s.row][c]) pois[s.row][c] = true; if (s.x < -60 || s.x > W + 60) scorp = null; } }
 }
 
@@ -160,7 +197,7 @@ function update(dt) {
     ship.cool -= dt; if (ship.mouth > 0) ship.mouth -= dt; if (ship.cool <= 0 && (auto || mouse.down || keys.Space || keys.ShiftLeft || keys.ShiftRight || touch.id !== null) && bolts.length < 4) { bolts.push({ x: ship.x, y: ship.y - 18, w: rnd(0, TAU) }); ship.cool = .13; ship.mouth = .12; sfx.shoot(); }
   } else if (ship.respawn > 0) {
     ship.respawn -= dt; if (ship.respawn <= 0) { if (lives <= 0) { state = 'over'; playMusic('over'); if (score >= hi) try { localStorage.setItem('spore-hi', String(hi)); } catch (e) {} return; }
-      ship.alive = true; ship.inv = 2.5; ship.x = W / 2; ship.y = H - 60; spider = flea = butter = null; dragons = []; heal = 1; startWave(); } }
+      ship.alive = true; ship.inv = 2.5; ship.x = W / 2; ship.y = H - 60; spider = flea = butter = null; dragons = []; heal = 1; startWave(true); } }
   // mushroom healing after a death: damaged ones regrow one by one for a few points each
   if (heal > 0 && ship.alive) { heal -= dt; if (heal <= 0) { heal = .05; let done = true; for (let r = 0; r < ROWS && done; r++) for (let c = 0; c < COLS; c++) if (mush[r][c] > 0 && (mush[r][c] < 4 || pois[r][c])) { mush[r][c] = 4; pois[r][c] = false; pts(5, 0, 0); sfx.mush(); done = false; break; } if (done) heal = 0; } }
   // bolts
@@ -176,11 +213,12 @@ function update(dt) {
     if (gone) bolts.splice(i, 1);
   }
   // crawler
-  tickLen = Math.max(.05, .115 - wave * .005) * (PORTRAIT ? 1.2 : PHONE ? 1.12 : 1); tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); }
+  tickLen = Math.max(.05, .115 - wave * .005) * (PORTRAIT ? 1.2 : PHONE ? 1.12 : 1); tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); if (worms.length && ++chompN % 3 === 0) sfx.chomp(); }
+  croakT -= dt; if (croakT <= 0 && ship.alive) { sfx.croak(); croakT = rnd(8, 15); }
   for (const q of queue) q.t -= dt; for (const q of queue.filter(q => q.t <= 0)) worms.push(makeWorm(1, 2 + Math.floor(Math.random() * 3), q.left)); queue = queue.filter(q => q.t > 0);
   if (ship.alive) for (const w of worms) for (const s of w) { const [x, y] = segXY(s); if (Math.hypot(x - ship.x, y - ship.y) < 24) killShip(); }
   enemies(dt);
-  if (!worms.length && !queue.length && !butter) { wave++; pts(wave * 50, W / 2, H / 2); startWave(); }
+  if (!worms.length && !queue.length && !butter) { wave++; seedMushrooms(); pts(wave * 50, W / 2, H / 2); startWave(); }
   pulse(dt);
 }
 
@@ -191,6 +229,20 @@ function drawMush(r, c) {
   ctx.beginPath(); ctx.arc(x, y + 5, rad, Math.PI, 0); ctx.closePath(); ctx.globalAlpha = .25 + hp * .1; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x - 4, y + 5); ctx.lineTo(x - 4, y + 13); ctx.moveTo(x + 4, y + 5); ctx.lineTo(x + 4, y + 13); ctx.stroke();
   ctx.fillStyle = p ? '#ffd0d4' : '#d6ffe8'; ctx.beginPath(); ctx.arc(x - rad * .35, y + 5 - rad * .45, 1.8, 0, TAU); ctx.arc(x + rad * .3, y + 5 - rad * .55, 1.8, 0, TAU); ctx.fill();
+}
+function drawPlant(pl) {
+  const x = cx(pl.c), top = cyy(pl.rt - 1) + 4, bot = OY + (pl.rb + 1) * CELL - 2, sw = Math.sin(time * 1.4 + pl.sway) * 3;
+  glow('#58ff9a', 12); ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.globalAlpha = .9;
+  ctx.beginPath(); ctx.moveTo(x, bot); ctx.quadraticCurveTo(x + sw * .5, (top + bot) / 2, x + sw, top + 10); ctx.stroke(); ctx.globalAlpha = 1;
+  for (const l of pl.leaves) { // each leaf points out and slightly up from the stem
+    const y = cyy(l.row) + 4, d = l.dir, len = CELL * 2.1, wob = Math.sin(time * 1.8 + l.row + pl.sway) * 2.5;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + d * len * .55, y - 16 + wob, x + d * len, y - 4 + wob); ctx.quadraticCurveTo(x + d * len * .55, y + 14 + wob, x, y);
+    ctx.globalAlpha = .38; ctx.fillStyle = '#58ff9a'; ctx.fill(); ctx.globalAlpha = 1; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + d * len * .92, y - 3 + wob); ctx.stroke();
+  }
+  glow('#ff7ad9', 14); ctx.lineWidth = 2.5; for (let k = 0; k < 6; k++) { const a = k / 6 * TAU + time * .3; ctx.beginPath(); ctx.ellipse(x + sw + Math.cos(a) * 8, top - 2 + Math.sin(a) * 8, 5, 3, a, 0, TAU); ctx.stroke(); }
+  glow('#ffe066', 8); ctx.beginPath(); ctx.arc(x + sw, top - 2, 3.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#4a3a22'; ctx.shadowBlur = 0; ctx.beginPath(); ctx.ellipse(x, bot + 1, 16, 5, 0, 0, TAU); ctx.fill();
 }
 function drawSeg(s, head, idx) {
   const [x, y] = segXY(s), col = head ? '#ff8a3d' : '#b6ff5a'; glow(col, 14); ctx.lineWidth = 2.5; ctx.globalAlpha = .35; ctx.beginPath(); ctx.arc(x, y, head ? 14 : 12.5, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
@@ -210,9 +262,10 @@ function drawShip() {
   ctx.strokeStyle = '#ffb3d0'; ctx.lineWidth = 2; ctx.beginPath(); if (ship.mouth > 0) ctx.ellipse(x, y - 1, 5, 3.5, 0, 0, TAU); else ctx.arc(x, y - 2, 6, .2, Math.PI - .2); ctx.stroke(); // mouth opens when it spits
 }
 function draw() {
-  ctx.save(); const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#07041a'); g.addColorStop(1, '#0b0620'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.save(); const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, theme.bg[0]); g.addColorStop(1, theme.bg[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   if (shake > 0) ctx.translate(rnd(-1, 1) * shake * 14, rnd(-1, 1) * shake * 14);
   ctx.strokeStyle = 'rgba(95,240,255,.10)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, OY + ZONE * CELL); ctx.lineTo(W, OY + ZONE * CELL); ctx.stroke();
+  for (const pl of plants) drawPlant(pl);
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (mush[r][c]) drawMush(r, c);
   for (const w of worms) w.forEach((s, i) => drawSeg(s, i === 0, i));
   if (scorp) { const x = scorp.x, y = cyy(scorp.row), d = Math.sign(scorp.vx); glow('#ff6a6a', 14); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(x, y, 20, 9, 0, 0, TAU); ctx.moveTo(x - d * 18, y); ctx.quadraticCurveTo(x - d * 34, y - 18, x - d * 18, y - 20); ctx.moveTo(x + d * 18, y - 3); ctx.lineTo(x + d * 28, y - 8); ctx.moveTo(x + d * 18, y + 3); ctx.lineTo(x + d * 28, y + 8); ctx.stroke(); }
@@ -237,7 +290,7 @@ function draw() {
     l.forEach((t, i) => ctx.fillText(t, W / 2, H * .55 + i * 26)); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, H * .55 + l.length * 26 + 24); }
   else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText('GAME OVER', W / 2, H * .4); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText('SCORE ' + score, W / 2, H * .5); ctx.fillText(touchMode ? 'TAP TO PLAY AGAIN' : 'CLICK OR PRESS ENTER TO PLAY AGAIN', W / 2, H * .58); }
   else if (state === 'pause') { glow('#fff', 14); ctx.font = '700 48px "Courier New", monospace'; ctx.fillText('PAUSED', W / 2, H / 2); ctx.font = '18px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO RESUME' : 'PRESS P OR CLICK TO RESUME', W / 2, H / 2 + 36); }
-  else if (banner > 0) { ctx.globalAlpha = clamp(banner, 0, 1); glow('#ffe066', 18); ctx.font = '700 40px "Courier New", monospace'; ctx.fillText('WAVE ' + wave, W / 2, H / 2 - 60); ctx.globalAlpha = 1; }
+  else if (banner > 0) { ctx.globalAlpha = clamp(banner, 0, 1); glow('#ffe066', 18); ctx.font = '700 40px "Courier New", monospace'; ctx.fillText('WAVE ' + wave, W / 2, H / 2 - 60); ctx.font = '700 ' + Math.min(22, Math.floor(W / 20)) + 'px "Courier New", monospace'; glow('#b6ff5a', 10); ctx.fillText(theme.name, W / 2, H / 2 - 28); ctx.globalAlpha = 1; }
   ctx.shadowBlur = 0;
 }
 function hud() {
