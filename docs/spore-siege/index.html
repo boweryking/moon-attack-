@@ -34,11 +34,12 @@ const rnd = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => Math.max
 const cx = c => c * CELL + CELL / 2, cyy = r => OY + r * CELL + CELL / 2;
 
 // ---------- state
-let state = 'title', score = 0, hi = 0, lives = 3, wave = 1, nextLife = 12000, time = 0, shake = 0, muted = false, auto = true, banner = 0, tickT = 0, tickLen = .11;
+let state = 'title', score = 0, hi = 0, lives = 3, wave = 1, nextLife = 12000, time = 0, shake = 0, muted = false, auto = false, banner = 0, tickT = 0, tickLen = .11;
 try { hi = +localStorage.getItem('spore-hi') || 0; } catch (e) {}
 const mush = Array.from({ length: ROWS }, () => new Array(COLS).fill(0)), pois = Array.from({ length: ROWS }, () => new Array(COLS).fill(false));
 let chompN = 0, croakT = 6, dragons = [], dragonT = 12, butter = null, worms = [], bolts = [], parts = [], texts = [], queue = [], spider = null, flea = null, scorp = null, spiderT = 9, fleaT = 14, scorpT = 22, heal = 0, spiderBeat = 0;
 const ship = { x: W / 2, y: H - 60, alive: true, inv: 0, cool: 0, respawn: 0, mouth: 0 }; // the player is a frog
+let fireId = null; const SPIT = { x: W - 66, y: H - 66, r: 50 }; // on a phone the right thumb holds this button
 const mouse = { x: W / 2, y: H - 60, in: false, down: false, rx: 0, ry: 0 }, keys = {}, touch = { id: null, x: 0, y: 0 };
 let touchMode = matchMedia('(pointer: coarse)').matches;
 
@@ -58,8 +59,10 @@ const sfx = {
   wave: () => { [220, 330, 440].forEach((f, i) => tone(f, .16, 'triangle', .1, null, i * .09)); }, coin: () => { tone(660, .08, 'square', .08); tone(990, .16, 'square', .08, null, .08); },
 };
 // sound clips (audio/sfx/NAME.mp3): chomping, frog croaks, bugs. Anything missing falls back to the little synth sounds above.
-const CLIPS = ['chomp', 'croak', 'croak_happy', 'croak_sad', 'dragonfly', 'fly', 'spider', 'scorpion', 'splat', 'butterfly', 'levelup', 'spit', 'rustle', 'nom'], cbuf = {};
-async function loadClips() { for (const k of CLIPS) { try { const r = await fetch('audio/sfx/' + k + '.mp3'); if (!r.ok) continue; cbuf[k] = await AC.decodeAudioData(await r.arrayBuffer()); } catch (e) {} } }
+const CLIPS = ['chomp', 'croak', 'croak_happy', 'croak_sad', 'dragonfly', 'fly', 'spider', 'scorpion', 'splat', 'butterfly', 'levelup', 'spit', 'rustle', 'nom', 'frog_start', 'frog_hurt', 'frog_life', 'frog_wave', 'frog_free', 'frog_spider', 'frog_dragon', 'frog_over', 'frog_hungry', 'frog_hey'], cbuf = {};
+let frogT = 0, tauntT = 45;
+function frogSay(name, force, delay = 0) { const go = () => { if (!force && frogT > 0) return; if (clip(name, .95)) frogT = 6; }; delay ? setTimeout(go, delay) : go(); } // the frog talks now and then, never twice in a row
+async function loadClips() { await Promise.all(CLIPS.map(async k => { try { const r = await fetch('audio/sfx/' + k + '.mp3'); if (!r.ok) return; cbuf[k] = await AC.decodeAudioData(await r.arrayBuffer()); } catch (e) {} })); }
 function clip(name, vol = .6, rate = 1) {
   if (!AC || muted || !cbuf[name]) return false; const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = cbuf[name]; s.playbackRate.value = rate; g.gain.value = vol; s.connect(g); g.connect(master); s.start(); return true;
 }
@@ -123,9 +126,9 @@ function makeWorm(len, row, fromLeft, delay = 0) {
 function startWave(quiet) {
   worms = []; queue = []; const len = Math.max(3, 13 - wave); worms.push(makeWorm(len, 0, true));
   for (let i = 0; i < Math.min(wave - 1, 8); i++) queue.push({ t: 3 + i * 3.5, left: Math.random() < .5 });
-  banner = 2.6; if (!quiet) { playMusic(musicFor()); sfx.wave(); if (plants.length) setTimeout(sfx.rustle, 500); }
+  banner = 2.6; if (!quiet) { playMusic(musicFor()); sfx.wave(); if (wave > 1) frogSay('frog_wave', false, 1500); if (plants.length) setTimeout(sfx.rustle, 500); }
 }
-function newGame() { score = 0; lives = 3; wave = 1; nextLife = 12000; seedMushrooms(); bolts = []; parts = []; texts = []; spider = flea = scorp = butter = null; dragons = []; dragonT = 12; spiderT = 9; fleaT = 14; scorpT = 22; ship.alive = true; ship.inv = 2; ship.x = W / 2; ship.y = H - 60; startWave(); state = 'play'; playMusic(musicFor()); }
+function newGame() { frogSay('frog_start', true, 700); tauntT = rnd(40, 70); score = 0; lives = 3; wave = 1; nextLife = 12000; seedMushrooms(); bolts = []; parts = []; texts = []; spider = flea = scorp = butter = null; dragons = []; dragonT = 12; spiderT = 9; fleaT = 14; scorpT = 22; ship.alive = true; ship.inv = 2; ship.x = W / 2; ship.y = H - 60; startWave(); state = 'play'; playMusic(musicFor()); }
 
 // ---------- crawler movement (one cell per tick; every segment follows the same rules, so a split worm just keeps going)
 function drop(s) {
@@ -140,7 +143,7 @@ function stepSeg(s) {
 }
 const segXY = s => { const k = clamp(tickT / tickLen, 0, 1); return [lerp(cx(s.pc), cx(s.c), k), lerp(cyy(s.pr), cyy(s.r), k)]; };
 
-function pts(n, x, y) { score += n; if (n >= 100) texts.push({ x, y, t: .8, s: String(n) }); if (score >= nextLife) { nextLife += 12000; lives++; sfx.life(); texts.push({ x: W / 2, y: H / 2, t: 1.5, s: 'EXTRA FROG' }); } if (score > hi) { hi = score; } }
+function pts(n, x, y) { score += n; if (n >= 100) texts.push({ x, y, t: .8, s: String(n) }); if (score >= nextLife) { nextLife += 12000; lives++; sfx.life(); frogSay('frog_life', true, 500); texts.push({ x: W / 2, y: H / 2, t: 1.5, s: 'EXTRA FROG' }); } if (score > hi) { hi = score; } }
 function boom(x, y, n, col, sp = 160) { for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(.2, 1) * sp; parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(.3, .8), col }); } }
 
 function killSeg(wi, si) {
@@ -150,12 +153,12 @@ function killSeg(wi, si) {
   if (!worms.length && !queue.length) { butter = { x, y, t: 0, life: 4.5, seed: rnd(0, TAU) }; sfx.magic(); texts.push({ x: W / 2, y: Math.max(OY + 40, y - 40), t: 1.8, s: 'GHOST BUTTERFLY' }); boom(x, y, 30, '#bfe9ff', 120); }
 }
 function killShip() {
-  if (!ship.alive || ship.inv > 0) return; ship.alive = false; boom(ship.x, ship.y, 40, '#7dff6a', 260); sfx.die(); shake = .6; lives--; ship.respawn = 1.8;
+  if (!ship.alive || ship.inv > 0) return; ship.alive = false; boom(ship.x, ship.y, 40, '#7dff6a', 260); sfx.die(); frogSay('frog_hurt', true, 350); shake = .6; lives--; ship.respawn = 1.8;
 }
 
 // ---------- enemies
 function enemies(dt) {
-  spiderT -= dt; if (!spider && spiderT <= 0 && ship.alive) { const L = Math.random() < .5; sfx.spiderIn(); spider = { x: L ? -20 : W + 20, y: rnd(OY + ZONE * CELL + 20, H - 30), vx: (L ? 1 : -1) * (125 + wave * 8), vy: rnd(-1, 1) > 0 ? 105 : -105, t: 0 }; spiderT = rnd(10, 18); }
+  spiderT -= dt; if (!spider && spiderT <= 0 && ship.alive) { const L = Math.random() < .5; sfx.spiderIn(); if (Math.random() < .5) frogSay('frog_spider', false, 900); spider = { x: L ? -20 : W + 20, y: rnd(OY + ZONE * CELL + 20, H - 30), vx: (L ? 1 : -1) * (125 + wave * 8), vy: rnd(-1, 1) > 0 ? 105 : -105, t: 0 }; spiderT = rnd(10, 18); }
   if (spider) { const s = spider; s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; if (s.y < OY + ZONE * CELL + 10) { s.y = OY + ZONE * CELL + 10; s.vy = Math.abs(s.vy); } if (s.y > H - 20) { s.y = H - 20; s.vy = -Math.abs(s.vy); } if (Math.random() < dt * .7) s.vy = -s.vy;
     const r = Math.floor((s.y - OY) / CELL), c = Math.floor(s.x / CELL); if (r >= 0 && r < ROWS && c >= 0 && c < COLS && mush[r][c] && Math.random() < dt * 5) mush[r][c] = 0;
     spiderBeat -= dt; if (spiderBeat <= 0 && !muted) { spiderBeat = .12; tone(260 + Math.sin(s.t * 14) * 90, .1, 'sawtooth', .03); }
@@ -163,7 +166,7 @@ function enemies(dt) {
   if (wave >= 2) { fleaT -= dt; if (!flea && fleaT <= 0) { sfx.fly(); flea = { x: cx(Math.floor(rnd(1, COLS - 1))), y: OY - 10, hp: wave >= 4 ? 2 : 1 }; fleaT = rnd(14, 22); }
     if (flea) { const f = flea, pr = Math.floor((f.y - OY) / CELL); f.y += 330 * dt; const nr = Math.floor((f.y - OY) / CELL); if (nr !== pr && nr > 0 && nr < ZONE && Math.random() < .35 && !mush[nr][Math.floor(f.x / CELL)] && !plant[nr][Math.floor(f.x / CELL)]) mush[nr][Math.floor(f.x / CELL)] = 4;
       if (Math.hypot(ship.x - f.x, ship.y - f.y) < 22) killShip(); if (f.y > H + 20) flea = null; } }
-  if (wave >= 2) { dragonT -= dt; if (dragons.length < (wave >= 5 ? 2 : 1) && dragonT <= 0 && ship.alive) { const L = Math.random() < .5; dragons.push({ x: L ? -40 : W + 40, y: OY + CELL * (2 + Math.random() * (ZONE - 5)), vx: (L ? 1 : -1) * (150 + wave * 8), vy: 0, t: 0, dart: rnd(.6, 1.4), pause: 0, dive: false }); dragonT = rnd(12, 20); sfx.dragon(); } }
+  if (wave >= 2) { dragonT -= dt; if (dragons.length < (wave >= 5 ? 2 : 1) && dragonT <= 0 && ship.alive) { const L = Math.random() < .5; dragons.push({ x: L ? -40 : W + 40, y: OY + CELL * (2 + Math.random() * (ZONE - 5)), vx: (L ? 1 : -1) * (150 + wave * 8), vy: 0, t: 0, dart: rnd(.6, 1.4), pause: 0, dive: false }); dragonT = rnd(12, 20); sfx.dragon(); if (Math.random() < .5) frogSay('frog_dragon', false, 700); } }
   for (let i = dragons.length - 1; i >= 0; i--) {
     const d = dragons[i]; d.t += dt;
     if (!d.dive) { d.pause -= dt; if (d.pause <= 0) d.x += d.vx * dt; d.y += Math.sin(d.t * 3) * 36 * dt; d.dart -= dt;
@@ -199,9 +202,9 @@ function update(dt) {
     if (document.pointerLockElement === cv) { mdx = mouse.rx; mdy = mouse.ry; } else if (mouse.in && touch.id === null && !kx && !ky) { mdx = mouse.x - ship.x; mdy = mouse.y - ship.y; }
     mouse.rx = mouse.ry = 0;
     if (mdx || mdy) { const n = Math.ceil(Math.max(Math.abs(mdx), Math.abs(mdy)) / 6); for (let i = 0; i < n; i++) { move(mdx / n, 0); move(0, mdy / n); } }
-    ship.cool -= dt; if (ship.mouth > 0) ship.mouth -= dt; if (ship.cool <= 0 && (auto || mouse.down || keys.Space || keys.ShiftLeft || keys.ShiftRight || touch.id !== null) && bolts.length < 4) { bolts.push({ x: ship.x, y: ship.y - 18, w: rnd(0, TAU) }); ship.cool = .13; ship.mouth = .12; sfx.shoot(); }
+    ship.cool -= dt; if (ship.mouth > 0) ship.mouth -= dt; if (ship.cool <= 0 && (auto || mouse.down || keys.Space || keys.ShiftLeft || keys.ShiftRight || fireId !== null) && bolts.length < 4) { bolts.push({ x: ship.x, y: ship.y - 18, w: rnd(0, TAU) }); ship.cool = .13; ship.mouth = .12; sfx.shoot(); }
   } else if (ship.respawn > 0) {
-    ship.respawn -= dt; if (ship.respawn <= 0) { if (lives <= 0) { state = 'over'; playMusic('over'); if (score >= hi) try { localStorage.setItem('spore-hi', String(hi)); } catch (e) {} return; }
+    ship.respawn -= dt; if (ship.respawn <= 0) { if (lives <= 0) { state = 'over'; playMusic('over'); frogSay('frog_over', true, 900); if (score >= hi) try { localStorage.setItem('spore-hi', String(hi)); } catch (e) {} return; }
       ship.alive = true; ship.inv = 2.5; ship.x = W / 2; ship.y = H - 60; spider = flea = butter = null; dragons = []; heal = 1; startWave(true); } }
   // mushroom healing after a death: damaged ones regrow one by one for a few points each
   if (heal > 0 && ship.alive) { heal -= dt; if (heal <= 0) { heal = .05; let done = true; for (let r = 0; r < ROWS && done; r++) for (let c = 0; c < COLS; c++) if (mush[r][c] > 0 && (mush[r][c] < 4 || pois[r][c])) { mush[r][c] = 4; pois[r][c] = false; pts(5, 0, 0); sfx.mush(); done = false; break; } if (done) heal = 0; } }
@@ -214,12 +217,13 @@ function update(dt) {
     if (!gone && flea && Math.hypot(b.x - flea.x, b.y - flea.y) < 22) { gone = true; if (--flea.hp <= 0) { pts(200, flea.x, flea.y); boom(flea.x, flea.y, 18, '#ffd27a'); sfx.fleaHit(); flea = null; } else sfx.mush(); }
     if (!gone && scorp && Math.abs(b.x - scorp.x) < 28 && Math.abs(b.y - cyy(scorp.row)) < 18) { pts(1000, scorp.x, cyy(scorp.row)); boom(scorp.x, cyy(scorp.row), 24, '#ff6a6a', 200); sfx.fleaHit(); scorp = null; gone = true; }
     for (let di = dragons.length - 1; di >= 0 && !gone; di--) { const d = dragons[di]; if (Math.hypot(b.x - d.x, b.y - d.y) < 24) { pts(500, d.x, d.y); boom(d.x, d.y, 24, '#5ff0ff', 220); sfx.dragonHit(); dragons.splice(di, 1); gone = true; } }
-    if (!gone && butter && Math.hypot(b.x - butter.x, b.y - butter.y) < 26) { pts(1000, butter.x, butter.y); boom(butter.x, butter.y, 40, '#ffffff', 200); sfx.free(); texts.push({ x: butter.x, y: butter.y - 20, t: 1.2, s: 'FREED!' }); butter = null; gone = true; }
+    if (!gone && butter && Math.hypot(b.x - butter.x, b.y - butter.y) < 26) { pts(1000, butter.x, butter.y); boom(butter.x, butter.y, 40, '#ffffff', 200); sfx.free(); frogSay('frog_free', true, 400); texts.push({ x: butter.x, y: butter.y - 20, t: 1.2, s: 'FREED!' }); butter = null; gone = true; }
     if (gone) bolts.splice(i, 1);
   }
   // crawler
   tickLen = Math.max(.05, .115 - wave * .005) * (PORTRAIT ? 1.2 : PHONE ? 1.12 : 1); tickT += dt; while (tickT >= tickLen) { tickT -= tickLen; for (const w of worms) for (const s of w) stepSeg(s); if (worms.length && ++chompN % 3 === 0) { if (chompN % 21 === 0 && Math.random() < .8) sfx.nom(); else sfx.chomp(); } }
   croakT -= dt; if (croakT <= 0 && ship.alive) { sfx.croak(); croakT = rnd(8, 15); }
+  frogT -= dt; tauntT -= dt; if (tauntT <= 0 && ship.alive) { frogSay(Math.random() < .5 ? 'frog_hungry' : 'frog_hey'); tauntT = rnd(45, 80); }
   for (const q of queue) q.t -= dt; for (const q of queue.filter(q => q.t <= 0)) worms.push(makeWorm(1, 2 + Math.floor(Math.random() * 3), q.left)); queue = queue.filter(q => q.t > 0);
   if (ship.alive) for (const w of worms) for (const s of w) { const [x, y] = segXY(s); if (Math.hypot(x - ship.x, y - ship.y) < 24) killShip(); }
   enemies(dt);
@@ -289,20 +293,24 @@ function draw() {
   for (const p of parts) { glow(p.col, 6); ctx.globalAlpha = clamp(p.life * 2, 0, 1); ctx.fillRect(p.x, p.y, 3, 3); ctx.globalAlpha = 1; }
   ctx.restore(); ctx.shadowBlur = 0; ctx.textAlign = 'center';
   ctx.font = '700 16px "Courier New", monospace'; for (const t of texts) { ctx.globalAlpha = clamp(t.t * 2, 0, 1); glow('#ffe066', 8); ctx.fillText(t.s, t.x, t.y); ctx.globalAlpha = 1; }
-  hud();
+  hud(); drawSpit();
   if (state === 'title') { glow('#b6ff5a', 24); ctx.font = '700 ' + Math.min(72, Math.floor(W / 7.4)) + 'px "Courier New", monospace'; ctx.fillText('SPORE SIEGE', W / 2, H * .33); glow('#fff', 10); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO START' : 'CLICK OR PRESS ENTER TO START', W / 2, H * .46);
-    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Drag your finger low to hop.', 'The frog spits by itself.', 'Shoot the glowing crawler.', 'Do not let it reach you.'] : touchMode ? ['Drag your finger low on the screen to move the frog.', 'It spits by itself. Hit the glowing crawler.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to move the frog.', 'Your mouse is captured while you play. Esc lets go.', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.'];
+    glow('#9ef', 6); ctx.font = '16px "Courier New", monospace'; const l = PORTRAIT ? ['Drag a finger to move the frog.', 'Hold the SPIT button to spit.', 'Hit the glowing crawler.', 'Do not let it reach you.'] : touchMode ? ['Drag a finger to move the frog. Hold SPIT to spit.', 'Hit the glowing crawler. Do not let it reach you.', 'Every hit leaves a mushroom. Do not let it reach you.'] : ['Move the mouse or trackpad to move the frog.', 'Hold the mouse button to spit. Your mouse is captured, Esc lets go.', 'Spit on the crawler. Every hit leaves a mushroom. Stay alive.'];
     l.forEach((t, i) => ctx.fillText(t, W / 2, H * .55 + i * 26)); ctx.fillStyle = '#7f90bd'; ctx.shadowBlur = 0; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, H * .55 + l.length * 26 + 24); }
   else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText('GAME OVER', W / 2, H * .4); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText('SCORE ' + score, W / 2, H * .5); ctx.fillText(touchMode ? 'TAP TO PLAY AGAIN' : 'CLICK OR PRESS ENTER TO PLAY AGAIN', W / 2, H * .58); }
   else if (state === 'pause') { glow('#fff', 14); ctx.font = '700 48px "Courier New", monospace'; ctx.fillText('PAUSED', W / 2, H / 2); ctx.font = '18px "Courier New", monospace'; ctx.fillText(touchMode ? 'TAP TO RESUME' : 'PRESS P OR CLICK TO RESUME', W / 2, H / 2 + 36); }
   else if (banner > 0) { ctx.globalAlpha = clamp(banner, 0, 1); glow('#ffe066', 18); ctx.font = '700 40px "Courier New", monospace'; ctx.fillText('WAVE ' + wave, W / 2, H / 2 - 60); ctx.font = '700 ' + Math.min(22, Math.floor(W / 20)) + 'px "Courier New", monospace'; glow('#b6ff5a', 10); ctx.fillText(theme.name, W / 2, H / 2 - 28); ctx.globalAlpha = 1; }
   ctx.shadowBlur = 0;
 }
+function drawSpit() {
+  if (!touchMode || (state !== 'play' && state !== 'pause')) return; const on = fireId !== null; ctx.save(); glow('#b6ff5a', on ? 26 : 12); ctx.lineWidth = 4; ctx.globalAlpha = on ? 1 : .8;
+  ctx.beginPath(); ctx.arc(SPIT.x, SPIT.y, SPIT.r, 0, TAU); if (on) { ctx.globalAlpha = .35; ctx.fill(); ctx.globalAlpha = 1; } ctx.stroke(); ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.fillStyle = '#b6ff5a'; ctx.font = '700 20px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.fillText('SPIT', SPIT.x, SPIT.y + 7); ctx.restore();
+}
 function hud() {
   ctx.shadowBlur = 0; ctx.font = '700 20px "Courier New", monospace'; ctx.textAlign = 'left'; glow('#5ff0ff', 6); ctx.fillText(String(score).padStart(6, '0'), 16, 30);
   ctx.textAlign = 'center'; ctx.fillStyle = '#ffe066'; ctx.shadowBlur = 6; ctx.shadowColor = '#ffe066'; ctx.fillText('HI ' + String(hi).padStart(6, '0'), W / 2, 30);
   ctx.textAlign = 'right'; glow('#7dff6a', 6); for (let i = 0; i < Math.min(lives, 8); i++) { const x = W - 24 - i * 32; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, 22, 10, 7, 0, 0, TAU); ctx.moveTo(x - 4 + 4, 14); ctx.arc(x - 5, 13, 3.5, 0, TAU); ctx.moveTo(x + 8.5, 13); ctx.arc(x + 5, 13, 3.5, 0, TAU); ctx.stroke(); }
-  ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.font = '12px "Courier New", monospace'; ctx.fillStyle = '#5a6a95'; ctx.fillText('WAVE ' + wave + '   AUTO-SPIT ' + (auto ? 'ON' : 'OFF') + (touchMode ? '' : '   [F] auto  [P] pause  [M] mute'), 16, H - 8);
+  ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.font = '12px "Courier New", monospace'; ctx.fillStyle = '#5a6a95'; ctx.fillText('WAVE ' + wave + '   AUTO-SPIT ' + (auto ? 'ON' : 'OFF') + (touchMode ? '' : '   hold click / Shift to spit  [F] auto  [P] pause  [M] mute'), 16, H - 8);
 }
 
 // ---------- input
@@ -310,9 +318,9 @@ const xy = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.l
 function begin() { audio(); if (state === 'title' || state === 'over') { sfx.coin(); newGame(); } else if (state === 'pause') state = 'play'; }
 cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' && document.pointerLockElement === cv) { const k = W / cv.getBoundingClientRect().width * 1.25; mouse.rx += e.movementX * k; mouse.ry += e.movementY * k; return; } const [x, y] = xy(e); if (e.pointerType === 'touch') { if (e.pointerId === touch.id) { touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; } });
 cv.addEventListener('pointerdown', e => { e.preventDefault(); window.focus(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} const [x, y] = xy(e);
-  if (e.pointerType === 'touch') { touchMode = true; if (touch.id === null) { touch.id = e.pointerId; touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; mouse.down = true; try { if (cv.requestPointerLock && !document.pointerLockElement) { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } } catch (err) {} }
+  if (e.pointerType === 'touch') { touchMode = true; if (Math.hypot(x - SPIT.x, y - SPIT.y) < SPIT.r + 14) { fireId = e.pointerId; } else if (touch.id === null) { touch.id = e.pointerId; touch.x = x; touch.y = y; } } else { mouse.x = x; mouse.y = y; mouse.in = true; mouse.down = true; try { if (cv.requestPointerLock && !document.pointerLockElement) { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } } catch (err) {} }
   begin(); });
-const up = e => { if (e.pointerType === 'touch') { if (e.pointerId === touch.id) touch.id = null; } else mouse.down = false; };
+const up = e => { if (e.pointerType === 'touch') { if (e.pointerId === touch.id) touch.id = null; if (e.pointerId === fireId) fireId = null; } else mouse.down = false; };
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up); cv.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch' && !mouse.down) mouse.in = false; }); cv.addEventListener('contextmenu', e => e.preventDefault());
 const GAME = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Enter', 'KeyP', 'KeyM', 'KeyF', 'KeyW', 'KeyA', 'KeyS', 'KeyD']);
 addEventListener('keydown', e => {
@@ -323,7 +331,7 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { if (e.key === 'Alt' || e.key === 'Meta') { for (const k in keys) keys[k] = false; } keys[e.code] = false; });
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && state === 'play') { for (const k in keys) keys[k] = false; mouse.down = false; state = 'pause'; } });
-function autoPause() { for (const k in keys) keys[k] = false; mouse.down = false; if (state === 'play') state = 'pause'; }
+function autoPause() { for (const k in keys) keys[k] = false; mouse.down = false; fireId = null; if (state === 'play') state = 'pause'; }
 addEventListener('blur', autoPause); document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
 document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
 document.addEventListener('dblclick', e => e.preventDefault());
