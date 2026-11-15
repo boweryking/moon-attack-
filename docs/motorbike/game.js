@@ -1,29 +1,24 @@
 /* global THREE */
-// Dash Delivery - step 1 prototype.
-// Third-person motorbike courier: ride to the green drop-off marker and press SPACE.
+// Dash Delivery - city grid version: ride to the shop, grab the order, follow the map to the customer.
 (function () {
   'use strict';
 
   // ---- Config -------------------------------------------------------------
-  const LANES = [-3.5, 0, 3.5];
-  const CRUISE = 24;
-  const MAX_SPEED = 46;
-  const MIN_SPEED = 6;
-  const STEER = 8;
-  const PLAYER_HW = 0.5;
-  const PLAYER_HL = 1.1;
-  const FOOD_DECAY = 0.7;          // food temperature lost per second
-  const DASH_STEP = 6;
-  const DASH_COUNT = 60;
-  const DASH_LOOP = DASH_STEP * DASH_COUNT;
-  const BLDG_STEP = 24;
-  const BLDG_COUNT = 30;
-  const BLDG_LOOP = BLDG_STEP * BLDG_COUNT;
+  const S = 100;                 // block pitch: roads run along every multiple of S
+  const RH = 6;                  // half road width
+  const SW = 2.5;                // sidewalk width
+  const BLK = RH + SW;           // buildings start this far from a road centre line
+  const CRUISE = 20, MAX_SPEED = 40, MIN_SPEED = 4;
+  const PLAYER_R = 0.9;
+  const FOOD_DECAY = 0.7;
   const SKY = 0x1b2236;
+  const RANGE = 4;               // blocks kept alive around the rider
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const rand = (a, b) => a + Math.random() * (b - a);
   const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+  const mod = (a, n) => ((a % n) + n) % n;
+  function hash(i, j, k) { let h = (i * 374761393 + j * 668265263 + k * 1442695041) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
 
   // ---- Renderer / scene ---------------------------------------------------
   const canvas = document.getElementById('game');
@@ -31,9 +26,8 @@
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SKY);
-  scene.fog = new THREE.Fog(SKY, 60, 200);
-  const camera = new THREE.PerspectiveCamera(65, 1, 0.1, 500);
-  camera.position.set(0, 3.4, 7.5);
+  scene.fog = new THREE.Fog(SKY, 70, 230);
+  const camera = new THREE.PerspectiveCamera(65, 1, 0.1, 600);
 
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
@@ -44,14 +38,13 @@
   window.addEventListener('resize', resize);
   resize();
 
-  scene.add(new THREE.HemisphereLight(0xbfd8ff, 0x303040, 0.9));
+  scene.add(new THREE.HemisphereLight(0xbfd8ff, 0x303040, 0.95));
   const sun = new THREE.DirectionalLight(0xffe2b0, 0.7);
   sun.position.set(-6, 14, 8);
   scene.add(sun);
 
   const boxGeo = new THREE.BoxGeometry(1, 1, 1);
   const lam = (color) => new THREE.MeshLambertMaterial({ color: color });
-
   function addBox(parent, w, h, d, color, x, y, z) {
     const m = new THREE.Mesh(boxGeo, lam(color));
     m.scale.set(w, h, d);
@@ -60,53 +53,77 @@
     return m;
   }
 
-  // Ground that follows the rider
-  const grass = addBox(scene, 200, 0.1, 1000, 0x1f3b2a, 0, -0.1, 0);
-  const road = addBox(scene, 12, 0.05, 1000, 0x2c2f38, 0, 0, 0);
-  const sidewalkL = addBox(scene, 3, 0.3, 1000, 0x6b6f7a, -7.5, 0.15, 0);
-  const sidewalkR = addBox(scene, 3, 0.3, 1000, 0x6b6f7a, 7.5, 0.15, 0);
-
-  // Lane dashes that recycle as the rider moves
-  const dashMat = lam(0xe9e9e9);
-  const dashes = [];
-  for (const x of [-1.75, 1.75]) {
-    for (let i = 0; i < DASH_COUNT; i++) {
-      const d = new THREE.Mesh(boxGeo, dashMat);
-      d.scale.set(0.18, 0.03, 3);
-      d.position.set(x, 0.02, -i * DASH_STEP);
-      scene.add(d);
-      dashes.push(d);
+  // ---- Ground: one repeating tile (roads along its edges) that hops with the rider
+  const GN = 9;
+  const groundTex = (function () {
+    const N = 512, c = document.createElement('canvas'); c.width = c.height = N;
+    const g = c.getContext('2d'), k = N / S;
+    g.fillStyle = '#2c2f38'; g.fillRect(0, 0, N, N);
+    g.fillStyle = '#6b6f7a'; g.fillRect(RH * k, RH * k, (S - 2 * RH) * k, (S - 2 * RH) * k);
+    g.strokeStyle = '#8b90a0'; g.lineWidth = 3; g.strokeRect(RH * k, RH * k, (S - 2 * RH) * k, (S - 2 * RH) * k);
+    g.fillStyle = '#e8e8e8';
+    const dash = 4 * k, gap = 5 * k;
+    for (let t = (RH + 3) * k; t < N - (RH + 3) * k - dash; t += dash + gap) {
+      [0, N].forEach(function (e) { g.fillRect(e - 0.22 * k, t, 0.44 * k, dash); g.fillRect(t, e - 0.22 * k, dash, 0.44 * k); });
     }
-  }
-
-  // Buildings on both sides that recycle
-  const BLDG_COLORS = [0x3a4a6b, 0x4b3f5c, 0x2f5a57, 0x6b4d3a, 0x44506a];
-  const buildings = [];
-  function resetBuilding(b) {
-    const w = rand(6, 10), h = rand(8, 40), d = rand(14, 20);
-    b.scale.set(w, h, d);
-    b.position.x = b.userData.side * rand(14, 17);
-    b.position.y = h / 2;
-    b.material.color.setHex(pick(BLDG_COLORS));
-  }
-  for (const side of [-1, 1]) {
-    for (let i = 0; i < BLDG_COUNT; i++) {
-      const b = new THREE.Mesh(boxGeo, lam(0x444444));
-      b.userData.side = side;
-      b.position.z = -i * BLDG_STEP;
-      scene.add(b);
-      resetBuilding(b);
-      buildings.push(b);
+    // crosswalk stripes at every road mouth
+    for (let s = -RH + 1; s < RH - 0.5; s += 2) {
+      [RH + 1.2, S - RH - 3.2].forEach(function (p) {
+        [0, N].forEach(function (e) { g.fillRect(e + s * k, p * k, 1.1 * k, 2 * k); g.fillRect(p * k, e + s * k, 2 * k, 1.1 * k); });
+      });
     }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(GN, GN);
+    t.anisotropy = 4;
+    return t;
+  })();
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(GN * S, GN * S), new THREE.MeshLambertMaterial({ map: groundTex }));
+  ground.rotation.x = -Math.PI / 2;
+  scene.add(ground);
+  const far = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshBasicMaterial({ color: 0x1b2230 }));
+  far.rotation.x = -Math.PI / 2; far.position.y = -0.3; scene.add(far);
+
+  // ---- City blocks (buildings) created and removed around the rider
+  const BLDG_MATS = [0x55699a, 0x6b5a85, 0x3f7f79, 0x946a50, 0x5f6e96, 0x7d6650, 0x585880].map(lam);
+  const blocks = new Map();
+  function makeBlock(i, j) {
+    const g = new THREE.Group();
+    const half = (S - 2 * BLK - 1) / 2;
+    for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
+      const h = 9 + hash(i, j, a * 2 + b) * 38;
+      const m = new THREE.Mesh(boxGeo, BLDG_MATS[Math.floor(hash(i, j, 7 + a * 2 + b) * BLDG_MATS.length)]);
+      m.scale.set(half, h, half);
+      m.position.set(i * S + BLK + half / 2 + a * (half + 1), h / 2, j * S + BLK + half / 2 + b * (half + 1));
+      g.add(m);
+    }
+    scene.add(g);
+    return g;
+  }
+  function updateBlocks() {
+    const ci = Math.floor(G.x / S), cj = Math.floor(G.z / S);
+    for (let di = -RANGE + 1; di <= RANGE; di++) for (let dj = -RANGE + 1; dj <= RANGE; dj++) {
+      const key = (ci + di) + ',' + (cj + dj);
+      if (!blocks.has(key)) blocks.set(key, makeBlock(ci + di, cj + dj));
+    }
+    blocks.forEach(function (g, key) {
+      const p = key.split(',');
+      if (Math.abs(+p[0] - ci) > RANGE + 1 || Math.abs(+p[1] - cj) > RANGE + 1) { scene.remove(g); blocks.delete(key); }
+    });
+  }
+  function solidAt(x, z, r) {   // inside a building block (grown by r)?
+    const m = mod(x, S), n = mod(z, S);
+    return m > BLK - r && m < S - BLK + r && n > BLK - r && n < S - BLK + r;
   }
 
-  // Rider's bike (faces -z)
+  // ---- Rider's bike (faces -z at heading 0)
   const bike = new THREE.Group();
+  bike.rotation.order = 'YXZ';
   scene.add(bike);
-  addBox(bike, 0.5, 0.5, 1.8, 0xff5a1f, 0, 0.6, 0);        // frame
-  addBox(bike, 0.55, 0.9, 0.6, 0x2a6cff, 0, 1.25, 0.15);    // rider torso
-  addBox(bike, 0.5, 0.5, 0.5, 0xffffff, 0, 1.9, 0.1);       // helmet
-  addBox(bike, 0.9, 0.8, 0.8, 0xffc233, 0, 1.2, 0.95);      // delivery box
+  addBox(bike, 0.5, 0.5, 1.8, 0xff5a1f, 0, 0.6, 0);
+  addBox(bike, 0.55, 0.9, 0.6, 0x2a6cff, 0, 1.25, 0.15);
+  addBox(bike, 0.5, 0.5, 0.5, 0xffffff, 0, 1.9, 0.1);
+  addBox(bike, 0.9, 0.8, 0.8, 0xffc233, 0, 1.2, 0.95);
   const wheelGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.22, 14);
   wheelGeo.rotateZ(Math.PI / 2);
   const wheels = [];
@@ -117,25 +134,55 @@
     wheels.push(w);
   }
 
-  // Drop-off marker
+  // ---- Target marker (blue = pick-up, green = drop-off), beam is visible from far away
   const marker = new THREE.Group();
   marker.visible = false;
   scene.add(marker);
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(1.7, 0.15, 8, 28),
-    new THREE.MeshBasicMaterial({ color: 0x4cff7a })
-  );
-  ring.rotation.x = Math.PI / 2;
-  ring.position.y = 0.1;
-  marker.add(ring);
-  const beam = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.4, 0.4, 60, 12, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0x4cff7a, transparent: true, opacity: 0.25, depthWrite: false })
-  );
-  beam.position.y = 30;
-  marker.add(beam);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.25, 8, 32), new THREE.MeshBasicMaterial({ color: 0x4cff7a }));
+  ring.rotation.x = Math.PI / 2; ring.position.y = 0.15; marker.add(ring);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 160, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0x4cff7a, transparent: true, opacity: 0.3, depthWrite: false, fog: false }));
+  beam.position.y = 80; marker.add(beam);
+  const propGroup = new THREE.Group();   // storefront / house for the current target
+  scene.add(propGroup);
 
-  // ---- Traffic factories --------------------------------------------------
+  function makeSign(icon, text, color) {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 192;
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgba(10,14,28,.9)'; g.strokeStyle = color; g.lineWidth = 10;
+    g.beginPath(); g.moveTo(24, 6); g.arcTo(506, 6, 506, 186, 28); g.arcTo(506, 186, 6, 186, 28); g.arcTo(6, 186, 6, 6, 28); g.arcTo(6, 6, 506, 6, 28); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = '#fff'; g.font = '700 84px system-ui, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle';
+    g.fillText(icon, 28, 100);
+    g.font = '700 40px system-ui, sans-serif'; g.fillStyle = color;
+    const words = text.split(' '), lines = []; let line = '';
+    words.forEach(function (w) { if ((line + ' ' + w).length > 14 && line) { lines.push(line); line = w; } else line = (line ? line + ' ' : '') + w; });
+    lines.push(line);
+    lines.slice(0, 2).forEach(function (l, n) { g.fillText(l, 140, lines.length > 1 ? 70 + n * 52 : 96); });
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), fog: false }));
+    sp.scale.set(15, 5.6, 1);
+    return sp;
+  }
+  function clearProps() { while (propGroup.children.length) propGroup.remove(propGroup.children[0]); }
+  function buildProps(t, kind, icon, label, color, tierColor) {
+    clearProps();
+    // the building front sits on the sidewalk beside the ring
+    const side = t.side, g = new THREE.Group();
+    const w = 10, d = 5, h = kind === 'shop' ? 5 : 4;
+    const off = RH + d / 2 - 0.2;
+    const body = addBox(g, t.vert ? d : w, h, t.vert ? w : d, kind === 'shop' ? 0xffe0a0 : 0xa0d8b0, 0, h / 2, 0);
+    const awn = addBox(g, t.vert ? d + 1.4 : w, 0.7, t.vert ? w : d + 1.4, parseInt(tierColor.slice(1), 16), 0, h + 0.35, 0);
+    g.position.set(t.x + (t.vert ? side * off : 0), 0, t.z + (t.vert ? 0 : side * off));
+    propGroup.add(g);
+    const sp = makeSign(icon, label, color);
+    sp.position.set(t.x + (t.vert ? side * (RH - 1.5) : 0), h + 5.5, t.z + (t.vert ? 0 : side * (RH - 1.5)));
+    propGroup.add(sp);
+  }
+  function setMarker(t, color) {
+    marker.position.set(t.x, 0, t.z);
+    ring.material.color.setHex(color); beam.material.color.setHex(color);
+    marker.visible = true;
+  }
+
   const CAR_COLORS = [0xd9534f, 0x5bc0de, 0xf0ad4e, 0xdddddd, 0x5cb85c, 0x9b59b6];
   const SHIRT_COLORS = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf1c40f];
 
@@ -168,64 +215,62 @@
     return g;
   }
 
+
   // ---- Game state ---------------------------------------------------------
-  const objs = []; // { kind, group, vx, vz, hw, hl, hit, endX }
+  const objs = [];   // { kind, group, vx, vz, hw, hl, hit }
   const G = {};
 
   function resetRun() {
     for (const o of objs) scene.remove(o.group);
     objs.length = 0;
+    clearProps();
     Object.assign(G, {
-      state: 'start',
-      dist: 0,            // distance travelled; rider's world z is -dist
-      speed: CRUISE,
-      x: 0,
-      vx: 0,
-      health: 100,
-      score: 0,
-      combo: 1,
-      delivered: 0,
-      order: null,
-      food: 100,
-      timeLeft: 0,
-      msgT: 0,
-      spawnT: 0,
-      pedT: 0,
-      coneT: 0,
-      shake: 0,
-      job: null,
-      phase: 'pickup',
-      earned: 0,
-      honkT: 0,
-      lowWarned: false,
-      t: 0
+      state: 'start', x: 3, z: 60, h: 0, camH: 0, speed: CRUISE, steer: 0,
+      health: 100, score: 0, combo: 1, delivered: 0, earned: 0,
+      job: null, phase: 'pickup', order: null, food: 100, timeLeft: 0, lowWarned: false,
+      msgT: 0, shake: 0, honkT: 0, scrapeT: 0, t: 0
     });
     marker.visible = false;
   }
 
-  function addObj(kind, group, x, z, vx, vz, hw, hl, extra) {
+  function addObj(kind, group, x, z, vx, vz, hw, hl) {
     group.position.set(x, 0, z);
     scene.add(group);
-    const o = { kind: kind, group: group, vx: vx, vz: vz, hw: hw, hl: hl, hit: false, endX: 0 };
-    if (extra) Object.assign(o, extra);
-    objs.push(o);
+    objs.push({ kind: kind, group: group, vx: vx, vz: vz, hw: hw, hl: hl, hit: false });
   }
+
+  // a random point on a road, roughly dmin..dmax from the rider
+  function roadPoint(dmin, dmax) {
+    const ang = rand(0, Math.PI * 2), d = rand(dmin, dmax);
+    let px = G.x + Math.cos(ang) * d, pz = G.z + Math.sin(ang) * d;
+    const vert = Math.random() < 0.5;
+    if (vert) px = Math.round(px / S) * S; else pz = Math.round(pz / S) * S;
+    // keep out of the intersection itself
+    if (vert) { const m = mod(pz, S); if (m < RH + 4 || m > S - RH - 4) pz += S * 0.5; }
+    else { const m = mod(px, S); if (m < RH + 4 || m > S - RH - 4) px += S * 0.5; }
+    return { x: px, z: pz, vert: vert };
+  }
+  function countOf(kind) { let n = 0; for (const o of objs) if (o.kind === kind) n++; return n; }
 
   function spawnCar() {
-    const oncoming = Math.random() < 0.35;
-    const x = oncoming ? -3.5 : pick([0, 3.5]);
-    const vz = oncoming ? rand(10, 16) : -rand(9, 16);
-    addObj('car', makeCar(), x, -(G.dist + 170), 0, vz, 1, 2);
+    const p = roadPoint(90, 260), dir = Math.random() < 0.5 ? 1 : -1, sp = rand(7, 13) * dir, g = makeCar();
+    if (p.vert) {   // drives along z
+      g.rotation.y = dir > 0 ? Math.PI : 0;
+      addObj('car', g, p.x - dir * 3, p.z, 0, sp, 1, 2);
+    } else {        // drives along x
+      g.rotation.y = dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+      addObj('car', g, p.x, p.z + dir * 3, sp, 0, 2, 1);
+    }
   }
-
   function spawnCone() {
-    addObj('cone', makeCone(), pick(LANES), -(G.dist + rand(150, 190)), 0, 0, 0.5, 0.5);
+    const p = roadPoint(60, 240), off = pick([-4, -1.5, 1.5, 4]);
+    addObj('cone', makeCone(), p.vert ? p.x + off : p.x, p.vert ? p.z : p.z + off, 0, 0, 0.5, 0.5);
   }
-
   function spawnPed() {
-    const dir = Math.random() < 0.5 ? 1 : -1;
-    const vx = dir * 2.2;
-    addObj('ped', makePed(), -dir * 9, -(G.dist + rand(90, 160)), vx, 0, 0.4, 0.4, { endX: dir * 9.5 });
+    const p = roadPoint(70, 220), dir = Math.random() < 0.5 ? 1 : -1, vx = dir * 2.2;
+    if (p.vert) addObj('ped', makePed(), p.x - dir * 9, p.z, vx, 0, 0.4, 0.4);
+    else addObj('ped', makePed(), p.x, p.z - dir * 9, 0, vx, 0.4, 0.4);
+    objs[objs.length - 1].endX = dir * 9.5; objs[objs.length - 1].vert = p.vert; objs[objs.length - 1].c = p.vert ? p.x : p.z; objs[objs.length - 1].dir = dir;
   }
 
   function flash(text, color) {
@@ -233,24 +278,20 @@
     el.textContent = text;
     el.style.color = color || '#fff';
     el.style.opacity = 1;
-    G.msgT = 1.6;
+    G.msgT = 1.8;
   }
-
   function showPanel(html, buttonText) {
     const panel = document.getElementById('panel');
     panel.innerHTML = html + '<br><button id="go">' + buttonText + '</button>';
     document.getElementById('overlay').style.display = 'flex';
   }
-
-  function hidePanel() {
-    document.getElementById('overlay').style.display = 'none';
-  }
+  function hidePanel() { document.getElementById('overlay').style.display = 'none'; }
 
   // ---- Jobs ---------------------------------------------------------------
   const TIERS = {
-    easy:   { label: 'EASY',   color: '#4cff7a', traffic: 0.65, timeF: 1.8, decay: 0.3, base: 80,  pk: [110, 190], dr: [150, 250], unlock: 0 },
-    medium: { label: 'MEDIUM', color: '#ffc233', traffic: 1.0,  timeF: 1.4, decay: 0.7, base: 190, pk: [150, 250], dr: [210, 330], unlock: 400 },
-    hard:   { label: 'HARD',   color: '#ff5a5a', traffic: 1.6,  timeF: 1.1, decay: 1.2, base: 420, pk: [190, 300], dr: [290, 440], unlock: 1200 }
+    easy:   { label: 'EASY',   color: '#4cff7a', traffic: 0.6, timeF: 2.0, decay: 0.3, base: 80,  pk: [150, 250], dr: [200, 300], unlock: 0 },
+    medium: { label: 'MEDIUM', color: '#ffc233', traffic: 1.0, timeF: 1.5, decay: 0.7, base: 190, pk: [200, 300], dr: [280, 400], unlock: 400 },
+    hard:   { label: 'HARD',   color: '#ff5a5a', traffic: 1.6, timeF: 1.2, decay: 1.2, base: 420, pk: [250, 400], dr: [380, 560], unlock: 1200 }
   };
   const MENU = {
     easy:   [['☕', 'Coffee run', 'Corner Café'], ['🥯', 'Bagel box', 'Bagel Barn'], ['🥗', 'Salad bowl', 'Green Leaf']],
@@ -259,18 +300,33 @@
   };
   const CUSTOMERS = ['Mrs. Lee', 'Big Mike', 'Apt 4B', 'The Garcias', 'Dr. Patel', 'Night shift crew'];
 
+  // a spot on a street about `dist` metres of city blocks from (fx, fz)
+  function pickSpot(fx, fz, dist) {
+    const blocks = Math.max(2, Math.round(dist / S));
+    for (let n = 0; n < 30; n++) {
+      const a = Math.round(rand(-blocks, blocks)), b = (blocks - Math.abs(a)) * (Math.random() < 0.5 ? 1 : -1);
+      const k = Math.round(fx / S) + a, j = Math.round(fz / S) + b, vert = Math.random() < 0.5;
+      const t = vert ? { x: k * S, z: (j + 0.5) * S, vert: true } : { x: (k + 0.5) * S, z: j * S, vert: false };
+      t.side = Math.random() < 0.5 ? 1 : -1;
+      if (Math.hypot(t.x - fx, t.z - fz) > 120) return t;
+    }
+    return { x: Math.round(fx / S) * S + S * 2, z: (Math.round(fz / S) + 0.5) * S, vert: true, side: 1 };
+  }
+
   function makeJob(tierKey) {
     const T = TIERS[tierKey], m = pick(MENU[tierKey]);
-    const pk = Math.round(rand(T.pk[0], T.pk[1])), dr = Math.round(rand(T.dr[0], T.dr[1]));
+    const a = pickSpot(G.x, G.z, rand(T.pk[0], T.pk[1]));
+    const b = pickSpot(a.x, a.z, rand(T.dr[0], T.dr[1]));
+    const pk = Math.round(Math.abs(a.x - G.x) + Math.abs(a.z - G.z)), dr = Math.round(Math.abs(b.x - a.x) + Math.abs(b.z - a.z));
     return {
-      tier: tierKey, icon: m[0], item: m[1], shop: m[2], customer: pick(CUSTOMERS), pk: pk, dr: dr,
-      time: Math.round((pk + dr) / 24 * T.timeF + 8), pay: Math.round(T.base * rand(0.95, 1.2))
+      tier: tierKey, icon: m[0], item: m[1], shop: m[2], customer: pick(CUSTOMERS), a: a, b: b, pk: pk, dr: dr,
+      time: Math.round((pk + dr) / 17 * T.timeF + 12), pay: Math.round(T.base * rand(0.95, 1.2))
     };
   }
 
   function showBoard(note) {
     G.state = 'board';
-    G.job = null; G.order = null; marker.visible = false;
+    G.job = null; G.order = null; marker.visible = false; clearProps();
     stopEngine();
     const order = ['easy', 'medium', 'hard'];
     let top = 'easy'; order.forEach(function (k) { if (G.earned >= TIERS[k].unlock) top = k; });
@@ -295,22 +351,16 @@
     say('v_board');
   }
 
-  function setTarget(z, x, color) {
-    G.order = { z: z, dropX: x };
-    marker.position.set(x, 0, z);
-    ring.material.color.setHex(color);
-    beam.material.color.setHex(color);
-    marker.visible = true;
-  }
-
   function startJob(job) {
     audioInit();
     G.job = job; G.phase = 'pickup'; G.state = 'play';
     G.timeLeft = job.time; G.food = 100; G.lowWarned = false;
     hidePanel();
-    setTarget(-(G.dist + job.pk), pick(LANES), 0x4cc2ff);
+    G.order = job.a;
+    setMarker(job.a, 0x4cc2ff);
+    buildProps(job.a, 'shop', job.icon, job.shop, '#4cc2ff', TIERS[job.tier].color);
     say(job.tier === 'easy' ? 'v_easy' : job.tier === 'medium' ? 'v_mid' : 'v_hard');
-    flash('Pick up at ' + job.shop, '#4cc2ff');
+    flash('Pick up at ' + job.shop + ' - follow the map', '#4cc2ff');
     startEngine();
     const hb = document.getElementById('hintbar'); if (G.delivered < 1) hb.style.opacity = 1;
   }
@@ -327,8 +377,7 @@
     G.state = 'over';
     stopEngine();
     say('v_over');
-    const panel = document.getElementById('panel');
-    panel.innerHTML = '<h1>Shift over</h1><p>Orders delivered: <b>' + G.delivered + '</b></p><p>Money earned: <b>$' + G.earned + '</b></p><p>Score: <b>' + G.score + '</b></p><br><button id="go">New shift</button>';
+    document.getElementById('panel').innerHTML = '<h1>Shift over</h1><p>Orders delivered: <b>' + G.delivered + '</b></p><p>Money earned: <b>$' + G.earned + '</b></p><p>Score: <b>' + G.score + '</b></p><br><button id="go">New shift</button>';
     document.getElementById('overlay').style.display = 'flex';
   }
 
@@ -336,12 +385,13 @@
     G.phase = 'deliver';
     play('pickup', 0.8);
     say('v_pickedup');
-    setTarget(G.order.z - G.job.dr, pick(LANES), 0x4cff7a);
+    G.order = G.job.b;
+    setMarker(G.job.b, 0x4cff7a);
+    buildProps(G.job.b, 'home', '🏠', G.job.customer, '#4cff7a', '#4cff7a');
     flash('Got it! Deliver to ' + G.job.customer, '#4cff7a');
   }
 
   function deliver() {
-    const T = TIERS[G.job.tier];
     const pay = G.job.pay + Math.round(G.food);
     const bonus = Math.round(G.timeLeft) * 3;
     const gained = (pay + bonus) * G.combo;
@@ -368,49 +418,60 @@
     setTimeout(function () { if (G.state === 'wait') showBoard(text); }, 1900);
   }
 
+  function hurt(dmg) { G.health -= dmg; if (G.health <= 0) { G.health = 0; gameOver(); } }
+
   function crash(o) {
     o.hit = true;
     G.combo = 1;
     G.shake = 0.5;
     if (o.kind === 'car') {
-      G.health -= 30; G.food -= 25; G.speed = Math.min(G.speed, 9);
+      G.food -= 25; G.speed = Math.min(G.speed, 6);
       play('crash', 0.9); if (Math.random() < 0.6) say('v_crash');
-      flash('CRASH!', '#ff5a5a');
+      flash('CRASH!', '#ff5a5a'); hurt(30);
     } else if (o.kind === 'cone') {
-      G.health -= 8; G.food -= 10; G.speed *= 0.4; o.group.rotation.z = 1.3;
+      G.food -= 10; G.speed *= 0.4; o.group.rotation.z = 1.3;
       play('cone', 0.9);
-      flash('Cone!', '#ffb020');
+      flash('Cone!', '#ffb020'); hurt(8);
     } else {
-      G.health -= 35; G.food -= 20; G.speed = MIN_SPEED; o.group.rotation.x = Math.PI / 2;
+      G.food -= 20; G.speed = MIN_SPEED; o.group.rotation.x = Math.PI / 2;
       play('crash', 0.6); say('v_ped', true);
-      flash('Pedestrian hit!', '#ff5a5a');
+      flash('Pedestrian hit!', '#ff5a5a'); hurt(35);
     }
-    if (G.health <= 0) { G.health = 0; gameOver(); }
   }
 
   // ---- Per-frame logic ----------------------------------------------------
   function update(dt) {
     const T = TIERS[G.job.tier];
     // Controls: finger drag (left/right steers, up/down = faster/slower), or keys
-    let steerTarget = null, speedTarget = CRUISE;
+    let steerIn = 0, speedTarget = CRUISE, holdSpeed = false;
     if (ptr) {
-      steerTarget = clamp(ptr.bx + (ptr.x - ptr.sx) / window.innerWidth * 16, -5, 5);
-      speedTarget = clamp(CRUISE + (ptr.sy - ptr.y) / window.innerHeight * 70, MIN_SPEED, MAX_SPEED);
+      steerIn = clamp((ptr.x - ptr.sx) / (window.innerWidth * 0.3), -1, 1);
+      speedTarget = clamp(CRUISE + (ptr.sy - ptr.y) / window.innerHeight * 60, MIN_SPEED, MAX_SPEED);
     } else {
-      if (keys.ArrowUp || keys.KeyW) speedTarget = MAX_SPEED;
-      else if (keys.ArrowDown || keys.KeyS) speedTarget = MIN_SPEED;
+      steerIn = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
+      if (keys.ArrowUp || keys.KeyW) { speedTarget = MAX_SPEED; holdSpeed = true; }
+      else if (keys.ArrowDown || keys.KeyS) { speedTarget = MIN_SPEED; holdSpeed = true; }
     }
-    const rate = speedTarget > G.speed ? 16 : 26;
+    const rate = speedTarget > G.speed ? 14 : 24;
     G.speed += clamp(speedTarget - G.speed, -rate * dt, rate * dt);
-    if (!ptr && !(keys.ArrowUp || keys.KeyW || keys.ArrowDown || keys.KeyS)) G.speed += (CRUISE - G.speed) * Math.min(1, 1.2 * dt);
-    let vxT;
-    if (steerTarget !== null) vxT = clamp((steerTarget - G.x) * 7, -STEER * 1.6, STEER * 1.6);
-    else vxT = ((keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0)) * STEER;
-    G.vx += (vxT - G.vx) * Math.min(1, 12 * dt);
-    G.x = clamp(G.x + G.vx * dt, -5, 5);
-    G.dist += G.speed * dt;
-    const pz = -G.dist;
+    G.steer += (steerIn - G.steer) * Math.min(1, 9 * dt);
+    G.h -= G.steer * 3.0 / (1 + G.speed / 24) * dt;   // right = clockwise
+    const fx = -Math.sin(G.h), fz = -Math.cos(G.h);
+    G.x += fx * G.speed * dt;
+    G.z += fz * G.speed * dt;
     setEngine(G.speed);
+
+    // buildings: slide out and scrape
+    if (solidAt(G.x, G.z, PLAYER_R)) {
+      const m = mod(G.x, S), n = mod(G.z, S), kx = Math.floor(G.x / S) * S, kz = Math.floor(G.z / S) * S;
+      const pens = [[m - (BLK - PLAYER_R), -1, 0], [(S - BLK + PLAYER_R) - m, 1, 0], [n - (BLK - PLAYER_R), 0, -1], [(S - BLK + PLAYER_R) - n, 0, 1]];
+      pens.sort(function (a, b) { return a[0] - b[0]; });
+      const p = pens[0];
+      G.x += p[1] * (p[0] + 0.05); G.z += p[2] * (p[0] + 0.05);
+      if (G.speed > 8) { G.speed *= 0.5; }
+      if (G.scrapeT <= 0) { G.scrapeT = 0.7; G.shake = 0.35; G.combo = 1; play('cone', 0.8, 0.7); flash('Watch the buildings!', '#ffb020'); hurt(6); if (G.state !== 'play') return; }
+    }
+    G.scrapeT -= dt;
 
     // Timers and food (food only cools once you have it)
     G.timeLeft -= dt;
@@ -419,20 +480,16 @@
     if (G.timeLeft <= 0) return failJob('Too late!', 'v_late');
     if (G.food <= 0) return failJob('Food went cold!', 'v_cold');
 
-    // Pick-up / drop-off: just ride through the ring
-    const ahead = pz - G.order.z;
-    if (ahead > -4 && ahead < 8 && Math.abs(G.x - G.order.dropX) < 2.6) {
+    // Pick-up / drop-off: ride into the ring
+    if (Math.hypot(G.x - G.order.x, G.z - G.order.z) < 5) {
       if (G.phase === 'pickup') pickedUp(); else return deliver();
-    } else if (ahead < -4) {
-      return failJob('Missed it!', 'v_missed');
     }
 
-    // Traffic
+    // Traffic fills in around the rider
     const diff = T.traffic * Math.min(1.5, 1 + G.delivered * 0.04);
-    G.spawnT -= dt; G.pedT -= dt; G.coneT -= dt;
-    if (G.spawnT <= 0) { spawnCar(); G.spawnT = rand(0.9, 1.5) / diff; }
-    if (G.pedT <= 0) { spawnPed(); G.pedT = rand(3, 5.5) / diff; }
-    if (G.coneT <= 0) { spawnCone(); G.coneT = rand(1.8, 3.3) / diff; }
+    if (countOf('car') < 8 * diff) spawnCar();
+    if (countOf('cone') < 9 * diff) spawnCone();
+    if (countOf('ped') < 3 * diff + 1) spawnPed();
     G.honkT -= dt;
 
     for (let i = objs.length - 1; i >= 0; i--) {
@@ -440,66 +497,110 @@
       o.group.position.x += o.vx * dt;
       o.group.position.z += o.vz * dt;
       const p = o.group.position;
-      const behind = p.z > pz + 25;
-      const far = p.z < pz - 320;
-      const crossed = o.kind === 'ped' && ((o.vx > 0 && p.x > o.endX) || (o.vx < 0 && p.x < o.endX));
-      if (behind || far || crossed) { scene.remove(o.group); objs.splice(i, 1); }
+      const gone = Math.hypot(p.x - G.x, p.z - G.z) > 330;
+      let crossed = false;
+      if (o.kind === 'ped') { const rel = (o.vert ? p.x : p.z) - o.c; crossed = o.dir > 0 ? rel > 9.5 : rel < -9.5; }
+      if (gone || crossed) { scene.remove(o.group); objs.splice(i, 1); }
     }
 
     for (const o of objs) {
       if (o.hit) continue;
-      const dx = Math.abs(o.group.position.x - G.x);
-      const dz = Math.abs(o.group.position.z - pz);
-      if (dx < o.hw + PLAYER_HW && dz < o.hl + PLAYER_HL) {
+      const p = o.group.position;
+      const ex = Math.max(Math.abs(p.x - G.x) - o.hw, 0), ez = Math.max(Math.abs(p.z - G.z) - o.hl, 0);
+      const d2 = ex * ex + ez * ez;
+      if (d2 < PLAYER_R * PLAYER_R) {
         crash(o);
         if (G.state !== 'play') return;
-      } else if (o.kind === 'car' && !o.honked && dz < 4 && dx < 2.4 && dx >= o.hw + PLAYER_HW && G.honkT <= 0) {
+      } else if (o.kind === 'car' && !o.honked && d2 < 3.5 * 3.5 && G.honkT <= 0) {
         o.honked = true; G.honkT = 4; play('horn', 0.35);   // near miss: the other driver honks
       }
     }
   }
 
-  // Visuals that follow or recycle regardless of state
+  // ---- Visuals ------------------------------------------------------------
+  function angDiff(a, b) { let d = a - b; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; }
   function syncScene(dt, now) {
-    const pz = -G.dist;
-    bike.position.set(G.x, 0, pz);
-    bike.rotation.z = -G.vx * 0.04;
+    bike.position.set(G.x, 0, G.z);
+    bike.rotation.set(0, G.h, -G.steer * 0.35 * Math.min(1, G.speed / 20));
     for (const w of wheels) w.rotation.x -= G.speed * dt / 0.45;
 
-    grass.position.z = pz - 150;
-    road.position.z = pz - 150;
-    sidewalkL.position.z = pz - 150;
-    sidewalkR.position.z = pz - 150;
+    ground.position.set((Math.round(G.x / S - 0.5) + 0.5) * S, 0, (Math.round(G.z / S - 0.5) + 0.5) * S);
+    updateBlocks();
 
-    for (const d of dashes) {
-      if (d.position.z > pz + 10) d.position.z -= DASH_LOOP;
-    }
-    for (const b of buildings) {
-      if (b.position.z > pz + 30) {
-        b.position.z -= BLDG_LOOP;
-        resetBuilding(b);
-      }
-    }
-
-    if (G.order && marker.visible) {
-      marker.position.z = G.order.z;
+    if (marker.visible) {
       const pulse = 1 + 0.08 * Math.sin(now * 0.006);
       ring.scale.set(pulse, pulse, pulse);
     }
 
-    // Chase camera with a little shake after crashes
+    // chase camera: trails the bike's heading a little for a smooth feel
+    G.camH += angDiff(G.h, G.camH) * (1 - Math.exp(-6 * dt));
     G.shake = Math.max(0, G.shake - dt * 1.5);
-    const k = 1 - Math.exp(-8 * dt);
-    camera.position.x += (G.x * 0.6 - camera.position.x) * k;
-    camera.position.y += (3.4 - camera.position.y) * k;
-    camera.position.z = pz + 7.5;
-    const sx = (Math.random() - 0.5) * G.shake * 0.6;
-    const sy = (Math.random() - 0.5) * G.shake * 0.4;
-    camera.lookAt(G.x * 0.6 + sx, 1.2 + sy, pz - 9);
+    const cfx = -Math.sin(G.camH), cfz = -Math.cos(G.camH);
+    const sx = (Math.random() - 0.5) * G.shake * 0.6, sy = (Math.random() - 0.5) * G.shake * 0.4;
+    camera.position.set(G.x - cfx * 7.5, 3.6, G.z - cfz * 7.5);
+    camera.lookAt(G.x + cfx * 10 + sx, 1.3 + sy, G.z + cfz * 10);
+  }
+
+  // ---- Map: heading-up mini map with a route to the current target
+  const mini = document.getElementById('mini'), mctx = mini.getContext('2d');
+  const MS = 0.55;   // px per metre
+  function routePts() {
+    const t = G.order, ci = Math.floor(G.x / S), cj = Math.floor(G.z / S), fx = -Math.sin(G.h), fz = -Math.cos(G.h);
+    let cand;
+    if (t.vert) { const k = Math.round(t.x / S), j = Math.floor(t.z / S); cand = [[k, j], [k, j + 1]]; }
+    else { const j = Math.round(t.z / S), k = Math.floor(t.x / S); cand = [[k, j], [k + 1, j]]; }
+    // start from the corner ahead of the rider that gets us to the target soonest
+    let best = null, bs = 1e9;
+    [[ci, cj], [ci + 1, cj], [ci, cj + 1], [ci + 1, cj + 1]].forEach(function (c) {
+      cand.forEach(function (e) {
+        const dx = c[0] * S - G.x, dz = c[1] * S - G.z;
+        const sc = Math.hypot(dx, dz) + (Math.abs(e[0] - c[0]) + Math.abs(e[1] - c[1])) * S + (dx * fx + dz * fz < 0 ? 90 : 0);
+        if (sc < bs) { bs = sc; best = [c, e]; }
+      });
+    });
+    const c = best[0], e = best[1], pts = [[G.x, G.z], [c[0] * S, c[1] * S]];
+    if (t.vert) pts.push([e[0] * S, c[1] * S]); else pts.push([c[0] * S, e[1] * S]);
+    pts.push([e[0] * S, e[1] * S]);
+    pts.push([t.x, t.z]);
+    return pts;
+  }
+  function drawMap() {
+    const W = mini.width, R = W / 2, dpr = W / mini.clientWidth || 1, sc = MS * dpr;
+    mctx.clearRect(0, 0, W, W);
+    mctx.save();
+    mctx.beginPath(); mctx.arc(R, R, R - 2, 0, Math.PI * 2); mctx.clip();
+    mctx.fillStyle = 'rgba(14,18,32,.82)'; mctx.fillRect(0, 0, W, W);
+    const rx = Math.cos(G.h), rz = -Math.sin(G.h), fx = -Math.sin(G.h), fz = -Math.cos(G.h);
+    const toS = function (x, z) { const dx = x - G.x, dz = z - G.z; return [R + (dx * rx + dz * rz) * sc, R - (dx * fx + dz * fz) * sc]; };
+    const span = R / sc + S;
+    mctx.lineCap = 'round';
+    mctx.strokeStyle = '#4b5166'; mctx.lineWidth = 7 * dpr * 0.55 + 2;
+    for (let k = Math.floor((G.x - span) / S); k <= Math.ceil((G.x + span) / S); k++) {
+      const a = toS(k * S, G.z - span), b = toS(k * S, G.z + span); mctx.beginPath(); mctx.moveTo(a[0], a[1]); mctx.lineTo(b[0], b[1]); mctx.stroke();
+    }
+    for (let k = Math.floor((G.z - span) / S); k <= Math.ceil((G.z + span) / S); k++) {
+      const a = toS(G.x - span, k * S), b = toS(G.x + span, k * S); mctx.beginPath(); mctx.moveTo(a[0], a[1]); mctx.lineTo(b[0], b[1]); mctx.stroke();
+    }
+    if (G.order && (G.state === 'play')) {
+      const pts = routePts().map(function (p) { return toS(p[0], p[1]); });
+      mctx.strokeStyle = G.phase === 'pickup' ? '#4cc2ff' : '#4cff7a'; mctx.lineWidth = 4 * dpr * 0.6 + 1;
+      mctx.beginPath(); pts.forEach(function (p, n) { if (n) mctx.lineTo(p[0], p[1]); else mctx.moveTo(p[0], p[1]); }); mctx.stroke();
+      // destination pin, clamped to the edge when it is off the map
+      let [px, py] = toS(G.order.x, G.order.z); const dx = px - R, dy = py - R, dd = Math.hypot(dx, dy), lim = R - 14 * dpr;
+      if (dd > lim) { px = R + dx / dd * lim; py = R + dy / dd * lim; }
+      mctx.fillStyle = G.phase === 'pickup' ? '#4cc2ff' : '#4cff7a'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 2;
+      mctx.beginPath(); mctx.arc(px, py, 8 * dpr * 0.8, 0, Math.PI * 2); mctx.fill(); mctx.stroke();
+      mctx.fillStyle = '#04101f'; mctx.font = '700 ' + (11 * dpr) + 'px system-ui'; mctx.textAlign = 'center'; mctx.textBaseline = 'middle';
+      mctx.fillText(G.phase === 'pickup' ? 'P' : 'D', px, py + 1);
+    }
+    mctx.restore();
+    // me
+    mctx.fillStyle = '#ffc233'; mctx.strokeStyle = '#000'; mctx.lineWidth = 2;
+    mctx.beginPath(); mctx.moveTo(R, R - 9 * dpr); mctx.lineTo(R + 6 * dpr, R + 7 * dpr); mctx.lineTo(R, R + 3 * dpr); mctx.lineTo(R - 6 * dpr, R + 7 * dpr); mctx.closePath(); mctx.fill(); mctx.stroke();
+    mctx.strokeStyle = 'rgba(255,255,255,.55)'; mctx.lineWidth = 3; mctx.beginPath(); mctx.arc(R, R, R - 2, 0, Math.PI * 2); mctx.stroke();
   }
 
   function updateHUD() {
-    const pz = -G.dist;
     const setText = (id, t) => { document.getElementById(id).textContent = t; };
     setText('score', G.score);
     setText('combo', 'x' + G.combo);
@@ -507,16 +608,16 @@
     timeEl.textContent = Math.max(0, Math.ceil(G.timeLeft));
     timeEl.style.color = G.timeLeft < 5 ? '#ff5a5a' : '#fff';
     setText('distlabel', G.phase === 'pickup' ? 'To pickup' : 'To drop-off');
-    setText('dist', G.order && G.state === 'play' ? Math.max(0, Math.round(pz - G.order.z)) + 'm' : '-');
+    setText('dist', G.order && G.state === 'play' ? Math.round(Math.hypot(G.x - G.order.x, G.z - G.order.z)) + 'm' : '-');
     document.querySelector('#healthBar > div').style.width = clamp(G.health, 0, 100) + '%';
     document.querySelector('#foodBar > div').style.width = clamp(G.food, 0, 100) + '%';
-
+    mini.style.opacity = G.state === 'play' ? 1 : 0;
+    if (G.state === 'play') drawMap();
     if (G.msgT > 0) {
       G.msgT -= 1 / 60;
       if (G.msgT <= 0) document.getElementById('msg').style.opacity = 0;
     }
   }
-
 
   // ---- Input: finger drag ---------------------------------------------------
   const keys = {};
@@ -527,7 +628,7 @@
     audioInit();
     if (G.state !== 'play' || inOverlay(e.target) || ptr) return;
     e.preventDefault();
-    ptr = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY, bx: G.x };
+    ptr = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY };
     document.getElementById('hintbar').style.opacity = 0;
   }, { passive: false });
   window.addEventListener('pointermove', function (e) {
@@ -597,6 +698,7 @@
   // duck the music while someone is talking
   setInterval(function () { if (musicG && AC) musicG.gain.setTargetAtTime(AC.currentTime < voiceT ? 0.12 : 0.32, AC.currentTime, 0.2); }, 150);
 
+
   // ---- Loop ---------------------------------------------------------------
   let last = performance.now();
   function frame(now) {
@@ -613,13 +715,10 @@
   }
 
   resetRun();
-  window.DD = { G: G, marker: marker };
-  {
-    const panel = document.getElementById('panel');
-    panel.innerHTML = '<h1>Dash Delivery</h1>' +
-      '<p>Pick a job, ride to the <b style="color:#4cc2ff">blue</b> ring to pick up the order, then to the <b style="color:#4cff7a">green</b> ring to deliver it.</p>' +
-      '<p><b>Drag your finger</b>: left / right to steer, up to go faster, down to slow down. Let go to cruise.</p>' +
-      '<p class="hint">Harder jobs pay more but have more traffic and less time. Keep the food hot.</p><br><button id="go">Start shift</button>';
-  }
+  window.DD = { G: G, marker: marker, objs: objs, routePts: routePts };
+  document.getElementById('panel').innerHTML = '<h1>Dash Delivery</h1>' +
+    '<p>Pick a job. Ride to the shop (<b style="color:#4cc2ff">blue</b> ring) to grab the order, then follow the <b>map</b> to the customer (<b style="color:#4cff7a">green</b> ring).</p>' +
+    '<p><b>Drag your finger</b>: left / right to turn, up to go faster, down to slow down. Slow down for corners and stay off the buildings.</p>' +
+    '<p class="hint">Harder jobs pay more but have more traffic and less time. Keep the food hot.</p><br><button id="go">Start shift</button>';
   requestAnimationFrame(frame);
 })();

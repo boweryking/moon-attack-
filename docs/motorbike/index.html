@@ -24,7 +24,7 @@
     button { margin-top: 12px; font-size: 20px; padding: 12px 28px; border: 0; border-radius: 10px; background: #ff5a1f; color: #fff; font-weight: 700; cursor: pointer; }
 
     html, body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
-    #hintbar { position: fixed; left: 0; right: 0; bottom: calc(18px + env(safe-area-inset-bottom)); text-align: center; font-weight: 700; font-size: 15px; text-shadow: 0 2px 6px #000; pointer-events: none; transition: opacity .6s; opacity: 0; }
+    #hintbar { position: fixed; left: 0; right: 0; bottom: calc(170px + env(safe-area-inset-bottom)); text-align: center; padding: 0 12px; font-weight: 700; font-size: 15px; text-shadow: 0 2px 6px #000; pointer-events: none; transition: opacity .6s; opacity: 0; }
     #panel { max-height: 100%; overflow-y: auto; }
     .jobs { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
     .job { display: flex; align-items: center; gap: 12px; text-align: left; padding: 12px 14px; border-radius: 14px; border: 3px solid; background: rgba(255,255,255,.08); color: #fff; font: inherit; font-size: 15px; cursor: pointer; }
@@ -32,6 +32,7 @@
     .job small { opacity: .75; font-size: 12px; }
     .job.locked { opacity: .4; cursor: default; }
     @media (max-width: 700px) { #hud { top: 6px; left: 6px; right: 6px; gap: 6px; } .card { min-width: 70px !important; padding: 4px 8px; } .val { font-size: 17px; } #msg { font-size: 20px; white-space: normal; width: 86vw; text-align: center; } #panel { padding: 14px; } #panel h1 { font-size: 30px; } }
+    #mini { position: fixed; left: 10px; bottom: calc(14px + env(safe-area-inset-bottom)); width: 140px; height: 140px; pointer-events: none; opacity: 0; transition: opacity .3s; }
   </style>
 </head>
 <body>
@@ -50,8 +51,9 @@
     </div>
   </div>
 
+  <canvas id="mini" width="280" height="280"></canvas>
   <div id="msg"></div>
-  <div id="hintbar">Drag: left / right steers &middot; up = faster &middot; down = slower</div>
+  <div id="hintbar">Drag your finger: left / right turns &middot; up = faster &middot; down = slower</div>
 
   <div id="overlay">
     <div id="panel"></div>
