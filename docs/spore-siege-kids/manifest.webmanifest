@@ -1,0 +1,1 @@
+{"name": "Ranita y la oruga", "short_name": "Ranita", "start_url": "./", "scope": "./", "display": "standalone", "orientation": "portrait", "background_color": "#04101a", "theme_color": "#04101a", "icons": [{"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}]}
