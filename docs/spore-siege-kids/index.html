@@ -83,12 +83,12 @@ const sfx = {
 const CLIPS = ['chomp', 'croak', 'croak_happy', 'croak_sad', 'dragonfly', 'fly', 'spider', 'scorpion', 'splat', 'butterfly', 'levelup', 'spit', 'rustle', 'nom', 'frog_start', 'frog_hurt', 'frog_life', 'frog_wave', 'frog_free', 'frog_spider', 'frog_dragon', 'frog_over', 'frog_hungry', 'frog_hey', 'lady_enter', 'lady_taunt1', 'lady_taunt2', 'lady_taunt3', 'lady_taunt4', 'lady_eek', 'lady_curse', 'lady_curse2', 'lady_saved', 'lady_dead', 'kid_n1', 'kid_n2', 'kid_n3', 'kid_n4', 'kid_n5', 'kid_n6', 'kid_n7', 'kid_n8', 'kid_n9', 'kid_n10', 'kid_start', 'kid_tickle', 'kid_win', 'kid_butterfly', 'kid_cheer', 'kid_c1', 'kid_c2', 'kid_c3', 'kid_c4', 'kid_c5', 'kid_c6', 'kid_a1', 'kid_a2', 'kid_a3', 'kid_a4', 'kid_a5', 'kid_a6', 'kid_l1', 'kid_l2', 'kid_l3', 'kid_l4', 'kid_l5', 'kid_l6', 'kid_s1', 'kid_s2', 'kid_s3', 'kid_s4', 'kid_s5', 'kid_s6', 'kid_l7', 'kid_p1', 'kid_p2', 'kid_p3'], cbuf = {};
 const LADY_ES = { lady_enter: 'Vaya, vaya, vaya. Mira nada más al gran héroe. Procura no arruinarlo, cariño.', lady_taunt1: 'Muévete, lentorro. Tengo un estanque al que llegar.', lady_taunt2: '¿Eso es lo mejor que tienes? Mi abuela escupe mejor, ¡y es un renacuajo!', lady_taunt3: 'Ojos en la maldita oruga, cielo. No en mis piernas.', lady_taunt4: 'Tú tranquilo, yo salto por aquí mientras averiguas cuál lado es arriba.', lady_eek: '¡Ay, diablos, no! ¡La oruga! ¡Haz algo, grandísimo tonto!', lady_curse: '¡Baboso, cara de verruga, sapo de charco! ¡Que se te pudran los nenúfares y que tus moscas sepan a jabón!', lady_curse2: '¡Mal rayo te parta, cerebro de bicho! ¡Que una libélula se te siente en la cara por cien años!', lady_saved: 'Caray. Mi héroe. Que no se te suba a la cabeza. Ribbit.', lady_dead: '¡Inútil verruga! ¡Confié en ti y ahora soy el almuerzo! ¡Maldito seas!' };
 const LADY_LINES = { lady_enter: "Well, well, well. Look at you, big hero. Try not to screw it up, sweetie.", lady_taunt1: 'Move your slimy ass, slowpoke. I have a pond to get to.', lady_taunt2: "Is that the best you've got? My grandmother spits better, and she's a tadpole.", lady_taunt3: 'Eyes on the damn caterpillar, darling. Not on my legs.', lady_taunt4: "Oh, don't mind me. I'll just hop around while you figure out which end is up.", lady_eek: 'Oh hell no! Caterpillar! Do something, you big dumb lump!', lady_curse: 'You slimy, wart-faced, pond-scum son of a toad! May your lily pads rot and your flies taste like soap!', lady_curse2: 'A hex on you, you bug-brained bastard! May a dragonfly sit on your face for a hundred years!', lady_saved: "Well, damn. My hero. Don't let it go to your head. Ribbit.", lady_dead: "You useless wart! I trusted you, and now I'm lunch! Damn you!" };
-if (KID) Object.assign(LADY_ES, { lady_enter: '¡Hola, Emiliano! Soy la reina. ¡Ayúdame a cruzar!', lady_taunt1: '¡Vamos, Emiliano! ¡Tú puedes!', lady_taunt2: '¡Cómete a las orugas, Emiliano!', lady_taunt3: '¡Ayúdame a cruzar, por favor!', lady_taunt4: '¡Eres muy valiente, Emiliano!', lady_eek: '¡Ay, la oruga! ¡Ayúdame, Emiliano!', lady_curse: '¡No, no, Emiliano! ¡Soy la reina! ¡Cuidado!', lady_curse2: '¡Ji, ji! ¡Cuidado, soy la reina!', lady_saved: '¡Gracias, Emiliano! ¡Me salvaste! ¡Eres mi héroe!', lady_dead: '' });
+if (KID) Object.assign(LADY_ES, { lady_enter: '¡Hola, Emiliano! Soy la reina. ¡Ayúdame a cruzar!', lady_taunt1: '¡Vamos, Emiliano! ¡Tú puedes!', lady_taunt2: '¡Cómete a las orugas, Emiliano!', lady_taunt3: '¡Ayúdame a cruzar, por favor!', lady_taunt4: '¡Eres muy valiente, Emiliano!', lady_eek: '¡Ay, la oruga! ¡Ayúdame, Emiliano!', lady_curse: '¡Ji, ji, ji! ¡Qué cosquillas, Emiliano! ¡Soy la reina!', lady_curse2: '¡Ay, qué lindo, Emiliano! Ahora, ¡ayúdame a cruzar, por favor!', lady_saved: '¡Gracias, Emiliano! ¡Me salvaste! ¡Eres mi héroe!', lady_dead: '' });
 function ladySay(name) { ladyMsg = { text: (LANG === 'es' ? LADY_ES : LADY_LINES)[name] || '', t: 4.2 }; frogT = Math.max(frogT, 4); clip(name, 1); }
 let frogT = 0, tauntT = 45;
-const KIDMAP = { frog_start: 'kid_start', frog_free: 'kid_butterfly', frog_hungry: 'kid_cheer', frog_hey: 'kid_cheer' };
+const KIDMAP = { frog_start: 'kid_start' };
 function frogSay(name, force, delay = 0) { if (KID) { name = KIDMAP[name] || (/^kid_/.test(name) ? name : null); if (!name) return; } const go = () => { if (!force && frogT > 0) return; if (clip(name, .95)) frogT = 6; }; delay ? setTimeout(go, delay) : go(); } // the frog talks now and then, never twice in a row
-async function loadClips() { await Promise.all(CLIPS.concat(['frog_prize']).map(async k => { try { const r = await fetch((LANG === 'es' && /^(frog_|lady_|kid_|nom$)/.test(k) ? 'audio/sfx/es/' : 'audio/sfx/') + k + '.mp3'); if (!r.ok) return; cbuf[k] = await AC.decodeAudioData(await r.arrayBuffer()); } catch (e) {} })); }
+async function loadClips() { await Promise.all(CLIPS.concat(['frog_prize']).map(async k => { try { const r = await fetch((LANG === 'es' && /^(frog_|lady_|kid_|nom$)/.test(k) ? 'audio/sfx/es/' : 'audio/sfx/') + k + '.mp3?v=4'); if (!r.ok) return; cbuf[k] = await AC.decodeAudioData(await r.arrayBuffer()); } catch (e) {} })); }
 function clip(name, vol = .6, rate = 1) {
   if (!AC || muted || !cbuf[name]) return false; const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = cbuf[name]; s.playbackRate.value = rate; g.gain.value = vol; s.connect(g); g.connect(master); s.start(); return true;
 }
@@ -189,7 +189,7 @@ function spawnLady() {
   lady = { x: dir > 0 ? -22 : W + 22, y: cyy(row), row, dir, hopT: 0, talkT: 4.5, taunt: 0, dead: 0, tag: KID || seen < 4 }; ladyTip = (KID || seen < 4) ? 6 : 0; ladySay('lady_enter');
 }
 function killLady(by) {
-  if (KID) { const l = lady; if (l && by === 'player' && !(l.bonkT > 0)) { l.bonkT = 1.2; l.x -= l.dir * 40; boom(l.x, l.y, 14, '#c58bff', 120); texts.push({ x: l.x, y: l.y - 24, t: 1.4, s: '¡CUIDADO!', fs: 22, col: '#ff7ad9' }); ladySay(Math.random() < .5 ? 'lady_curse' : 'lady_curse2'); } return; }
+  if (KID) { const l = lady; if (l && by === 'player' && !(l.bonkT > 0)) { l.bonkT = 1.2; l.x -= l.dir * 40; boom(l.x, l.y, 14, '#c58bff', 120); texts.push({ x: l.x, y: l.y - 24, t: 1.4, s: '¡JI, JI!', fs: 22, col: '#ff7ad9' }); ladySay(Math.random() < .5 ? 'lady_curse' : 'lady_curse2'); } return; }
   const l = lady; if (!l || l.dead) return; ladyT = rnd(12, 20); l.dead = .9; boom(l.x, l.y, 26, by === 'player' ? '#c58bff' : '#ff7ad9', 200);
   if (by === 'player') { score = Math.max(0, score - 500); hexT = 4; texts.push({ x: l.x, y: l.y - 20, t: 1.4, s: '-500' }); texts.push({ x: W / 2, y: H * .55, t: 1.8, s: t('cursed') }); ladySay(Math.random() < .5 ? 'lady_curse' : 'lady_curse2'); tone(300, .5, 'sawtooth', .12, 60); }
   else { texts.push({ x: l.x, y: l.y - 20, t: 1.4, s: t('lost') }); ladySay('lady_dead'); sfx.pop(); }
@@ -204,7 +204,7 @@ function updateLady(dt) {
   for (const [x, y] of foes) { const d = Math.hypot(x - l.x, y - l.y); near = Math.min(near, d); if (d < 30) { killLady('foe'); return; } }
   if (KID) { l.scared = (l.scared || 0) - dt; l.bonkT = (l.bonkT || 0) - dt; for (const w of worms) for (const sg of w) { const [wx, wy] = segXY(sg); if (l.scared <= 0 && Math.hypot(wx - l.x, wy - l.y) < 30) { l.scared = 2.5; l.x -= l.dir * 70; ladySay('lady_eek'); boom(l.x, l.y, 10, '#ffffff', 90); } } }
   if (near < 150 && ladyEekT <= 0) { ladySay('lady_eek'); ladyEekT = 8; }
-  l.talkT -= dt; if (l.talkT <= 0) { ladySay(['lady_taunt1', 'lady_taunt2', 'lady_taunt3', 'lady_taunt4'][l.taunt++ % 4]); l.talkT = rnd(6, 8); }
+  l.talkT -= dt; if (l.talkT <= 0) { ladySay(['lady_taunt1', 'lady_taunt2', 'lady_taunt3', 'lady_taunt4'][l.taunt++ % 4]); l.talkT = KID ? rnd(14, 20) : rnd(6, 8); }
   if ((l.dir > 0 && l.x > W + 26) || (l.dir < 0 && l.x < -26)) { lady = null; ladySaved++; ladyT = rnd(24, 38); score += 2000; if (score > hi) hi = score; texts.push({ x: W / 2, y: H * .45, t: 2, s: t('made') }); boom(W / 2, H * .45, 30, '#ff7ad9', 160); ladySay('lady_saved'); sfx.life(); checkPrize(); }
 }
 function pts(n, x, y) { score += n; if (n >= 100) texts.push({ x, y, t: .8, s: String(n) }); if (score >= nextLife) { nextLife += 12000; lives++; sfx.life(); frogSay('frog_life', true, 500); texts.push({ x: W / 2, y: H / 2, t: 1.5, s: t('extra') }); } if (score > hi) { hi = score; } }
@@ -226,17 +226,32 @@ let kidFree = 0, kidP = 0;
 const kidDur = n => (cbuf[n] && cbuf[n].duration) || 1.5;
 function kidQueue(dur, fn) { const nw = performance.now(), st = Math.max(nw, kidFree); kidFree = st + dur * 1000 + 200; setTimeout(fn, st - nw); }
 function kidShow(big, col, fs, label, lcol, life) { texts.push({ x: W / 2, y: H * .3, t: life, s: big, fs, col, still: true }); texts.push({ x: W / 2, y: H * .3 + fs * .75, t: life, s: label, fs: 26, col: lcol || col, still: true }); }
-function kidLearn(x, y) {
-  const L = wave - 1, m = L % 4, sets = KSETS[m], set = sets[Math.floor(L / 4) % sets.length], it = set[kidN % 3]; kidN++;
-  if (m === 0) { const n = KNUM[it - 1]; kidQueue(kidDur('kid_n' + it), () => { clip('kid_n' + it, 1); kidShow(String(it), '#ffe066', 120, n[0].toUpperCase() + ' · ' + n[1], '#ffe066', kidDur('kid_n' + it) + .1); }); }
-  else if (m === 1) { const c = KV.colors[it - 1]; kidQueue(kidDur('kid_c' + it), () => { clip('kid_c' + it, 1); boom(x, y, 18, c[2], 160); kidShow('●', c[2], 130, c[0] + ' · ' + c[1], c[2], kidDur('kid_c' + it) + .1); }); }
-  else if (m === 2) { const a = KV.animals[it - 1], d = .9 + kidDur('kid_a' + it); kidQueue(d, () => { clip('kid_s' + it, 1); setTimeout(() => clip('kid_a' + it, 1), 900); kidShow(a[2], '#ffe066', 110, a[0] + ' · ' + a[1], '#ffe066', d + .1); }); }
-  else { const l = KV.letters[it - 1]; kidQueue(kidDur('kid_l' + it), () => { clip('kid_l' + it, 1); kidShow(l[0], '#7dff6a', 120, l[1], '#ffe066', kidDur('kid_l' + it) + .1); }); }
-  if (kidN % 3 === 0) { kidP = kidP % 3 + 1; const pp = kidP; kidQueue(kidDur('kid_p' + pp), () => { clip('kid_p' + pp, 1); texts.push({ x: W / 2, y: H * .3, t: kidDur('kid_p' + pp) + .6, s: KPRAISE[pp - 1], fs: 34, col: '#ff7ad9', still: true }); }); }
+// The lesson happens between levels: the game waits, the 3 words of the level that was just finished are shown one at a time while they are spoken, then the next level starts.
+let lessonCur = null;
+function startLesson() {
+  const L = wave - 1, m = L % 4, sets = KSETS[m], set = sets[Math.floor(L / 4) % sets.length]; state = 'lesson'; lessonCur = null; let t0 = 0;
+  const at = (ms, fn) => setTimeout(fn, ms);
+  at(t0, () => { lessonCur = { big: ['1 2 3', '🎨', '🐾', 'A B C'][m], col: '#b6ff5a', fs: 70, label: KLABEL[m], lcol: '#b6ff5a' }; }); t0 += 1700;
+  set.forEach(it => {
+    let big, col, fs = 120, label, lcol, play, dur;
+    if (m === 0) { const n = KNUM[it - 1]; big = String(it); col = lcol = '#ffe066'; label = n[0].toUpperCase() + ' · ' + n[1]; play = () => clip('kid_n' + it, 1); dur = kidDur('kid_n' + it); }
+    else if (m === 1) { const c = KV.colors[it - 1]; big = '●'; col = lcol = c[2]; fs = 130; label = c[0] + ' · ' + c[1]; play = () => clip('kid_c' + it, 1); dur = kidDur('kid_c' + it); }
+    else if (m === 2) { const a = KV.animals[it - 1]; big = a[2]; col = lcol = '#ffe066'; fs = 110; label = a[0] + ' · ' + a[1]; play = () => { clip('kid_s' + it, 1); setTimeout(() => clip('kid_a' + it, 1), 900); }; dur = .9 + kidDur('kid_a' + it); }
+    else { const l = KV.letters[it - 1]; big = l[0]; col = '#7dff6a'; lcol = '#ffe066'; label = l[1]; play = () => clip('kid_l' + it, 1); dur = kidDur('kid_l' + it); }
+    at(t0, () => { lessonCur = { big, col, fs, label, lcol }; play(); }); t0 += dur * 1000 + 600;
+  });
+  kidP = kidP % 3 + 1; const pp = kidP;
+  at(t0, () => { lessonCur = { big: '⭐', col: '#ffe066', fs: 100, label: KPRAISE[pp - 1], lcol: '#ff7ad9' }; clip('kid_p' + pp, 1); }); t0 += kidDur('kid_p' + pp) * 1000 + 700;
+  at(t0, () => { lessonCur = null; wave++; seedMushrooms(); pts(wave * 50, W / 2, H / 2); startWave(); state = 'play'; });
+}
+function drawLesson() {
+  ctx.fillStyle = 'rgba(4,8,22,.88)'; ctx.fillRect(0, 0, W, H); if (!lessonCur) return; const c = lessonCur; ctx.textAlign = 'center';
+  glow(c.col, 26); ctx.font = '700 ' + Math.round(c.fs * 1.5) + 'px "Courier New", monospace'; ctx.fillText(c.big, W / 2, H * .44);
+  glow(c.lcol || c.col, 10); ctx.font = '700 ' + Math.min(30, Math.floor(W / 14)) + 'px "Courier New", monospace'; ctx.fillText(c.label, W / 2, H * .44 + c.fs * .85);
 }
 function killSeg(wi, si) {
   const w = worms[wi], s = w[si], [x, y] = segXY(s), head = si === 0; boom(x, y, head ? 26 : 14, head ? '#ffd27a' : '#b6ff5a'); head ? sfx.head() : sfx.pop(); pts(head ? 100 : 10, x, y);
-  if (KID) kidLearn(x, y);
+  if (KID) kidN++;
   if (s.r >= 0 && s.r < ROWS && s.c >= 0 && s.c < COLS && !plant[s.r][s.c]) { mush[s.r][s.c] = 4; pois[s.r][s.c] = false; }
   const a = w.slice(0, si), b = w.slice(si + 1); worms.splice(wi, 1); if (a.length) worms.push(a); if (b.length) worms.push(b);
   if (!worms.length && !queue.length) { butter = { x, y, t: 0, life: KID ? 2.2 : 4.5, seed: rnd(0, TAU) }; sfx.magic(); texts.push({ x: W / 2, y: Math.max(OY + 40, y - 40), t: 1.8, s: t('ghost') }); boom(x, y, 30, '#bfe9ff', 120); }
@@ -318,7 +333,7 @@ function update(dt) {
   for (const q of queue) q.t -= dt; for (const q of queue.filter(q => q.t <= 0)) worms.push(makeWorm(1, 2 + Math.floor(Math.random() * 3), q.left)); queue = queue.filter(q => q.t > 0);
   if (ship.alive) for (const w of worms) for (const s of w) { const [x, y] = segXY(s); if (Math.hypot(x - ship.x, y - ship.y) < 24) killShip(); }
   if (!KID) enemies(dt); updateLady(dt);
-  if (!worms.length && !queue.length && !butter) { kidN = 0; wave++; seedMushrooms(); pts(wave * 50, W / 2, H / 2); startWave(); }
+  if (!worms.length && !queue.length && !butter) { kidN = 0; if (KID) { startLesson(); return; } wave++; seedMushrooms(); pts(wave * 50, W / 2, H / 2); startWave(); }
   pulse(dt);
 }
 
@@ -451,6 +466,7 @@ function draw() {
   else if (state === 'over') { glow('#ff4d5e', 22); ctx.font = '700 60px "Courier New", monospace'; ctx.fillText(t('over'), W / 2, H * .4); glow('#fff', 8); ctx.font = '700 22px "Courier New", monospace'; ctx.fillText(t('score') + score, W / 2, H * .5); ctx.fillText(touchMode ? t('tap_again') : t('click_again'), W / 2, H * .58); }
   else if (state === 'prize') drawPrize();
   else if (state === 'how') drawHow();
+  else if (state === 'lesson') drawLesson();
   else if (state === 'pause') { glow('#fff', 14); ctx.font = '700 48px "Courier New", monospace'; ctx.fillText(t('paused'), W / 2, H / 2); ctx.font = '18px "Courier New", monospace'; ctx.fillText(touchMode ? t('tap_resume') : t('click_resume'), W / 2, H / 2 + 36); }
   else if (banner > 0) { ctx.globalAlpha = clamp(banner, 0, 1); glow('#ffe066', 18); ctx.font = '700 40px "Courier New", monospace'; ctx.fillText(t('wave') + wave, W / 2, H / 2 - 60); ctx.font = '700 ' + Math.min(22, Math.floor(W / 20)) + 'px "Courier New", monospace'; glow('#b6ff5a', 10); ctx.fillText(TXT[LANG].themes[THEMES.indexOf(theme)] || theme.name, W / 2, H / 2 - 28); ctx.globalAlpha = 1; }
   ctx.shadowBlur = 0;
