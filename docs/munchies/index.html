@@ -31,7 +31,7 @@ const DIRS = [[0, -1], [-1, 0], [0, 1], [1, 0]]; // up left down right (tie-brea
 
 // ---------- audio
 let AC = null, muted = false, master = null, curMusic = null, wantMusic = null, voiceEnd = 0, voiceSrc = null;
-const SND = {}, NAMES = ['chomp', 'pipe', 'eat', 'death', 'level', 'munchie', 'life', 'wail', 'm_reggae', 'v_intro', 'v_hint', 'v_start', 'v_pipe', 'v_eat1', 'v_eat2', 'v_pipeend', 'v_death', 'v_level', 'v_munch', 'v_last', 'v_life', 'v_over', 'v_chase'];
+const SND = {}, NAMES = ['chomp', 'meow', 'pipe', 'eat', 'death', 'level', 'munchie', 'life', 'wail', 'm_reggae', 'v_intro', 'v_hint', 'v_start', 'v_pipe', 'v_eat1', 'v_eat2', 'v_pipeend', 'v_death', 'v_level', 'v_munch', 'v_last', 'v_life', 'v_over', 'v_chase'];
 function audio() {
   if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = .95; master.connect(AC.destination);
     NAMES.forEach(n => fetch('audio/' + n + '.mp3?v=1').then(r => r.arrayBuffer()).then(b => new Promise((res, rej) => AC.decodeAudioData(b, res, rej))).then(buf => { SND[n] = buf; if (n === wantMusic && !curMusic) playMusic(n); }).catch(() => {})); } catch (e) {} }
@@ -91,9 +91,9 @@ function pacAt(e) {
   if (bonus && bonus.tx === e.tx && bonus.ty === e.ty) { score += MUNCH[(level - 1) % MUNCH.length][1]; texts.push({ x: pxOf(e), y: pyOf(e) - 10, t: 1.2, s: String(MUNCH[(level - 1) % MUNCH.length][1]) }); snd('munchie', .8) || tone(900, .2, 'triangle', .1, 1500); say('munch'); bonus = null; checkScore(); }
   if (totalDots - eaten === 10 && !saidLast) { saidLast = true; say('last'); }
 }
-function checkScore() { if (score > hi) hi = score; if (score >= nextLife) { nextLife += 10000; lives++; snd('life', .8); say('life', true); texts.push({ x: W / 2, y: H / 2, t: 1.6, s: 'EXTRA LIFE' }); } }
+function checkScore() { if (score > hi) hi = score; if (score >= nextLife) { nextLife += 10000; lives++; snd('life', .8); setTimeout(() => snd('meow', .8), 350); say('life', true); texts.push({ x: W / 2, y: H / 2, t: 1.6, s: 'EXTRA LIFE' }); } }
 function eatPipe() {
-  score += 50; seenPipe = true; chain = 0; frightT = Math.max(2.5, 8 - level * .8); snd('pipe', .9) || tone(150, .6, 'sine', .15, 400); say('pipe', true);
+  score += 50; seenPipe = true; chain = 0; frightT = Math.max(2.5, 8 - level * .8); snd('meow', .8); snd('pipe', .9) || tone(150, .6, 'sine', .15, 400); say('pipe', true);
   for (const g of GH) if (g.state === 'norm') { g.fr = 1; reverse(g); }
 }
 function ghostTarget(g, i) {
