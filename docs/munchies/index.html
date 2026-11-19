@@ -248,7 +248,7 @@ function hud() {
 }
 function wrapText(s, x, y, mw, lh) { const words = s.split(' '); let line = '', yy = y; if (ctx.measureText(s).width > mw) yy = y - 4; for (const w of words) { if (ctx.measureText(line + w).width > mw && line) { ctx.fillText(line, x, yy); yy += lh; line = ''; } line += w + ' '; } ctx.fillText(line, x, yy); }
 function drawStick() {
-  if (!touchUI || state === 'title') return; const S = stick; ctx.save(); glow('#3dff7a', 8); ctx.lineWidth = 3; ctx.globalAlpha = .5; ctx.beginPath(); ctx.arc(S.cx, S.cy, S.R, 0, TAU); ctx.stroke();
+  return; const S = stick; ctx.save(); glow('#3dff7a', 8); ctx.lineWidth = 3; ctx.globalAlpha = .5; ctx.beginPath(); ctx.arc(S.cx, S.cy, S.R, 0, TAU); ctx.stroke();
   ctx.globalAlpha = .35; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(S.cx, S.cy - S.R + 8); ctx.lineTo(S.cx, S.cy + S.R - 8); ctx.moveTo(S.cx - S.R + 8, S.cy); ctx.lineTo(S.cx + S.R - 8, S.cy); ctx.stroke();
   ctx.globalAlpha = S.id !== null ? .95 : .7; ctx.shadowBlur = 12; ctx.beginPath(); ctx.arc(S.cx + S.kx, S.cy + S.ky, 17, 0, TAU); ctx.fill(); ctx.restore();
 }
@@ -269,10 +269,13 @@ function setWant(k) { want = k; if (state === 'play' && (pac.dx || pac.dy) && DI
 function begin() { audio(); if (state === 'title' || state === 'over') startGame(); else if (state === 'pause') state = 'play'; }
 const xy = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
 function stickMove(e) { const [x, y] = xy(e); let dx = x - stick.cx, dy = y - stick.cy; const d = Math.hypot(dx, dy); if (d > 26) { dx *= 26 / d; dy *= 26 / d; } stick.kx = dx; stick.ky = dy; if (d > 12) setWant(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 1) : (dy > 0 ? 2 : 0)); }
-cv.addEventListener('pointerdown', e => { e.preventDefault(); audio(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} if (e.pointerType === 'touch') touchUI = true; const [sx0, sy0] = xy(e); if (touchUI && (state === 'play' || state === 'ready') && stick.id === null && Math.hypot(sx0 - stick.cx, sy0 - stick.cy) < stick.R * 1.5) { stick.id = e.pointerId; stickMove(e); return; } swipe = { id: e.pointerId, x: e.clientX, y: e.clientY }; begin(); });
-cv.addEventListener('pointermove', e => { if (stick.id === e.pointerId) { stickMove(e); return; } if (!swipe || e.pointerId !== swipe.id) return; const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y; if (Math.hypot(dx, dy) < 16) return; setWant(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 1) : (dy > 0 ? 2 : 0)); swipe.x = e.clientX; swipe.y = e.clientY; });
-const up = e => { if (stick.id === e.pointerId) { stick.id = null; stick.kx = stick.ky = 0; } if (swipe && e.pointerId === swipe.id) swipe = null; };
-cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up); cv.addEventListener('contextmenu', e => e.preventDefault());
+// Thumb-anywhere steering: put a thumb ANYWHERE on the screen (best: the empty space under the maze) and drag; the anchor follows the finger so changing direction is a tiny flick.
+const D0 = 14;
+function steer(e) { if (!swipe || e.pointerId !== swipe.id) return; const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y, d = Math.hypot(dx, dy); if (d < D0) return; setWant(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 1) : (dy > 0 ? 2 : 0)); if (d > D0 * 2.2) { const k = (d - D0 * 2.2) / d; swipe.x += dx * k; swipe.y += dy * k; } swipe.cx = e.clientX; swipe.cy = e.clientY; }
+window.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('a,button')) return; e.preventDefault(); audio(); if (e.pointerType === 'touch') touchUI = true; if (!swipe) swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY }; begin(); }, { passive: false });
+window.addEventListener('pointermove', steer);
+const up = e => { if (swipe && e.pointerId === swipe.id) swipe = null; };
+window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up); cv.addEventListener('contextmenu', e => e.preventDefault());
 const KEYDIR = { ArrowUp: 0, KeyW: 0, ArrowLeft: 1, KeyA: 1, ArrowDown: 2, KeyS: 2, ArrowRight: 3, KeyD: 3 };
 addEventListener('keydown', e => { if (e.code in KEYDIR || e.code === 'Space' || e.code === 'Enter') e.preventDefault(); audio(); if (e.code in KEYDIR) setWant(KEYDIR[e.code]); if ((e.code === 'Enter' || e.code === 'Space') && !e.repeat) begin(); if (e.code === 'KeyP' && !e.repeat && (state === 'play' || state === 'pause')) state = state === 'play' ? 'pause' : 'play'; if (e.code === 'KeyM' && !e.repeat) { muted = !muted; if (curMusic) curMusic.g.gain.value = muted ? 0 : .42; } });
 addEventListener('blur', () => { if (state === 'play') state = 'pause'; });
