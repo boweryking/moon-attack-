@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Pharaoh's Break</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+html,body{margin:0;height:100%;background:#0a0618;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+canvas{display:block;background:#0a0618}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+<script>
+'use strict';
+const W = 480, H = 800, TAU = Math.PI * 2;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+cv.width = W * 2; cv.height = H * 2;
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); cv.style.width = W * s + 'px'; cv.style.height = H * s + 'px'; }
+addEventListener('resize', fit); fit();
+
+/* ---------- audio (synth: tones + a little desert-mode loop) ---------- */
+let AC = null, master = null, muted = false;
+function audio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = .6; master.connect(AC.destination); startMusic(); } catch (e) {} } if (AC && AC.state === 'suspended') AC.resume(); }
+function tone(f, d, type, v, slide, when) {
+  if (!AC || muted) return; const t = AC.currentTime + (when || 0), o = AC.createOscillator(), g = AC.createGain();
+  o.type = type || 'square'; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, f + slide), t + d);
+  g.gain.setValueAtTime(v || .15, t); g.gain.exponentialRampToValueAtTime(.001, t + d); o.connect(g); g.connect(master); o.start(t); o.stop(t + d + .02);
+}
+function noise(d, v, hp) {
+  if (!AC || muted) return; const n = AC.sampleRate * d | 0, b = AC.createBuffer(1, n, AC.sampleRate), a = b.getChannelData(0); for (let i = 0; i < n; i++) a[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const s = AC.createBufferSource(), g = AC.createGain(), f = AC.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp || 800; g.gain.value = v || .2; s.buffer = b; s.connect(f); f.connect(g); g.connect(master); s.start();
+}
+const SFX = {
+  paddle() { tone(300, .08, 'triangle', .22, 200); },
+  wall() { tone(180, .05, 'triangle', .12); },
+  brick(h) { tone(520 + h * 90 + Math.random() * 60, .07, 'square', .12); },
+  crack() { tone(220, .09, 'sawtooth', .13, -80); },
+  smash() { noise(.18, .22, 500); tone(160, .12, 'square', .1, -90); },
+  scarab() { tone(900, .12, 'square', .13, 500); tone(1400, .1, 'square', .09, -300, .06); },
+  zap() { noise(.15, .12, 3000); tone(300, .25, 'sawtooth', .14, -250); },
+  pharaoh() { tone(110, .35, 'sawtooth', .22, -50); noise(.25, .2, 300); tone(660, .15, 'square', .1, -300, .05); },
+  launch() { tone(250, .14, 'triangle', .2, 500); },
+  lose() { tone(330, .5, 'sawtooth', .2, -260); tone(220, .7, 'square', .12, -150, .15); },
+  win() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, .25, 'square', .14, 0, i * .11)); },
+  over() { [392, 349, 311, 262].forEach((f, i) => tone(f, .4, 'triangle', .2, -30, i * .22)); }
+};
+// music: D phrygian-dominant arpeggio over a drone
+let musicOn = false, nextT = 0, step = 0;
+const SCALE = [293.66, 311.13, 369.99, 392, 440, 466.16, 523.25, 587.33], PAT = [0, 2, 3, 2, 4, 3, 2, 1, 0, 2, 3, 5, 4, 3, 2, 1], BASS = [146.83, 146.83, 138.59, 146.83];
+function startMusic() { if (musicOn) return; musicOn = true; nextT = AC.currentTime + .1; setInterval(sched, 100); }
+function sched() {
+  if (!AC || muted || (state !== 'play' && state !== 'serve' && state !== 'title')) { if (AC) nextT = Math.max(nextT, AC.currentTime); return; }
+  const sp = .2 - Math.min(.07, level * .01);
+  while (nextT < AC.currentTime + .3) {
+    const w = nextT - AC.currentTime;
+    const f = SCALE[PAT[step % 16]] * (step % 32 >= 16 ? 1.122 : 1);
+    const o = AC.createOscillator(), g = AC.createGain(), t = nextT; o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(.05, t); g.gain.exponentialRampToValueAtTime(.001, t + sp * .9); o.connect(g); g.connect(master); o.start(t); o.stop(t + sp);
+    if (step % 4 === 0) { const b = AC.createOscillator(), bg = AC.createGain(); b.type = 'sine'; b.frequency.value = BASS[(step >> 2) % 4]; bg.gain.setValueAtTime(.12, t); bg.gain.exponentialRampToValueAtTime(.001, t + sp * 3.6); b.connect(bg); bg.connect(master); b.start(t); b.stop(t + sp * 4); }
+    if (step % 8 === 4) { const n = AC.sampleRate * .05 | 0, bf = AC.createBuffer(1, n, AC.sampleRate), a = bf.getChannelData(0); for (let i = 0; i < n; i++) a[i] = (Math.random() * 2 - 1) * (1 - i / n); const s = AC.createBufferSource(), ng = AC.createGain(); ng.gain.value = .05; s.buffer = bf; s.connect(ng); ng.connect(master); s.start(t); }
+    nextT += sp; step++;
+  }
+}
+
+/* ---------- state ---------- */
+const TOP = 56, COLS = 14, BW = 32, BH = 24, GAP = 2, X0 = (W - COLS * (BW + GAP) + GAP) / 2, Y0 = 118;
+let state = 'title', level = 1, score = 0, lives = 3, hi = 0, t0 = 0, stateT = 0;
+try { hi = +localStorage.getItem('pharaohHi') || 0; } catch (e) {}
+let bricks = [], pharaoh = null, balls = [], scarabs = [], parts = [], texts = [], spawnT = 2, shake = 0, tilt = 0;
+const paddle = { x: W / 2, y: 724, w: 84, h: 14 };
+const stars = Array.from({ length: 60 }, () => ({ x: Math.random() * W, y: Math.random() * H * .7, r: Math.random() * 1.4 + .3, p: Math.random() * 6 }));
+
+function buildLevel() {
+  bricks = []; scarabs = []; parts = []; texts = [];
+  const base = Math.min(14, 8 + 2 * (level - 1)), rows = base / 2, c = COLS / 2;
+  for (let r = 0; r < rows; r++) {
+    const w = 2 + r * 2;
+    for (let i = 0; i < w; i++) {
+      const col = c - w / 2 + i;
+      if (r >= 1 && r <= 2 && (col === c - 1 || col === c)) continue; // the pharaoh's chamber
+      let hp = 1 + Math.floor((level - 1) * (r / (rows - 1)) * 1.3); hp = Math.min(3, hp);
+      bricks.push({ x: X0 + col * (BW + GAP), y: Y0 + r * (BH + GAP), w: BW, h: BH, hp, max: hp, row: r, flash: 0 });
+    }
+  }
+  pharaoh = { x: X0 + (c - 1) * (BW + GAP), y: Y0 + 1 * (BH + GAP), w: BW * 2 + GAP, h: BH * 2 + GAP, hp: Math.min(7, 3 + level), max: Math.min(7, 3 + level), flash: 0, awake: false, alive: true };
+  spawnT = 3;
+}
+function newBall() { return { x: paddle.x, y: paddle.y - 8, vx: 0, vy: 0, r: 7, stuck: true, trail: [] }; }
+function speed() { return Math.min(640, 400 + level * 28); }
+function startGame() { level = 1; score = 0; lives = 3; paddle.w = 84; buildLevel(); serve(); }
+function serve() { balls = [newBall()]; state = 'serve'; stateT = 0; }
+function launch() { const b = balls[0]; if (!b || !b.stuck) return; b.stuck = false; const a = (Math.random() * 50 - 25) * Math.PI / 180, s = speed(); b.vx = Math.sin(a) * s; b.vy = -Math.cos(a) * s; state = 'play'; SFX.launch(); }
+function addScore(n, x, y) { score += n; if (score > hi) { hi = score; try { localStorage.setItem('pharaohHi', hi); } catch (e) {} } if (x != null) texts.push({ x, y, t: .7, s: '+' + n }); }
+function burst(x, y, col, n, sp) { for (let i = 0; i < n; i++) { const a = Math.random() * TAU, s = (sp || 120) * (.3 + Math.random()); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, t: .5 + Math.random() * .5, col, r: 1.5 + Math.random() * 2 }); } }
+
+/* ---------- physics ---------- */
+function reflectOff(b, rc) { // rc: rect {x,y,w,h}; returns true if hit
+  const nx = Math.max(rc.x, Math.min(b.x, rc.x + rc.w)), ny = Math.max(rc.y, Math.min(b.y, rc.y + rc.h));
+  const dx = b.x - nx, dy = b.y - ny, d2 = dx * dx + dy * dy; if (d2 >= b.r * b.r) return false;
+  const d = Math.sqrt(d2);
+  if (d < .001) { b.vy = -b.vy; return true; }
+  if (Math.abs(dx) > Math.abs(dy) * 1.0001 || (Math.abs(dx) === Math.abs(dy) && false)) { b.vx = Math.abs(b.vx) * Math.sign(dx || b.vx); b.x = nx + Math.sign(dx) * (b.r + .1); }
+  else { b.vy = Math.abs(b.vy) * Math.sign(dy || b.vy); b.y = ny + Math.sign(dy) * (b.r + .1); }
+  return true;
+}
+function brickColor(br) { return br.hp >= 3 ? '#ffd93b' : br.hp === 2 ? '#c98a3c' : '#e8c47a'; }
+function hitBrick(br, b) {
+  br.hp--; br.flash = .12;
+  if (br.hp <= 0) { br.dead = true; SFX.smash(); addScore(10 * br.max, br.x + br.w / 2, br.y); burst(br.x + br.w / 2, br.y + br.h / 2, '#ffd27a', 9); }
+  else { SFX.crack(); burst(br.x + br.w / 2, br.y + br.h / 2, '#a8793a', 4, 80); addScore(5); }
+}
+function stepBall(b, dt) {
+  const sp = Math.hypot(b.vx, b.vy), n = Math.max(1, Math.ceil(sp * dt / 4)), h = dt / n;
+  for (let i = 0; i < n; i++) {
+    b.x += b.vx * h; b.y += b.vy * h;
+    if (b.x < b.r) { b.x = b.r; b.vx = Math.abs(b.vx); SFX.wall(); }
+    if (b.x > W - b.r) { b.x = W - b.r; b.vx = -Math.abs(b.vx); SFX.wall(); }
+    if (b.y < TOP + b.r) { b.y = TOP + b.r; b.vy = Math.abs(b.vy); SFX.wall(); }
+    // paddle
+    if (b.vy > 0 && b.y + b.r >= paddle.y && b.y - b.r <= paddle.y + paddle.h && Math.abs(b.x - paddle.x) <= paddle.w / 2 + b.r) {
+      const k = Math.max(-1, Math.min(1, (b.x - paddle.x) / (paddle.w / 2))), a = k * 62 * Math.PI / 180, s = speed();
+      b.vx = Math.sin(a) * s; b.vy = -Math.cos(a) * s; b.y = paddle.y - b.r; SFX.paddle(); tilt = k * 4;
+    }
+    // bricks
+    for (const br of bricks) { if (br.dead) continue; if (reflectOff(b, br)) { hitBrick(br, b); break; } }
+    // pharaoh
+    if (pharaoh.alive && reflectOff(b, pharaoh)) {
+      pharaoh.hp--; pharaoh.flash = .4; pharaoh.awake = true; shake = 8; SFX.pharaoh(); burst(pharaoh.x + pharaoh.w / 2, pharaoh.y + pharaoh.h / 2, '#ffe066', 14, 160); addScore(100, pharaoh.x + pharaoh.w / 2, pharaoh.y);
+      for (let k = 0; k < 2; k++) spawnScarab(pharaoh.x + pharaoh.w / 2 + (k ? 18 : -18), pharaoh.y + pharaoh.h);
+      if (pharaoh.hp <= 0) { pharaoh.alive = false; defeat(); }
+    }
+    // scarabs
+    for (const sc of scarabs) if (!sc.dead && Math.hypot(sc.x - b.x, sc.y - b.y) < 15 + b.r) { sc.dead = true; SFX.scarab(); addScore(25, sc.x, sc.y); burst(sc.x, sc.y, '#4dffb8', 8); }
+    // keep it from going flat
+    const s2 = Math.hypot(b.vx, b.vy), mv = s2 * .28; if (Math.abs(b.vy) < mv) { b.vy = (b.vy < 0 ? -1 : 1) * mv; const nx = Math.sqrt(s2 * s2 - b.vy * b.vy); b.vx = Math.sign(b.vx || 1) * nx; }
+  }
+  bricks = bricks.filter(x => !x.dead);
+}
+function spawnScarab(x, y) { scarabs.push({ x: x == null ? 30 + Math.random() * (W - 60) : x, y: y == null ? TOP + 6 : y, bx: 0, vy: 85 + level * 12 + Math.random() * 30, ph: Math.random() * 6, dead: false }); const s = scarabs[scarabs.length - 1]; s.bx = s.x; }
+function defeat() { state = 'clear'; stateT = 0; balls = []; scarabs.forEach(s => { s.dead = true; burst(s.x, s.y, '#4dffb8', 6); }); SFX.win(); addScore(500 + lives * 100, W / 2, 300); burst(pharaoh.x + pharaoh.w / 2, pharaoh.y + pharaoh.h / 2, '#ffe066', 60, 260); for (const br of bricks) { br.dead = true; burst(br.x + br.w / 2, br.y + br.h / 2, '#ffd27a', 4, 160); } shake = 14; }
+function loseLife() {
+  state = 'dead'; stateT = 0; lives--; SFX.lose(); shake = 10; burst(paddle.x, paddle.y, '#5ff0ff', 30, 220); scarabs.forEach(s => s.dead = true); balls = [];
+}
+
+/* ---------- input ---------- */
+let drag = null, keys = {}, mouseX = null;
+function clampPad() { paddle.x = Math.max(paddle.w / 2, Math.min(W - paddle.w / 2, paddle.x)); }
+function toLogical(clientX) { const r = cv.getBoundingClientRect(); return (clientX - r.left) / r.width * W; }
+function onTap(e) {
+  audio();
+  if (state === 'title') startGame(); else if (state === 'serve') launch(); else if (state === 'over' && stateT > .8) { state = 'title'; stateT = 0; }
+}
+addEventListener('pointerdown', e => {
+  e.preventDefault(); audio();
+  const r = cv.getBoundingClientRect(), lx = (e.clientX - r.left) / r.width * W, ly = (e.clientY - r.top) / r.height * H;
+  if (lx > W - 52 && ly < 46) { muted = !muted; return; }
+  if (e.pointerType === 'mouse') { mouseX = lx; paddle.x = lx; clampPad(); onTap(e); return; }
+  if (!drag) drag = { id: e.pointerId, x: e.clientX, moved: 0 };
+  onTap(e);
+}, { passive: false });
+addEventListener('pointermove', e => {
+  if (e.pointerType === 'mouse') { mouseX = toLogical(e.clientX); if (state === 'play' || state === 'serve') { paddle.x = mouseX; clampPad(); if (balls[0] && balls[0].stuck) balls[0].x = paddle.x; } return; }
+  if (!drag || e.pointerId !== drag.id) return; const dx = (e.clientX - drag.x) / cv.getBoundingClientRect().width * W * 1.35; drag.x = e.clientX; drag.moved += Math.abs(dx);
+  if (state === 'play' || state === 'serve') { paddle.x += dx; clampPad(); if (balls[0] && balls[0].stuck) balls[0].x = paddle.x; }
+});
+const up = e => { if (drag && e.pointerId === drag.id) drag = null; };
+addEventListener('pointerup', up); addEventListener('pointercancel', up);
+addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('keydown', e => { keys[e.key] = true; if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onTap(e); } if (e.key === 'm' || e.key === 'M') muted = !muted; });
+addEventListener('keyup', e => { keys[e.key] = false; });
+
+/* ---------- update ---------- */
+function update(dt) {
+  t0 += dt; stateT += dt; shake = Math.max(0, shake - dt * 30); tilt *= .9;
+  if (keys.ArrowLeft || keys.a || keys.A) { paddle.x -= 460 * dt; clampPad(); } if (keys.ArrowRight || keys.d || keys.D) { paddle.x += 460 * dt; clampPad(); }
+  if (balls[0] && balls[0].stuck) { balls[0].x = paddle.x; balls[0].y = paddle.y - 8; }
+  for (const p of parts) { p.t -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 260 * dt; } parts = parts.filter(p => p.t > 0);
+  for (const t of texts) { t.t -= dt; t.y -= 28 * dt; } texts = texts.filter(t => t.t > 0);
+  for (const b of bricks) b.flash = Math.max(0, b.flash - dt); pharaoh.flash = Math.max(0, pharaoh.flash - dt);
+  if (state === 'play') {
+    for (const b of balls) stepBall(b, Math.min(dt, 1 / 30));
+    balls = balls.filter(b => b.y < H + 20);
+    if (!balls.length && state === 'play') loseLife();
+    // scarabs: they swoop toward the paddle; hit the paddle and you lose a life
+    spawnT -= dt; const awake = pharaoh.awake ? 1 : .6;
+    if (spawnT <= 0) { spawnScarab(); spawnT = Math.max(1.1, (3.8 - level * .3)) / awake * (.7 + Math.random() * .6); }
+    for (const s of scarabs) {
+      s.y += s.vy * dt; s.ph += dt * 3; s.x = Math.max(14, Math.min(W - 14, s.bx + Math.sin(s.ph) * 32));
+      if (s.y > paddle.y - 4 && s.y < paddle.y + paddle.h + 10 && Math.abs(s.x - paddle.x) < paddle.w / 2 + 10) { s.dead = true; SFX.zap(); if (state === 'play') loseLife(); }
+      if (s.y > H + 20) s.dead = true;
+    }
+    scarabs = scarabs.filter(s => !s.dead);
+  }
+  if (state === 'dead' && stateT > 1.4) { if (lives > 0) serve(); else { state = 'over'; stateT = 0; SFX.over(); } }
+  if (state === 'clear' && stateT > 3.2) { level++; buildLevel(); serve(); }
+}
+
+/* ---------- drawing ---------- */
+function glow(c, b) { ctx.shadowColor = c; ctx.shadowBlur = b; ctx.strokeStyle = c; ctx.fillStyle = c; }
+function drawBG() {
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0a0618'); g.addColorStop(.55, '#241046'); g.addColorStop(1, '#5a2a1a'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  for (const s of stars) { ctx.globalAlpha = .4 + .5 * Math.sin(t0 * 1.5 + s.p); ctx.fillStyle = '#fff'; ctx.fillRect(s.x, s.y, s.r, s.r); } ctx.globalAlpha = 1;
+  if (state !== 'title') { ctx.fillStyle = '#ffcf6a'; ctx.globalAlpha = .9; ctx.beginPath(); ctx.arc(410, 200, 24, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; } // moon
+  ctx.fillStyle = '#3a1a14'; ctx.beginPath(); ctx.moveTo(0, 790); ctx.lineTo(0, 700); ctx.quadraticCurveTo(120, 650, 240, 720); ctx.quadraticCurveTo(360, 770, 480, 690); ctx.lineTo(480, 800); ctx.fill();
+  ctx.fillStyle = '#4a2418'; ctx.beginPath(); ctx.moveTo(0, 800); ctx.lineTo(0, 760); ctx.quadraticCurveTo(160, 730, 300, 770); ctx.quadraticCurveTo(400, 790, 480, 760); ctx.lineTo(480, 800); ctx.fill();
+}
+function drawBrick(b) {
+  const f = b.flash > 0; ctx.save(); ctx.shadowBlur = 0; ctx.fillStyle = f ? '#fff' : brickColor(b); ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fillRect(b.x, b.y, b.w, 3); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(b.x, b.y + b.h - 3, b.w, 3);
+  glow(b.hp >= 3 ? '#ffe066' : '#ffb347', 6); ctx.lineWidth = 1.5; ctx.strokeRect(b.x + .5, b.y + .5, b.w - 1, b.h - 1);
+  ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(80,40,10,.55)'; ctx.lineWidth = 1; ctx.beginPath(); // tiny hieroglyph ticks
+  ctx.moveTo(b.x + 8, b.y + 9); ctx.lineTo(b.x + 14, b.y + 9); ctx.moveTo(b.x + 18, b.y + 15); ctx.lineTo(b.x + 24, b.y + 15); if (b.hp >= 2) { ctx.moveTo(b.x + 12, b.y + 14); ctx.lineTo(b.x + 16, b.y + 10); } ctx.stroke();
+  ctx.restore();
+}
+function drawPharaoh() {
+  const p = pharaoh; if (!p.alive) return; const cx = p.x + p.w / 2, cy = p.y + p.h / 2, f = p.flash > 0, wob = p.awake ? Math.sin(t0 * 12) * 1.2 : 0;
+  ctx.save(); ctx.translate(cx + wob, cy);
+  glow(p.awake ? '#ff4d6a' : '#ffd93b', 14);
+  ctx.fillStyle = f ? '#fff' : '#1b3a8c'; ctx.beginPath(); ctx.moveTo(-32, -24); ctx.lineTo(32, -24); ctx.lineTo(36, 24); ctx.lineTo(-36, 24); ctx.closePath(); ctx.fill(); // nemes headdress
+  ctx.shadowBlur = 0; ctx.fillStyle = f ? '#fff' : '#ffd93b'; for (let i = -3; i <= 3; i++) ctx.fillRect(i * 9 - 1.5, -24, 3, 48 * (i % 2 ? .55 : .75)); ctx.globalAlpha = .55; // stripes
+  ctx.globalAlpha = 1; ctx.fillStyle = f ? '#fff' : '#f0c24a'; ctx.beginPath(); ctx.ellipse(0, 2, 17, 21, 0, 0, TAU); ctx.fill(); // face
+  ctx.fillStyle = '#111'; ctx.fillRect(-12, -6, 9, 4); ctx.fillRect(3, -6, 9, 4); ctx.fillStyle = p.awake ? '#ff4d6a' : '#fff'; ctx.fillRect(-9, -6, 3, 4); ctx.fillRect(6, -6, 3, 4); // kohl eyes
+  ctx.fillStyle = '#9a6a10'; ctx.fillRect(-2, -1, 4, 8); ctx.fillStyle = '#7a3a1a'; ctx.fillRect(-6, 12, 12, 3); // nose, mouth
+  ctx.fillStyle = '#c33'; ctx.fillRect(-3, 24, 6, 8); // false beard
+  ctx.fillStyle = '#ffd93b'; ctx.beginPath(); ctx.moveTo(-6, -24); ctx.lineTo(0, -34); ctx.lineTo(6, -24); ctx.fill(); // cobra crest
+  ctx.restore();
+  // HP pips
+  for (let i = 0; i < p.max; i++) { ctx.fillStyle = i < p.hp ? '#ff4d6a' : 'rgba(255,255,255,.18)'; ctx.fillRect(cx - p.max * 5 + i * 10, p.y - 10, 8, 4); }
+}
+function drawScarab(s) {
+  ctx.save(); ctx.translate(s.x, s.y); glow('#4dffb8', 10); const w = Math.sin(t0 * 30 + s.ph) * 3;
+  ctx.beginPath(); ctx.ellipse(0, 0, 8, 10, 0, 0, TAU); ctx.fillStyle = '#0d6b52'; ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(0, 9); ctx.lineWidth = 1; ctx.stroke(); ctx.lineWidth = 1.6;
+  for (const d of [-1, 1]) { ctx.beginPath(); ctx.moveTo(d * 7, -5); ctx.lineTo(d * (13 + w), -9); ctx.moveTo(d * 8, 0); ctx.lineTo(d * (14 + w), 1); ctx.moveTo(d * 7, 5); ctx.lineTo(d * (13 + w), 10); ctx.stroke(); }
+  ctx.fillStyle = '#ff4d6a'; ctx.shadowBlur = 0; ctx.fillRect(-4, -10, 2, 2); ctx.fillRect(2, -10, 2, 2); ctx.restore();
+}
+function drawPaddle() {
+  if (state === 'dead' || state === 'clear' || state === 'over') return;
+  ctx.save(); ctx.translate(paddle.x, paddle.y + paddle.h / 2); ctx.rotate(tilt * .01); glow('#5ff0ff', 14); ctx.lineWidth = 3;
+  const w = paddle.w, h = paddle.h; ctx.beginPath(); ctx.moveTo(-w / 2 + 6, -h / 2); ctx.lineTo(w / 2 - 6, -h / 2); ctx.lineTo(w / 2, h / 2); ctx.lineTo(-w / 2, h / 2); ctx.closePath(); ctx.globalAlpha = .35; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
+  ctx.shadowBlur = 0; ctx.fillStyle = '#ffd93b'; ctx.fillRect(-w / 2 + 2, -2, 10, 4); ctx.fillRect(w / 2 - 12, -2, 10, 4); ctx.fillRect(-3, -h / 2 + 2, 6, h - 4); ctx.restore();
+}
+function drawBall(b) {
+  ctx.save(); glow('#fff3b0', 16); ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fillStyle = '#fff3b0'; ctx.fill(); ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(b.x - 2, b.y - 2, 2.4, 0, TAU); ctx.fill(); ctx.restore();
+}
+function text(s, x, y, size, col, al) { ctx.save(); ctx.font = `bold ${size}px "Courier New",monospace`; ctx.textAlign = al || 'center'; glow(col, 10); ctx.fillText(s, x, y); ctx.restore(); }
+function draw() {
+  ctx.setTransform(2, 0, 0, 2, 0, 0); ctx.save(); if (shake > 0) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
+  drawBG();
+  if (state !== 'title') {
+    for (const b of bricks) drawBrick(b); drawPharaoh();
+    for (const s of scarabs) drawScarab(s);
+    drawPaddle(); for (const b of balls) drawBall(b);
+  } else {
+    // title: a little pyramid
+    const c = COLS / 2; for (let r = 0; r < 6; r++) for (let i = 0; i < 2 + r * 2; i++) { if (r >= 1 && r <= 2 && (i === (1 + r) - 1 || i === 1 + r)) continue; drawBrick({ x: X0 + (c - 1 - r + i) * (BW + GAP), y: 380 + r * (BH + GAP), w: BW, h: BH, hp: 1, max: 1, flash: 0 }); }
+    pharaoh = pharaoh || { alive: true }; const sv = pharaoh; pharaoh = { x: X0 + (c - 1) * (BW + GAP), y: 380 + (BH + GAP), w: BW * 2 + GAP, h: BH * 2 + GAP, hp: 3, max: 3, flash: 0, awake: false, alive: true }; drawPharaoh(); pharaoh = sv;
+  }
+  for (const p of parts) { ctx.globalAlpha = Math.max(0, p.t * 1.6); ctx.fillStyle = p.col; ctx.fillRect(p.x, p.y, p.r, p.r); } ctx.globalAlpha = 1;
+  for (const t of texts) { ctx.globalAlpha = Math.min(1, t.t * 2); text(t.s, t.x, t.y, 14, '#ffe066'); } ctx.globalAlpha = 1;
+  ctx.restore();
+  // HUD
+  if (state !== 'title') {
+    text(String(score).padStart(6, '0'), 14, 34, 22, '#5ff0ff', 'left'); text('LV ' + level, W / 2, 34, 18, '#ffd93b'); text('HI ' + String(hi).padStart(6, '0'), W / 2, 52, 11, '#9a8ad0');
+    for (let i = 0; i < lives; i++) { ctx.save(); ctx.translate(W - 118 + i * 24, 28); glow('#5ff0ff', 6); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-8, 4); ctx.lineTo(8, 4); ctx.lineTo(10, -2); ctx.lineTo(-10, -2); ctx.closePath(); ctx.stroke(); ctx.restore(); }
+  }
+  ctx.save(); ctx.globalAlpha = muted ? .4 : .9; ctx.translate(W - 26, 22); glow('#9a8ad0', 4); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-8, -4); ctx.lineTo(-3, -4); ctx.lineTo(3, -9); ctx.lineTo(3, 9); ctx.lineTo(-3, 4); ctx.lineTo(-8, 4); ctx.closePath(); ctx.stroke(); if (muted) { ctx.beginPath(); ctx.moveTo(7, -6); ctx.lineTo(15, 6); ctx.stroke(); } else { ctx.beginPath(); ctx.arc(4, 0, 7, -1, 1); ctx.stroke(); } ctx.restore();
+  // overlays
+  if (state === 'title') {
+    text("PHARAOH'S", W / 2, 150, 54, '#ffd93b'); text('BREAK', W / 2, 212, 64, '#5ff0ff');
+    text('Smash the pyramid.', W / 2, 290, 20, '#e8dcff'); text('Wake the Pharaoh.', W / 2, 318, 20, '#e8dcff');
+    if (Math.sin(t0 * 4) > -.3) text('TAP TO START', W / 2, 640, 28, '#ff6ad5');
+    text('drag anywhere to slide · mouse or arrows on a laptop', W / 2, 700, 12, '#9a8ad0'); text('beware the scarabs!', W / 2, 722, 14, '#4dffb8');
+  }
+  if (state === 'serve' && stateT > .1) { if (Math.sin(t0 * 5) > -.3) text('TAP TO LAUNCH', W / 2, 600, 22, '#ff6ad5'); if (level === 1 && lives === 3 && score === 0) { text('Dig down to the Pharaoh!', W / 2, 560, 16, '#ffe066'); } }
+  if (state === 'dead') text(lives > 0 ? 'OUCH!' : '', W / 2, 460, 40, '#ff4d6a');
+  if (state === 'clear') { text('PHARAOH DEFEATED!', W / 2, 400, 32, '#ffd93b'); text('bonus +' + (500 + lives * 100), W / 2, 440, 18, '#5ff0ff'); text('Next pyramid…', W / 2, 480, 16, '#e8dcff'); }
+  if (state === 'over') { text('THE CURSE WINS', W / 2, 380, 36, '#ff4d6a'); text('Score ' + score, W / 2, 430, 22, '#5ff0ff'); if (stateT > .8 && Math.sin(t0 * 4) > -.3) text('TAP TO CONTINUE', W / 2, 520, 22, '#ff6ad5'); }
+}
+
+pharaoh = null; buildLevel(); balls = [];
+let last = performance.now();
+function loop(now) { const dt = Math.min(.05, (now - last) / 1000); last = now; update(dt); draw(); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+window.G = { get state() { return state; }, get score() { return score; }, get lives() { return lives; }, get level() { return level; }, get bricks() { return bricks.length; }, get ball() { return balls[0]; }, paddle, get pharaoh() { return pharaoh; }, get scarabs() { return scarabs.length; },
+  clearBricks() { for (const b of bricks) { b.dead = true; } bricks = bricks.filter(b => !b.dead); }, spawnScarab };
+</script>
+</body>
+</html>
