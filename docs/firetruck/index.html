@@ -82,34 +82,54 @@ function audioUpdate() {
 }
 
 /* ================= top-down city ================= */
-const MAXS = 230, S = 150, RD = 54, Z = 1, DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]], ANG = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
-let COLS = 10, ROWS = 12, closed = new Set(), cars = [], truck = null, fireNode = { x: 5, y: 2 }, startNode = { x: 1, y: 10 }, distMap = [], blocks = {}, NB = 1, cam = { x: 0, y: 0 };
+const MAXS = 230, Z = 1, DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]], ANG = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
+let COLS = 12, ROWS = 14, XS = [], YS = [], WX = [], WY = [], closed = new Set(), cars = [], truck = null, fireNode = { x: 5, y: 2 }, startNode = { x: 1, y: 10 }, distMap = [], blocks = [], NB = 1, cam = { x: 0, y: 0 };
 const ekey = (cx, cy, d) => d === 2 ? `${cx},${cy + 1},0` : d === 3 ? `${cx - 1},${cy},1` : `${cx},${cy},${d}`;
 function isOpen(cx, cy, d) { const nx = cx + DIRS[d][0], ny = cy + DIRS[d][1]; return nx >= 0 && ny >= 0 && nx < COLS && ny < ROWS && !closed.has(ekey(cx, cy, d)); }
 function bfs(tx, ty) { const dm = Array.from({ length: COLS }, () => Array(ROWS).fill(999)); dm[tx][ty] = 0; const q = [[tx, ty]]; while (q.length) { const [x, y] = q.shift(); for (let d = 0; d < 4; d++) if (isOpen(x, y, d)) { const nx = x + DIRS[d][0], ny = y + DIRS[d][1]; if (dm[nx][ny] > dm[x][y] + 1) { dm[nx][ny] = dm[x][y] + 1; q.push([nx, ny]); } } } return dm; }
-function buildCity() {
-  COLS = Math.min(15, 11 + level); ROWS = Math.min(18, 13 + level); NB = Math.min(3, level); startNode = { x: 1, y: ROWS - 2 };
-  let tries = 0;
-  do { closed = new Set(); for (let x = 0; x < COLS; x++) for (let y = 0; y < ROWS; y++) for (const d of [1, 2]) if (isOpen(x, y, d) && Math.random() < .2 + level * .02 && !(x === startNode.x && y === startNode.y)) closed.add(ekey(x, y, d)); 
-    const far = []; const dm0 = bfs(startNode.x, startNode.y); for (let x = 0; x < COLS; x++) for (let y = 0; y < ROWS; y++) if (dm0[x][y] < 999 && dm0[x][y] >= Math.floor((COLS + ROWS) * .9)) far.push([x, y]);
-    if (far.length) { const f = far[Math.floor(Math.random() * far.length)]; fireNode = { x: f[0], y: f[1] }; if (fireNode.x === 0) fireNode.x = 1; if (fireNode.y === 0) fireNode.y = 1; distMap = bfs(fireNode.x, fireNode.y); if (distMap[startNode.x][startNode.y] < 999) break; }
-  } while (++tries < 60);
-  if (distMap[startNode.x]?.[startNode.y] >= 999 || !distMap.length) { closed = new Set(); fireNode = { x: COLS - 2, y: 1 }; distMap = bfs(fireNode.x, fireNode.y); }
-  let sd = 0; for (let d = 0; d < 4; d++) if (isOpen(startNode.x, startNode.y, d)) { sd = d; break; }
-  truck = { x: startNode.x * S, y: startNode.y * S, dir: sd, hd: ANG[sd], ta: ANG[sd], v: 0, cool: 0 };
-  cars = []; for (let i = 0; i < 24 + level * 5; i++) { let cx = Math.floor(Math.random() * COLS), cy = Math.floor(Math.random() * ROWS), d = Math.floor(Math.random() * 4); if (!isOpen(cx, cy, d) || Math.hypot(cx - startNode.x, cy - startNode.y) < 2) continue; const t = Math.random() * .8 * S; cars.push({ x: cx * S + DIRS[d][0] * t, y: cy * S + DIRS[d][1] * t, dir: d, v: 70 + Math.random() * 40, vmax: 70 + Math.random() * 40, off: 14, yield: false, hit: false, hitT: 0, rot: 0, hue: Math.floor(Math.random() * 360), kind: Math.random() < .5 ? 'taxi' : Math.random() < .5 ? 'van' : 'bus', gone: false }); }
-  blocks = {}; for (let i = -4; i < COLS + 4; i++) for (let j = -4; j < ROWS + 4; j++) { const h = hash(i * 31 + j * 17 + level); blocks[i + ',' + j] = { kind: h < .12 ? 'park' : 'bld', hue: [185, 300, 50, 150, 25, 270][Math.floor(hash(i * 7 + j * 13) * 6)], seed: i * 11 + j * 5 }; }
+const roadW = (arr, i) => arr[i];
+function mkRng(seed) { let a = (seed * 2654435761) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function makeBlock(i, j) {
+  const x = XS[i] + WX[i] / 2, y = YS[j] + WY[j] / 2, w = XS[i + 1] - XS[i] - (WX[i] + WX[i + 1]) / 2, h = YS[j + 1] - YS[j] - (WY[j] + WY[j + 1]) / 2, r = mkRng(i * 977 + j * 131 + level * 7), t = r(), b = { x, y, w, h, lots: [], trees: [], kind: 'bld' };
+  const hues = [185, 300, 50, 150, 25, 270, 210], hue = () => hues[Math.floor(r() * hues.length)], pad = 5;
+  if (t < .12) { b.kind = 'park'; for (let k = 0; k < Math.max(4, w * h / 2400); k++) b.trees.push({ x: x + 10 + r() * (w - 20), y: y + 10 + r() * (h - 20), r: 7 + r() * 8 }); b.pond = r() < .5 ? { x: x + w * (.3 + r() * .4), y: y + h * (.3 + r() * .4), rx: 16 + r() * 18, ry: 10 + r() * 12 } : null; }
+  else if (t < .2) { b.kind = 'plaza'; for (let k = 0; k < 6; k++) b.trees.push({ x: x + 14 + r() * (w - 28), y: y + 14 + r() * (h - 28), r: 6 + r() * 4 }); }
+  else if (t < .28) { b.kind = 'parking'; b.cols = []; for (let k = 0; k < 40; k++) b.cols.push(Math.floor(r() * 360)); }
+  else if (t < .38) { b.kind = 'warehouse'; b.lots.push({ x: x + pad, y: y + pad, w: w - pad * 2, h: h - pad * 2, hue: 215, l: 16, d: 'vents', seed: i * 5 + j }); }
+  else if (t < .55 && w > 70 && h > 70) { b.kind = 'houses'; const cw = 26, ch = 32; for (let yy = y + pad; yy + ch <= y + h - pad; yy += ch + 6) for (let xx = x + pad; xx + cw <= x + w - pad; xx += cw + 5) b.lots.push({ x: xx, y: yy, w: cw, h: ch, hue: [25, 40, 8, 200][Math.floor(r() * 4)], l: 22 + r() * 8, d: 'gable', seed: Math.floor(r() * 99) }); }
+  else if (t < .85) { b.kind = 'split'; const horiz = w >= h, len = horiz ? w : h, n = clamp(Math.round(len / 85), 2, 5); let ws = []; let tot = 0; for (let k = 0; k < n; k++) { const q = .6 + r() * 1.1; ws.push(q); tot += q; } let pos = 0; for (let k = 0; k < n; k++) { const l = (len - pad * 2) * ws[k] / tot; b.lots.push(horiz ? { x: x + pad + pos, y: y + pad, w: l - 3, h: h - pad * 2 } : { x: x + pad, y: y + pad + pos, w: w - pad * 2, h: l - 3 }); const L = b.lots[b.lots.length - 1]; L.hue = hue(); L.l = 12 + r() * 14; L.d = ['ac', 'tank', 'skylight', 'ac'][Math.floor(r() * 4)]; L.seed = Math.floor(r() * 999); pos += l; } }
+  else { b.kind = 'tower'; b.lots.push({ x: x + pad, y: y + pad, w: w - pad * 2, h: h - pad * 2, hue: hue(), l: 18, d: r() < .4 ? 'helipad' : 'setback', seed: i * 3 + j }); }
+  return b;
 }
+function buildCity() {
+  COLS = Math.min(15, 11 + level); ROWS = Math.min(18, 13 + level); NB = Math.min(3, level); const gaps = [120, 150, 210, 270, 340], pick = () => gaps[Math.min(4, Math.floor(Math.pow(Math.random(), 1.3) * 5))];
+  XS = [0]; for (let i = 1; i < COLS; i++) XS.push(XS[i - 1] + pick()); YS = [0]; for (let j = 1; j < ROWS; j++) YS.push(YS[j - 1] + pick());
+  WX = []; for (let i = 0; i < COLS; i++) WX.push(i > 0 && i < COLS - 1 && i % 4 === 2 ? 96 : (i % 2 === 0 ? 64 : 48)); WY = []; for (let j = 0; j < ROWS; j++) WY.push(j > 0 && j < ROWS - 1 && j % 4 === 1 ? 96 : (j % 2 === 0 ? 64 : 48));
+  startNode = { x: 1, y: ROWS - 2 };
+  let tries = 0, ok = false;
+  do { closed = new Set(); for (let x = 0; x < COLS; x++) for (let y = 0; y < ROWS; y++) for (const d of [1, 2]) if (isOpen(x, y, d) && Math.random() < .18 + level * .02 && !(x === startNode.x && y === startNode.y)) closed.add(ekey(x, y, d));
+    const far = [], dm0 = bfs(startNode.x, startNode.y); for (let x = 1; x < COLS - 1; x++) for (let y = 1; y < ROWS - 1; y++) if (dm0[x][y] < 999 && dm0[x][y] >= Math.floor((COLS + ROWS) * .85)) far.push([x, y]);
+    if (far.length) { const f = far[Math.floor(Math.random() * far.length)]; fireNode = { x: f[0], y: f[1] }; distMap = bfs(fireNode.x, fireNode.y); ok = true; }
+  } while (!ok && ++tries < 80);
+  if (!ok) { closed = new Set(); fireNode = { x: COLS - 2, y: 1 }; distMap = bfs(fireNode.x, fireNode.y); }
+  let sd = 0; for (let d = 0; d < 4; d++) if (isOpen(startNode.x, startNode.y, d)) { sd = d; break; }
+  truck = { x: XS[startNode.x], y: YS[startNode.y], dir: sd, hd: ANG[sd], ta: ANG[sd], v: 0, cool: 0 };
+  cars = []; for (let n = 0; n < 26 + level * 5; n++) { const cx = Math.floor(Math.random() * COLS), cy = Math.floor(Math.random() * ROWS), d = Math.floor(Math.random() * 4); if (!isOpen(cx, cy, d) || Math.hypot(cx - startNode.x, cy - startNode.y) < 2) continue; const nx = cx + DIRS[d][0], ny = cy + DIRS[d][1], len = Math.abs(XS[nx] - XS[cx]) + Math.abs(YS[ny] - YS[cy]), t = Math.random() * len * .8; cars.push({ x: XS[cx] + DIRS[d][0] * t, y: YS[cy] + DIRS[d][1] * t, dir: d, v: 70, vmax: 65 + Math.random() * 45, off: 11, yield: false, hit: false, hitT: 0, rot: 0, hue: Math.floor(Math.random() * 360), kind: Math.random() < .5 ? 'taxi' : Math.random() < .5 ? 'van' : 'bus', gone: false }); }
+  blocks = []; for (let i = 0; i < COLS - 1; i++) { blocks[i] = []; for (let j = 0; j < ROWS - 1; j++) blocks[i][j] = makeBlock(i, j); }
+}
+const idxAt = (arr, v) => { let k = 0; for (let i = 0; i < arr.length; i++) if (arr[i] <= v + 1e-3) k = i; return k; };
+function nodeAt(e) { const i = idxAt(XS, e.x), j = idxAt(YS, e.y); return Math.abs(XS[i] - e.x) < 1e-3 && Math.abs(YS[j] - e.y) < 1e-3 ? [i, j] : null; }
 function stepAlong(e, dt, decide) {
-  const [dx, dy] = DIRS[e.dir]; let step = e.v * dt, guard = 0;
+  let step = e.v * dt, guard = 0;
   while (step > 0 && guard++ < 4) {
-    const along = dx !== 0 ? e.x : e.y, sg = dx + dy, cur = along / S, nextK = sg > 0 ? Math.floor(cur + 1e-6) + 1 : Math.ceil(cur - 1e-6) - 1, dist = Math.abs(nextK * S - along);
+    const [dx, dy] = DIRS[e.dir], horiz = dx !== 0, arr = horiz ? XS : YS, along = horiz ? e.x : e.y, i0 = idxAt(arr, along), onNode = Math.abs(arr[i0] - along) < 1e-3;
+    const ni = dx + dy > 0 ? i0 + 1 : (onNode ? i0 - 1 : i0); if (ni < 0 || ni >= arr.length) { e.v = 0; return; }
+    const dist = Math.abs(arr[ni] - along);
     if (step < dist - 1e-6) { e.x += dx * step; e.y += dy * step; return; }
-    e.x = dx !== 0 ? nextK * S : e.x; e.y = dy !== 0 ? nextK * S : e.y; step -= dist; const nd = decide(Math.round(e.x / S), Math.round(e.y / S));
-    if (nd < 0) { e.v = 0; return; } if (nd !== e.dir) { e.dir = nd; e.v = Math.min(e.v, e.maxTurn || 140); const [a, b] = DIRS[nd]; return stepAlong2(e, step, a, b); }
+    if (horiz) e.x = arr[ni]; else e.y = arr[ni]; step -= dist; const nd = decide(horiz ? ni : idxAt(XS, e.x), horiz ? idxAt(YS, e.y) : ni);
+    if (nd < 0) { e.v = 0; return; } if (nd !== e.dir) { e.dir = nd; e.v = Math.min(e.v, e.maxTurn || 140); e.x += DIRS[nd][0] * step; e.y += DIRS[nd][1] * step; return; }
   }
 }
-function stepAlong2(e, step, a, b) { e.x += a * step; e.y += b * step; }
 
 /* ================= game state ================= */
 let state = 'title', stateT = 0, t0 = 0, level = 1, score = 0, hi = 0, shake = 0, msgs = [], driveTime = 0, fireLevel = 0, speed = 0, yielded = false, parts = [];
@@ -172,28 +192,25 @@ function truckDecide(cx, cy) {
 }
 function driveWorld(dt) {
   const T = truck; driveTime += dt; fireLevel = clamp(driveTime / 80, 0, 1); T.cool -= dt; T.maxTurn = 150;
-  const atNode = Math.abs(T.x / S - Math.round(T.x / S)) < 1e-4 && Math.abs(T.y / S - Math.round(T.y / S)) < 1e-4;
-  const dEnd = Math.hypot(T.x - fireNode.x * S, T.y - fireNode.y * S);
+  const nd0 = nodeAt(T), fx = XS[fireNode.x], fy = YS[fireNode.y], dEnd = Math.hypot(T.x - fx, T.y - fy);
   if (state === 'drive') {
-    // flick the opposite way for a U-turn between intersections
     const opp = (T.dir + 2) % 4, w = G.auto ? -1 : input.want;
-    if (w === opp && T.cool <= 0 && !atNode) { T.dir = opp; T.v = Math.min(T.v, 50); T.cool = .6; }
-    if (atNode && T.v < 1) { const nd = truckDecide(Math.round(T.x / S), Math.round(T.y / S)); if (nd >= 0) { T.dir = nd; T.v = 20; } }
-    if (T.v > 0 || !atNode) T.v = Math.min(MAXS * .88, T.v + 300 * dt); else T.v = Math.min(MAXS * .88, T.v);
-    if (!(atNode && T.v < 1)) stepAlong(T, dt, truckDecide);
-    if (dEnd < 24) { state = 'arrive'; stateT = 0; }
-  } else { T.v = Math.max(0, T.v - 420 * dt); stepAlong(T, dt, () => truckDecide.call(null, 0, 0) >= 0 ? T.dir : -1); if (dEnd < 6 || stateT > 1) T.v = 0; if (stateT > .9) startScene(); }
+    if (w === opp && T.cool <= 0 && !nd0) { T.dir = opp; T.v = Math.min(T.v, 50); T.cool = .6; }
+    if (nd0 && T.v < 1) { const d = truckDecide(nd0[0], nd0[1]); if (d >= 0) { T.dir = d; T.v = 20; } }
+    if (!(nd0 && T.v < 1)) { T.v = Math.min(MAXS * .88, T.v + 300 * dt); stepAlong(T, dt, truckDecide); }
+    if (dEnd < 26) { state = 'arrive'; stateT = 0; }
+  } else { T.v = Math.max(0, T.v - 420 * dt); stepAlong(T, dt, () => -1); if (stateT > .9) startScene(); }
   speed = T.v; const dd = ((ANG[T.dir] - T.hd + Math.PI * 3) % (Math.PI * 2)) - Math.PI; T.hd += dd * Math.min(1, dt * 9); const dt2 = ((T.hd - T.ta + Math.PI * 3) % (Math.PI * 2)) - Math.PI; T.ta += dt2 * Math.min(1, dt * 5);
-  // traffic
+  const fvx = Math.cos(T.hd), fvy = Math.sin(T.hd);
   for (const c of cars) {
     if (c.gone) continue;
     if (c.hit) { c.hitT += dt; c.x += Math.cos(c.fly) * 160 * dt; c.y += Math.sin(c.fly) * 160 * dt; c.rot += 8 * dt; if (c.hitT > 1.2) c.gone = true; continue; }
-    const rel = (c.x - T.x) * DIRS[T.dir][0] + (c.y - T.y) * DIRS[T.dir][1], lat = Math.abs((c.x - T.x) * DIRS[T.dir][1]) + Math.abs((c.y - T.y) * DIRS[T.dir][0]);
-    const near = Math.hypot(c.x - T.x, c.y - T.y) < 170 && (rel > -30 || Math.hypot(c.x - T.x, c.y - T.y) < 80);
-    c.yield = c.yield && Math.hypot(c.x - T.x, c.y - T.y) < 400 || near; c.off += ((c.yield ? 24 : 14) - c.off) * Math.min(1, dt * 6); const tv = c.yield ? 30 : c.vmax; c.v += (tv - c.v) * Math.min(1, dt * 3);
+    const dx = c.x - T.x, dy = c.y - T.y, dist = Math.hypot(dx, dy), rel = dx * fvx + dy * fvy, near = dist < 190 && (rel > -40 || dist < 90);
+    c.yield = (c.yield && dist < 420) || near; const roadHalf = (c.dir % 2 ? WY[Math.max(0, Math.min(ROWS - 1, idxAt(YS, c.y)))] : WX[Math.max(0, Math.min(COLS - 1, idxAt(XS, c.x)))]) / 2; const target = c.yield ? Math.min(roadHalf - 3, 19) : Math.min(11, roadHalf * .45);
+    c.off += (target - c.off) * Math.min(1, dt * 6); c.v += ((c.yield ? 30 : c.vmax) - c.v) * Math.min(1, dt * 3);
     if (c.yield && !yielded && near && state === 'drive') { yielded = true; talk('c_clear'); sfxPlay('airhorn', .5); }
-    c.maxTurn = 90; stepAlong(c, dt, (cx, cy) => { const opp = (c.dir + 2) % 4, opts = []; for (let d = 0; d < 4; d++) if (d !== opp && isOpen(cx, cy, d)) opts.push(d); if (!opts.length) return isOpen(cx, cy, opp) ? opp : -1; return opts.includes(c.dir) && Math.random() < .65 ? c.dir : opts[Math.floor(Math.random() * opts.length)]; });
-    if (state === 'drive') { const r = DIRS[(c.dir + 1) % 4], px = c.x + r[0] * c.off, py = c.y + r[1] * c.off; if (Math.hypot(px - T.x, py - T.y) < 24 || (T.v > 0 && Math.hypot(px - T.x + DIRS[T.dir][0] * 14, py - T.y + DIRS[T.dir][1] * 14) < 22)) { c.hit = true; c.hitT = 0; c.rot = 0; c.fly = Math.atan2(py - T.y, px - T.x); T.v *= .6; shake = 8; SFX.crash(); talkOnce('c_wreck'); say('SMASH!', '#ffd93b', 1); } }
+    c.maxTurn = 90; stepAlong(c, dt, (cx, cy) => { const o = (c.dir + 2) % 4, opts = []; for (let d = 0; d < 4; d++) if (d !== o && isOpen(cx, cy, d)) opts.push(d); if (!opts.length) return isOpen(cx, cy, o) ? o : -1; return opts.includes(c.dir) && Math.random() < .65 ? c.dir : opts[Math.floor(Math.random() * opts.length)]; });
+    if (state === 'drive') { const r = DIRS[(c.dir + 1) % 4], px = c.x + r[0] * c.off, py = c.y + r[1] * c.off, ex = px - T.x, ey = py - T.y, rl = ex * fvx + ey * fvy, lat = Math.abs(-ex * fvy + ey * fvx), half = c.kind === 'bus' ? 17 : 11; if (rl > -64 - half && rl < 16 + half && lat < 16) { c.hit = true; c.hitT = 0; c.rot = 0; c.fly = Math.atan2(ey, ex); T.v *= .6; shake = 8; SFX.crash(); talkOnce('c_wreck'); say('SMASH!', '#ffd93b', 1); } }
   }
   if (state === 'drive' && driveTime > 55 && !said.hu) { said.hu = 1; talk('d_hurry'); }
 }
@@ -299,58 +316,75 @@ function drawScene() {
 }
 
 /* ================= drawing: top-down ================= */
-function drawCityBg() {
-  ctx.fillStyle = '#23232f'; ctx.fillRect(cam.x - W, cam.y - H, W * 2, H * 2);
-  const i0 = Math.floor((cam.x - W / Z / 2) / S) - 1, i1 = Math.ceil((cam.x + W / Z / 2) / S) + 1, j0 = Math.floor((cam.y - H / Z) / S) - 1, j1 = Math.ceil((cam.y + H / Z) / S) + 1;
-  // blocks
-  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
-    const b = blocks[i + ',' + j]; if (!b) { continue; } const x = i * S + RD / 2, y = j * S + RD / 2, w = S - RD, h = S - RD, fire = isFireBlock(i, j);
-    ctx.fillStyle = '#34344a'; ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
-    if (b.kind === 'park') { ctx.fillStyle = '#0f3a22'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#17582f'; for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.arc(x + 14 + hash(b.seed + k) * (w - 28), y + 14 + hash(b.seed + k * 3) * (h - 28), 9 + hash(b.seed + k * 7) * 7, 0, TAU); ctx.fill(); } ctx.strokeStyle = '#3dff7a'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, h); }
-    else { ctx.fillStyle = hsl(b.hue, 35, fire ? 18 : 10); ctx.fillRect(x, y, w, h); ctx.strokeStyle = fire ? '#ff6a2a' : hsl(b.hue, 90, 55, .85); ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2); ctx.fillStyle = hsl(b.hue, 40, 16); ctx.fillRect(x + 10, y + 10, w - 20, h - 20); for (let k = 0; k < 3; k++) { ctx.fillStyle = hsl(b.hue, 50, 24); ctx.fillRect(x + 14 + hash(b.seed + k * 2) * (w - 46), y + 14 + hash(b.seed + k * 5) * (h - 46), 14, 12); } ctx.fillStyle = hsl(b.hue, 90, 60, .6); ctx.fillRect(x + 6, y + h / 2 - 1, 5, 2); }
-    if (fire) { ctx.save(); ctx.shadowColor = '#ff6a1a'; ctx.shadowBlur = 20; for (let k = 0; k < 5; k++) { const fx = x + 12 + k * (w - 24) / 4, fy = y + 14 + hash(k + b.seed) * (h - 28), fh = 20 + 10 * Math.sin(t0 * 9 + k * 1.7); ctx.fillStyle = '#ff6a1a'; ctx.beginPath(); ctx.moveTo(fx - 10, fy + 8); ctx.quadraticCurveTo(fx - 3, fy - fh * .5, fx + Math.sin(t0 * 7 + k) * 3, fy - fh); ctx.quadraticCurveTo(fx + 3, fy - fh * .4, fx + 10, fy + 8); ctx.fill(); ctx.fillStyle = '#ffd93b'; ctx.beginPath(); ctx.moveTo(fx - 5, fy + 8); ctx.quadraticCurveTo(fx, fy - fh * .5, fx + 5, fy + 8); ctx.fill(); } ctx.restore(); ctx.fillStyle = 'rgba(100,80,90,.35)'; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(x + w / 2 + Math.sin(t0 * 2 + k * 2) * 12, y - 6 - ((t0 * 20 + k * 22) % 60), 12 + k * 4, 0, TAU); ctx.fill(); } }
+function roofDetail(L, fire) {
+  const cx = L.x + L.w / 2, cy = L.y + L.h / 2, r = mkRng(L.seed + 3);
+  if (L.d === 'ac') { for (let k = 0; k < 3; k++) { ctx.fillStyle = hsl(L.hue, 30, 30); ctx.fillRect(L.x + 6 + r() * Math.max(2, L.w - 24), L.y + 6 + r() * Math.max(2, L.h - 22), 12, 9); } }
+  else if (L.d === 'tank') { ctx.fillStyle = hsl(L.hue, 30, 28); ctx.beginPath(); ctx.arc(cx, cy, Math.min(14, L.w * .25, L.h * .25), 0, TAU); ctx.fill(); ctx.strokeStyle = hsl(L.hue, 80, 55, .8); ctx.lineWidth = 1.5; ctx.stroke(); }
+  else if (L.d === 'skylight') { ctx.fillStyle = 'rgba(120,200,255,.3)'; ctx.fillRect(L.x + L.w * .2, L.y + L.h * .25, L.w * .6, L.h * .5); ctx.strokeStyle = 'rgba(160,220,255,.6)'; ctx.lineWidth = 1; ctx.strokeRect(L.x + L.w * .2, L.y + L.h * .25, L.w * .6, L.h * .5); }
+  else if (L.d === 'helipad') { ctx.strokeStyle = '#ffd93b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, Math.min(L.w, L.h) * .3, 0, TAU); ctx.stroke(); ctx.fillStyle = '#ffd93b'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.fillText('H', cx, cy + 5); }
+  else if (L.d === 'setback') { ctx.fillStyle = hsl(L.hue, 40, 22); ctx.fillRect(L.x + L.w * .18, L.y + L.h * .18, L.w * .64, L.h * .64); ctx.fillStyle = hsl(L.hue, 40, 30); ctx.fillRect(L.x + L.w * .34, L.y + L.h * .34, L.w * .32, L.h * .32); ctx.strokeStyle = hsl(L.hue, 80, 55, .6); ctx.lineWidth = 1; ctx.strokeRect(L.x + L.w * .18, L.y + L.h * .18, L.w * .64, L.h * .64); }
+  else if (L.d === 'vents') { for (let k = 0; k < 6; k++) { ctx.fillStyle = hsl(L.hue, 25, 26); ctx.fillRect(L.x + 10 + k * Math.max(12, (L.w - 24) / 6), L.y + L.h * .3, 8, 8); ctx.fillRect(L.x + 10 + k * Math.max(12, (L.w - 24) / 6), L.y + L.h * .6, 8, 8); } ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1; for (let k = 1; k < 5; k++) { ctx.beginPath(); ctx.moveTo(L.x + L.w * k / 5, L.y); ctx.lineTo(L.x + L.w * k / 5, L.y + L.h); ctx.stroke(); } }
+}
+function drawBlock(b, fire, bi, bj) {
+  ctx.fillStyle = '#34344a'; ctx.fillRect(b.x - 3, b.y - 3, b.w + 6, b.h + 6);
+  if (b.kind === 'park') { ctx.fillStyle = '#0f3a22'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.strokeStyle = 'rgba(200,180,120,.35)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(b.x, b.y + b.h / 2); ctx.lineTo(b.x + b.w, b.y + b.h / 2); ctx.moveTo(b.x + b.w / 2, b.y); ctx.lineTo(b.x + b.w / 2, b.y + b.h); ctx.stroke(); if (b.pond) { ctx.fillStyle = '#1a5a8a'; ctx.beginPath(); ctx.ellipse(b.pond.x, b.pond.y, b.pond.rx, b.pond.ry, 0, 0, TAU); ctx.fill(); } for (const t of b.trees) { ctx.fillStyle = '#17582f'; ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, TAU); ctx.fill(); ctx.strokeStyle = '#3dff7a'; ctx.lineWidth = 1; ctx.stroke(); } ctx.strokeStyle = '#3dff7a'; ctx.lineWidth = 1.5; ctx.strokeRect(b.x, b.y, b.w, b.h); }
+  else if (b.kind === 'plaza') { ctx.fillStyle = '#4a4a5c'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.strokeStyle = 'rgba(255,255,255,.1)'; ctx.lineWidth = 1; for (let x = b.x; x < b.x + b.w; x += 20) { ctx.beginPath(); ctx.moveTo(x, b.y); ctx.lineTo(x, b.y + b.h); ctx.stroke(); } for (let y = b.y; y < b.y + b.h; y += 20) { ctx.beginPath(); ctx.moveTo(b.x, y); ctx.lineTo(b.x + b.w, y); ctx.stroke(); } ctx.fillStyle = '#2a7aaa'; ctx.beginPath(); ctx.arc(b.x + b.w / 2, b.y + b.h / 2, Math.min(b.w, b.h) * .16, 0, TAU); ctx.fill(); ctx.strokeStyle = '#9fe8ff'; ctx.lineWidth = 2; ctx.stroke(); for (const t of b.trees) { ctx.fillStyle = '#17582f'; ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, TAU); ctx.fill(); } ctx.strokeStyle = '#ff6ad5'; ctx.lineWidth = 1.5; ctx.strokeRect(b.x, b.y, b.w, b.h); }
+  else if (b.kind === 'parking') { ctx.fillStyle = '#20202c'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1.5; const rows = Math.max(1, Math.floor(b.h / 50)); let k = 0; for (let rr = 0; rr < rows; rr++) { const yy = b.y + 8 + rr * 50; for (let xx = b.x + 8; xx + 14 <= b.x + b.w - 6; xx += 16) { ctx.strokeRect(xx, yy, 12, 26); if (b.cols[k % 40] % 3 !== 0) { ctx.fillStyle = hsl(b.cols[k % 40], 60, 50); ctx.fillRect(xx + 2, yy + 3, 8, 20); } k++; } } ctx.strokeStyle = '#ffd93b'; ctx.lineWidth = 1.5; ctx.strokeRect(b.x, b.y, b.w, b.h); }
+  else for (const L of b.lots) {
+    ctx.fillStyle = hsl(L.hue, 38, fire ? L.l + 6 : L.l); ctx.fillRect(L.x, L.y, L.w, L.h);
+    if (L.d === 'gable') { ctx.fillStyle = hsl(L.hue, 40, L.l + 8); ctx.beginPath(); ctx.moveTo(L.x, L.y + L.h); ctx.lineTo(L.x + L.w / 2, L.y); ctx.lineTo(L.x + L.w, L.y + L.h); ctx.fill(); ctx.strokeStyle = hsl(L.hue, 70, 50, .7); ctx.lineWidth = 1; ctx.strokeRect(L.x, L.y, L.w, L.h); }
+    else { ctx.strokeStyle = fire ? '#ff6a2a' : hsl(L.hue, 90, 55, .85); ctx.lineWidth = 2; ctx.strokeRect(L.x + 1, L.y + 1, L.w - 2, L.h - 2); roofDetail(L, fire); }
   }
-  // fire station next to the start
-  { const sx = startNode.x * S + RD / 2, sy = (startNode.y - 1) * S + RD / 2; ctx.fillStyle = '#7a1018'; ctx.fillRect(sx, sy, S - RD, S - RD); ctx.strokeStyle = '#ff3b3b'; ctx.lineWidth = 2; ctx.strokeRect(sx + 1, sy + 1, S - RD - 2, S - RD - 2); ctx.fillStyle = '#fff'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('FIRE', sx + (S - RD) / 2, sy + 40); ctx.fillText('DEPT', sx + (S - RD) / 2, sy + 56); }
-  // roads: lane dashes, closures
-  for (let i = Math.max(0, i0); i <= Math.min(COLS - 1, i1); i++) for (let j = Math.max(0, j0); j <= Math.min(ROWS - 1, j1); j++) for (const d of [1, 2]) {
-    const nx = i + DIRS[d][0], ny = j + DIRS[d][1]; if (nx >= COLS || ny >= ROWS) continue; const x1 = i * S, y1 = j * S, x2 = nx * S, y2 = ny * S;
-    if (closed.has(ekey(i, j, d))) { const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2; ctx.save(); ctx.fillStyle = '#4a3a10'; if (d === 1) ctx.fillRect(x1 + RD / 2, y1 - RD / 2, S - RD, RD); else ctx.fillRect(x1 - RD / 2, y1 + RD / 2, RD, S - RD); ctx.strokeStyle = '#ffb300'; ctx.lineWidth = 6; ctx.beginPath(); for (let k = -3; k <= 3; k++) { if (d === 1) { ctx.moveTo(cx - 30 + k * 12, cy - RD / 2); ctx.lineTo(cx - 10 + k * 12, cy + RD / 2); } else { ctx.moveTo(cx - RD / 2, cy - 30 + k * 12); ctx.lineTo(cx + RD / 2, cy - 10 + k * 12); } } ctx.stroke(); ctx.restore(); for (const [bx, by] of d === 1 ? [[x1 + 38, y1], [x2 - 38, y1]] : [[x1, y1 + 38], [x1, y2 - 38]]) { ctx.fillStyle = '#ff7a1a'; ctx.beginPath(); ctx.arc(bx, by, 7, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(bx - 4, by - 1.5, 8, 3); } }
-    else { ctx.strokeStyle = 'rgba(255,233,160,.55)'; ctx.lineWidth = 2; ctx.setLineDash([12, 14]); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); }
-  }
-  // fire target: pulsing ring and hydrant
-  const fx = fireNode.x * S, fy = fireNode.y * S, pr = 26 + 8 * Math.sin(t0 * 6); ctx.strokeStyle = '#ff6a2a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(fx, fy, pr, 0, TAU); ctx.stroke(); ctx.fillStyle = 'rgba(255,106,42,.2)'; ctx.beginPath(); ctx.arc(fx, fy, pr, 0, TAU); ctx.fill();
+  if (fire) { ctx.save(); ctx.shadowColor = '#ff6a1a'; ctx.shadowBlur = 20; for (let k = 0; k < 6; k++) { const fx = b.x + 12 + k * (b.w - 24) / 5, fy = b.y + 18 + (k % 2) * (b.h - 40), fh = 22 + 10 * Math.sin(t0 * 9 + k * 1.7); ctx.fillStyle = '#ff6a1a'; ctx.beginPath(); ctx.moveTo(fx - 11, fy + 9); ctx.quadraticCurveTo(fx - 3, fy - fh * .5, fx + Math.sin(t0 * 7 + k) * 3, fy - fh); ctx.quadraticCurveTo(fx + 3, fy - fh * .4, fx + 11, fy + 9); ctx.fill(); ctx.fillStyle = '#ffd93b'; ctx.beginPath(); ctx.moveTo(fx - 5, fy + 9); ctx.quadraticCurveTo(fx, fy - fh * .5, fx + 5, fy + 9); ctx.fill(); } ctx.restore(); ctx.fillStyle = 'rgba(100,80,90,.35)'; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(b.x + b.w / 2 + Math.sin(t0 * 2 + k * 2) * 12, b.y - 6 - ((t0 * 20 + k * 22) % 60), 12 + k * 4, 0, TAU); ctx.fill(); } }
 }
 function isFireBlock(i, j) { const ox = [[0, 0], [-1, 0], [0, -1]]; for (let k = 0; k < NB; k++) if (i === fireNode.x + ox[k][0] && j === fireNode.y + ox[k][1]) return true; return false; }
+function drawRoadEdge(i, j, d) {
+  const nx = i + DIRS[d][0], ny = j + DIRS[d][1], horiz = d === 1, w = horiz ? WY[j] : WX[i], x1 = XS[i], y1 = YS[j], x2 = XS[nx], y2 = YS[ny];
+  if (closed.has(ekey(i, j, d))) {
+    const a = horiz ? x1 + WX[i] / 2 : x1 - w / 2, b = horiz ? y1 - w / 2 : y1 + WY[j] / 2, lw = horiz ? (x2 - WX[nx] / 2) - a : w, lh = horiz ? w : (y2 - WY[ny] / 2) - b;
+    ctx.save(); ctx.beginPath(); ctx.rect(a, b, lw, lh); ctx.clip(); ctx.fillStyle = '#4a3a10'; ctx.fillRect(a, b, lw, lh); ctx.strokeStyle = '#ffb300'; ctx.lineWidth = 7; ctx.beginPath(); for (let k = -20; k < (horiz ? lw : lh) / 14 + 4; k++) { if (horiz) { ctx.moveTo(a + k * 18, b + lh); ctx.lineTo(a + k * 18 + lh, b); } else { ctx.moveTo(a, b + k * 18 + lw); ctx.lineTo(a + lw, b + k * 18); } } ctx.stroke(); ctx.restore();
+    for (const [bx, by] of horiz ? [[a + 14, y1], [a + lw - 14, y1]] : [[x1, b + 14], [x1, b + lh - 14]]) { ctx.fillStyle = '#ff7a1a'; ctx.beginPath(); ctx.arc(bx, by, 8, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(bx - 5, by - 1.5, 10, 3); } return;
+  }
+  const a0 = horiz ? x1 + WX[i] / 2 : y1 + WY[j] / 2, a1 = horiz ? x2 - WX[nx] / 2 : y2 - WY[ny] / 2, blvd = w >= 90;
+  ctx.lineWidth = blvd ? 2.5 : 2; if (blvd) { ctx.strokeStyle = '#ffd93b'; for (const o of [-2.5, 2.5]) { ctx.beginPath(); if (horiz) { ctx.moveTo(a0, y1 + o); ctx.lineTo(a1, y1 + o); } else { ctx.moveTo(x1 + o, a0); ctx.lineTo(x1 + o, a1); } ctx.stroke(); } ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.setLineDash([14, 14]); for (const o of [-w / 4, w / 4]) { ctx.beginPath(); if (horiz) { ctx.moveTo(a0, y1 + o); ctx.lineTo(a1, y1 + o); } else { ctx.moveTo(x1 + o, a0); ctx.lineTo(x1 + o, a1); } ctx.stroke(); } ctx.setLineDash([]); }
+  else { ctx.strokeStyle = 'rgba(255,233,160,.55)'; ctx.setLineDash([12, 14]); ctx.beginPath(); if (horiz) { ctx.moveTo(a0, y1); ctx.lineTo(a1, y1); } else { ctx.moveTo(x1, a0); ctx.lineTo(x1, a1); } ctx.stroke(); ctx.setLineDash([]); }
+  if (w >= 60) { ctx.fillStyle = 'rgba(255,255,255,.22)'; for (const e of [a0 + 4, a1 - 12]) for (let k = 0; k < w / 8; k++) { if (horiz) ctx.fillRect(e, y1 - w / 2 + 3 + k * 8, 8, 4); else ctx.fillRect(x1 - w / 2 + 3 + k * 8, e, 4, 8); } }
+}
+function drawCityBg() {
+  const vx0 = cam.x - W / Z / 2 - 60, vx1 = cam.x + W / Z / 2 + 60, vy0 = cam.y - H * .55 / Z - 60, vy1 = cam.y + H * .45 / Z + 60;
+  ctx.fillStyle = '#23232f'; ctx.fillRect(vx0 - 200, vy0 - 200, vx1 - vx0 + 400, vy1 - vy0 + 400);
+  // outskirts
+  const X0 = XS[0] - WX[0] / 2, X1 = XS[COLS - 1] + WX[COLS - 1] / 2, Y0 = YS[0] - WY[0] / 2, Y1 = YS[ROWS - 1] + WY[ROWS - 1] / 2; ctx.fillStyle = '#0d0d18'; ctx.fillRect(vx0 - 200, vy0 - 200, vx1 - vx0 + 400, Y0 - (vy0 - 200)); ctx.fillRect(vx0 - 200, Y1, vx1 - vx0 + 400, vy1 + 200 - Y1); ctx.fillRect(vx0 - 200, Y0, X0 - (vx0 - 200), Y1 - Y0); ctx.fillRect(X1, Y0, vx1 + 200 - X1, Y1 - Y0);
+  for (let gx = Math.floor(vx0 / 70) - 1; gx <= vx1 / 70 + 1; gx++) for (let gy = Math.floor(vy0 / 70) - 1; gy <= vy1 / 70 + 1; gy++) { const x = gx * 70 + 6, y = gy * 70 + 6; if (x > X0 - 4 && x < X1 && y > Y0 - 4 && y < Y1) continue; const h = hash(gx * 13 + gy * 29); ctx.strokeStyle = `hsla(${[185, 300, 50, 270][Math.floor(h * 4)]},80%,45%,.45)`; ctx.fillStyle = `hsl(${[185, 300, 50, 270][Math.floor(h * 4)]},30%,${7 + h * 6}%)`; ctx.fillRect(x, y, 58, 58); ctx.lineWidth = 1.5; ctx.strokeRect(x, y, 58, 58); }
+  for (let i = 0; i < COLS - 1; i++) for (let j = 0; j < ROWS - 1; j++) { const b = blocks[i][j]; if (b.x > vx1 || b.x + b.w < vx0 || b.y > vy1 || b.y + b.h < vy0) continue; drawBlock(b, isFireBlock(i, j), i, j); }
+  { const sx = XS[startNode.x] + WX[startNode.x] / 2, sy = YS[startNode.y - 1] + WY[startNode.y - 1] / 2, sw = XS[startNode.x + 1] - XS[startNode.x] - (WX[startNode.x] + WX[startNode.x + 1]) / 2, sh = YS[startNode.y] - YS[startNode.y - 1] - (WY[startNode.y - 1] + WY[startNode.y]) / 2; ctx.fillStyle = '#7a1018'; ctx.fillRect(sx, sy, sw, sh); ctx.strokeStyle = '#ff3b3b'; ctx.lineWidth = 2; ctx.strokeRect(sx + 1, sy + 1, sw - 2, sh - 2); ctx.fillStyle = '#9a1a22'; ctx.fillRect(sx + 8, sy + sh - 34, sw - 16, 26); ctx.fillStyle = '#fff'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('FIRE DEPT', sx + sw / 2, sy + 20); }
+  for (let i = 0; i < COLS; i++) for (let j = 0; j < ROWS; j++) for (const d of [1, 2]) { const nx = i + DIRS[d][0], ny = j + DIRS[d][1]; if (nx >= COLS || ny >= ROWS) continue; const mx = (XS[i] + XS[nx]) / 2, my = (YS[j] + YS[ny]) / 2; if (mx < vx0 - 300 || mx > vx1 + 300 || my < vy0 - 300 || my > vy1 + 300) continue; drawRoadEdge(i, j, d); }
+  const fx = XS[fireNode.x], fy = YS[fireNode.y], pr = 28 + 8 * Math.sin(t0 * 6); ctx.strokeStyle = '#ff6a2a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(fx, fy, pr, 0, TAU); ctx.stroke(); ctx.fillStyle = 'rgba(255,106,42,.2)'; ctx.beginPath(); ctx.arc(fx, fy, pr, 0, TAU); ctx.fill();
+}
 function drawCarTD(c) {
   const r = DIRS[(c.dir + 1) % 4], x = c.x + r[0] * c.off, y = c.y + r[1] * c.off, long = c.kind === 'bus' ? 34 : 22; ctx.save(); ctx.translate(x, y); ctx.rotate(ANG[c.dir] + c.rot);
-  ctx.fillStyle = c.kind === 'taxi' ? '#ffd93b' : c.kind === 'bus' ? '#2a6aff' : hsl(c.hue, 70, 55); ctx.fillRect(-long / 2, -8, long, 16); ctx.fillStyle = '#15102a'; ctx.fillRect(-long * .15, -6, long * .35, 12); ctx.fillStyle = '#ffe9a0'; ctx.fillRect(long / 2 - 3, -6, 3, 3); ctx.fillRect(long / 2 - 3, 3, 3, 3); ctx.fillStyle = '#ff3b3b'; ctx.fillRect(-long / 2, -6, 2, 3); ctx.fillRect(-long / 2, 3, 2, 3); ctx.restore();
+  ctx.fillStyle = c.kind === 'taxi' ? '#ffd93b' : c.kind === 'bus' ? '#2a6aff' : hsl(c.hue, 70, 55); ctx.fillRect(-long / 2, -7, long, 14); ctx.fillStyle = '#15102a'; ctx.fillRect(-long * .15, -5, long * .35, 10); ctx.fillStyle = '#ffe9a0'; ctx.fillRect(long / 2 - 3, -5, 3, 3); ctx.fillRect(long / 2 - 3, 2, 3, 3); ctx.fillStyle = '#ff3b3b'; ctx.fillRect(-long / 2, -5, 2, 3); ctx.fillRect(-long / 2, 2, 2, 3); ctx.restore();
 }
 function drawTruckTD() {
   const T = truck, c = Math.cos(T.hd), s = Math.sin(T.hd), px = T.x - c * 16, py = T.y - s * 16, tc = Math.cos(T.ta), ts = Math.sin(T.ta);
-  // trailer (ladder section)
-  ctx.save(); ctx.translate(px - tc * 22, py - ts * 22); ctx.rotate(T.ta); ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-26, -9, 56, 22);
-  ctx.shadowColor = '#ff3b3b'; ctx.shadowBlur = 10; ctx.fillStyle = '#c4161c'; ctx.fillRect(-26, -11, 52, 22); ctx.shadowBlur = 0; ctx.fillStyle = '#f2f2f2'; ctx.fillRect(-26, -2, 52, 4);
-  ctx.strokeStyle = '#d8d8e8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-24, -6); ctx.lineTo(26, -6); ctx.moveTo(-24, 6); ctx.lineTo(26, 6); ctx.stroke(); ctx.lineWidth = 1.2; for (let k = -22; k <= 24; k += 6) { ctx.beginPath(); ctx.moveTo(k, -6); ctx.lineTo(k, 6); ctx.stroke(); } ctx.restore();
-  // cab
-  ctx.save(); ctx.translate(T.x, T.y); ctx.rotate(T.hd); ctx.shadowColor = '#ff3b3b'; ctx.shadowBlur = 10; ctx.fillStyle = '#d8181f'; ctx.fillRect(-14, -12, 28, 24); ctx.shadowBlur = 0; ctx.fillStyle = '#15102a'; ctx.fillRect(4, -9, 8, 18); ctx.fillStyle = '#f2f2f2'; ctx.fillRect(-14, -2, 14, 4);
-  const fl = Math.sin(t0 * 14) > 0; ctx.shadowBlur = 14; ctx.shadowColor = fl ? '#ff2a2a' : '#2a6aff'; ctx.fillStyle = fl ? '#ff4040' : '#601010'; ctx.fillRect(-6, -10, 5, 8); ctx.fillStyle = fl ? '#102060' : '#4a8aff'; ctx.fillRect(-6, 2, 5, 8); ctx.shadowBlur = 0; ctx.fillStyle = '#ffe9a0'; ctx.fillRect(13, -9, 3, 5); ctx.fillRect(13, 4, 3, 5); ctx.restore();
+  ctx.save(); ctx.translate(px - tc * 22, py - ts * 22); ctx.rotate(T.ta); ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-26, -8, 56, 20);
+  ctx.shadowColor = '#ff3b3b'; ctx.shadowBlur = 10; ctx.fillStyle = '#c4161c'; ctx.fillRect(-26, -10, 52, 20); ctx.shadowBlur = 0; ctx.fillStyle = '#f2f2f2'; ctx.fillRect(-26, -2, 52, 4);
+  ctx.strokeStyle = '#d8d8e8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-24, -5); ctx.lineTo(26, -5); ctx.moveTo(-24, 5); ctx.lineTo(26, 5); ctx.stroke(); ctx.lineWidth = 1.2; for (let k = -22; k <= 24; k += 6) { ctx.beginPath(); ctx.moveTo(k, -5); ctx.lineTo(k, 5); ctx.stroke(); } ctx.restore();
+  ctx.save(); ctx.translate(T.x, T.y); ctx.rotate(T.hd); ctx.shadowColor = '#ff3b3b'; ctx.shadowBlur = 10; ctx.fillStyle = '#d8181f'; ctx.fillRect(-14, -10, 28, 20); ctx.shadowBlur = 0; ctx.fillStyle = '#15102a'; ctx.fillRect(4, -8, 8, 16); ctx.fillStyle = '#f2f2f2'; ctx.fillRect(-14, -2, 14, 4);
+  const fl = Math.sin(t0 * 14) > 0; ctx.shadowBlur = 14; ctx.shadowColor = fl ? '#ff2a2a' : '#2a6aff'; ctx.fillStyle = fl ? '#ff4040' : '#601010'; ctx.fillRect(-6, -9, 5, 7); ctx.fillStyle = fl ? '#102060' : '#4a8aff'; ctx.fillRect(-6, 2, 5, 7); ctx.shadowBlur = 0; ctx.fillStyle = '#ffe9a0'; ctx.fillRect(13, -8, 3, 5); ctx.fillRect(13, 3, 3, 5); ctx.restore();
 }
 function drawTopDown() {
-  const T = truck, lead = 36; cam.x += ((T.x + DIRS[T.dir][0] * lead) - cam.x) * .14; cam.y += ((T.y + DIRS[T.dir][1] * lead) - cam.y) * .14;
+  const T = truck, lead = 40; cam.x += ((T.x + DIRS[T.dir][0] * lead) - cam.x) * .14; cam.y += ((T.y + DIRS[T.dir][1] * lead) - cam.y) * .14;
   ctx.save(); ctx.translate(W / 2, H * .55); ctx.scale(Z, Z); ctx.translate(-cam.x, -cam.y); drawCityBg(); for (const c of cars) if (!c.gone) drawCarTD(c); drawTruckTD();
-  // glow around the siren
-  const g = ctx.createRadialGradient(T.x, T.y, 4, T.x, T.y, 90); const fl = Math.sin(t0 * 14) > 0; g.addColorStop(0, fl ? 'rgba(255,40,40,.22)' : 'rgba(40,110,255,.22)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(T.x - 90, T.y - 90, 180, 180);
+  const g = ctx.createRadialGradient(T.x, T.y, 4, T.x, T.y, 90), fl = Math.sin(t0 * 14) > 0; g.addColorStop(0, fl ? 'rgba(255,40,40,.22)' : 'rgba(40,110,255,.22)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(T.x - 90, T.y - 90, 180, 180);
   for (const p of parts) drawPart(p); ctx.restore();
-  // arrow toward the fire when it is off screen
-  const sx = W / 2 + (fireNode.x * S - cam.x) * Z, sy = H * .55 + (fireNode.y * S - cam.y) * Z;
+  const sx = W / 2 + (XS[fireNode.x] - cam.x) * Z, sy = H * .55 + (YS[fireNode.y] - cam.y) * Z;
   if (sx < 30 || sx > W - 30 || sy < 130 || sy > H - 40) { const ang = Math.atan2(sy - H * .55, sx - W / 2), ex = clamp(W / 2 + Math.cos(ang) * 400, 34, W - 34), ey = clamp(H * .55 + Math.sin(ang) * 600, 140, H - 50); ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang); glow('#ff6a2a', 12); ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(-10, -13); ctx.lineTo(-4, 0); ctx.lineTo(-10, 13); ctx.closePath(); ctx.fill(); ctx.restore(); }
 }
 function drawMiniMap() {
-  const mw = 112, mh = 140, x0 = W - mw - 10, y0 = 112, sc = Math.min((mw - 12) / (COLS - 1), (mh - 12) / (ROWS - 1)); ctx.fillStyle = 'rgba(5,3,15,.7)'; ctx.fillRect(x0, y0, mw, mh); ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1; ctx.strokeRect(x0, y0, mw, mh);
-  const ox = x0 + 6, oy = y0 + 6; ctx.lineWidth = 1.5;
-  for (let i = 0; i < COLS; i++) for (let j = 0; j < ROWS; j++) for (const d of [1, 2]) { const nx = i + DIRS[d][0], ny = j + DIRS[d][1]; if (nx >= COLS || ny >= ROWS) continue; ctx.strokeStyle = closed.has(ekey(i, j, d)) ? 'rgba(255,90,60,.8)' : 'rgba(200,200,230,.5)'; ctx.beginPath(); ctx.moveTo(ox + i * sc, oy + j * sc); ctx.lineTo(ox + nx * sc, oy + ny * sc); ctx.stroke(); }
-  ctx.fillStyle = '#3dff7a'; ctx.fillRect(ox + startNode.x * sc - 2, oy + startNode.y * sc - 2, 4, 4); const pu = 3 + Math.sin(t0 * 6); ctx.fillStyle = '#ff6a2a'; ctx.beginPath(); ctx.arc(ox + fireNode.x * sc, oy + fireNode.y * sc, pu, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ox + truck.x / S * sc, oy + truck.y / S * sc, 3, 0, TAU); ctx.fill();
+  const mw = 112, mh = 150, x0 = W - mw - 10, y0 = 112, tw = XS[COLS - 1], th = YS[ROWS - 1], sc = Math.min((mw - 12) / tw, (mh - 12) / th); ctx.fillStyle = 'rgba(5,3,15,.7)'; ctx.fillRect(x0, y0, mw, mh); ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1; ctx.strokeRect(x0, y0, mw, mh);
+  const ox = x0 + 6, oy = y0 + 6; for (let i = 0; i < COLS; i++) for (let j = 0; j < ROWS; j++) for (const d of [1, 2]) { const nx = i + DIRS[d][0], ny = j + DIRS[d][1]; if (nx >= COLS || ny >= ROWS) continue; ctx.lineWidth = (d === 1 ? WY[j] : WX[i]) >= 90 ? 2.5 : 1.2; ctx.strokeStyle = closed.has(ekey(i, j, d)) ? 'rgba(255,90,60,.85)' : 'rgba(200,200,230,.55)'; ctx.beginPath(); ctx.moveTo(ox + XS[i] * sc, oy + YS[j] * sc); ctx.lineTo(ox + XS[nx] * sc, oy + YS[ny] * sc); ctx.stroke(); }
+  ctx.fillStyle = '#3dff7a'; ctx.fillRect(ox + XS[startNode.x] * sc - 2, oy + YS[startNode.y] * sc - 2, 4, 4); ctx.fillStyle = '#ff6a2a'; ctx.beginPath(); ctx.arc(ox + XS[fireNode.x] * sc, oy + YS[fireNode.y] * sc, 3 + Math.sin(t0 * 6), 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ox + truck.x * sc, oy + truck.y * sc, 3, 0, TAU); ctx.fill();
 }
 function render() {
   ctx.setTransform(2, 0, 0, 2, 0, 0); ctx.save(); if (shake > 0) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
@@ -390,6 +424,6 @@ buildCity();
 let last = performance.now(), acc = 0;
 function loop(now) { acc += Math.min(.1, (now - last) / 1000); last = now; while (acc >= 1 / 60) { update(1 / 60); acc -= 1 / 60; } render(); requestAnimationFrame(loop); }
 requestAnimationFrame(loop);
-window.G = { auto: false, aimOverride: null, get dist() { return truck ? Math.hypot(truck.x - fireNode.x * S, truck.y - fireNode.y * S) : 0; }, get cars() { return cars.filter(c => !c.gone).length; }, get state() { return state; }, get level() { return level; }, get score() { return score; }, get damage() { return damage; }, get tank() { return tank; }, get fires() { return wins.filter(w => w.f > .04).length; }, get wins() { return wins.length; }, get pets() { return pets.map(w => w.pet.saved ? 's' : w.pet.lost ? 'x' : 'a').join(''); }, get target() { let b = null; for (const w of wins) if (w.f > .04 && (!b || w.f > b.f)) b = w; return b ? { x: b.x + b.w / 2, y: b.y + b.h / 2 } : null; }, get speed() { return speed; }, get truck() { return truck && { x: Math.round(truck.x), y: Math.round(truck.y), d: truck.dir, v: Math.round(truck.v) }; }, get cap() { return caption && caption.s; }, get snd() { return Object.keys(SND).filter(k => SND[k]).length; }, 
+window.G = { auto: false, aimOverride: null, get dist() { return truck ? Math.hypot(truck.x - XS[fireNode.x], truck.y - YS[fireNode.y]) : 0; }, get cars() { return cars.filter(c => !c.gone).length; }, get state() { return state; }, get level() { return level; }, get score() { return score; }, get damage() { return damage; }, get tank() { return tank; }, get fires() { return wins.filter(w => w.f > .04).length; }, get wins() { return wins.length; }, get pets() { return pets.map(w => w.pet.saved ? 's' : w.pet.lost ? 'x' : 'a').join(''); }, get target() { let b = null; for (const w of wins) if (w.f > .04 && (!b || w.f > b.f)) b = w; return b ? { x: b.x + b.w / 2, y: b.y + b.h / 2 } : null; }, get speed() { return speed; }, get truck() { return truck && { x: Math.round(truck.x), y: Math.round(truck.y), d: truck.dir, v: Math.round(truck.v) }; }, get cap() { return caption && caption.s; }, get snd() { return Object.keys(SND).filter(k => SND[k]).length; }, 
   start() { startGame(); }, startAt(n) { level = n; score = 0; startLevel(); }, toScene() { if (state === 'count' || state === 'drive' || state === 'arrive') startScene(); }, sprayAt(x, y) { G.aimOverride = x == null ? null : { x, y }; }, setLevel(n) { level = n; } };
 </script>
