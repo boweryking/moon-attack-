@@ -69,12 +69,13 @@ function sched() {
 const TOP = 56, COLS = 14, BW = 32, BH = 24, GAP = 2, X0 = (W - COLS * (BW + GAP) + GAP) / 2, Y0 = 118;
 let state = 'title', level = 1, score = 0, lives = 3, hi = 0, t0 = 0, stateT = 0;
 try { hi = +localStorage.getItem('pharaohHi') || 0; } catch (e) {}
+let chariots = [], bombs = [], workers = [], ruins = [], chT = 9, wkT = 7;
 let bricks = [], pharaoh = null, balls = [], scarabs = [], parts = [], texts = [], spawnT = 2, shake = 0, tilt = 0;
 const paddle = { x: W / 2, y: 724, w: 84, h: 14 };
 const stars = Array.from({ length: 60 }, () => ({ x: Math.random() * W, y: Math.random() * H * .7, r: Math.random() * 1.4 + .3, p: Math.random() * 6 }));
 
 function buildLevel() {
-  bricks = []; scarabs = []; parts = []; texts = [];
+  bricks = []; scarabs = []; parts = []; texts = []; chariots = []; bombs = []; workers = []; ruins = []; chT = 9; wkT = 7;
   const base = Math.min(14, 8 + 2 * (level - 1)), rows = base / 2, c = COLS / 2;
   for (let r = 0; r < rows; r++) {
     const w = 2 + r * 2;
@@ -109,7 +110,7 @@ function reflectOff(b, rc) { // rc: rect {x,y,w,h}; returns true if hit
 function brickColor(br) { return br.hp >= 3 ? '#ffd93b' : br.hp === 2 ? '#c98a3c' : '#e8c47a'; }
 function hitBrick(br, b) {
   br.hp--; br.flash = .12;
-  if (br.hp <= 0) { br.dead = true; SFX.smash(); addScore(10 * br.max, br.x + br.w / 2, br.y); burst(br.x + br.w / 2, br.y + br.h / 2, '#ffd27a', 9); }
+  if (br.hp <= 0) { br.dead = true; ruins.push({ x: br.x, y: br.y, w: br.w, h: br.h, claimed: false }); SFX.smash(); addScore(10 * br.max, br.x + br.w / 2, br.y); burst(br.x + br.w / 2, br.y + br.h / 2, '#ffd27a', 9); }
   else { SFX.crack(); burst(br.x + br.w / 2, br.y + br.h / 2, '#a8793a', 4, 80); addScore(5); }
 }
 function stepBall(b, dt) {
@@ -134,15 +135,18 @@ function stepBall(b, dt) {
     }
     // scarabs
     for (const sc of scarabs) if (!sc.dead && Math.hypot(sc.x - b.x, sc.y - b.y) < 15 + b.r) { sc.dead = true; SFX.scarab(); addScore(25, sc.x, sc.y); burst(sc.x, sc.y, '#4dffb8', 8); }
+    for (const c of chariots) if (!c.dead && b.x > c.x - 36 && b.x < c.x + 36 && b.y > c.y - 22 && b.y < c.y + 18) { c.dead = true; b.vy = Math.abs(b.vy) * (b.y < c.y ? -1 : 1); SFX.smash(); SFX.scarab(); addScore(200, c.x, c.y - 20); burst(c.x, c.y, '#ffb347', 26, 200); }
+    for (const w of workers) if (!w.dead && Math.abs(b.x - w.x) < 8 + b.r && b.y > w.y - 22 - b.r && b.y < w.y + b.r) { w.dead = true; if (w.def) w.def.claimed = false; SFX.scarab(); addScore(50, w.x, w.y - 20); burst(w.x, w.y - 8, '#e8c47a', 8); }
+    for (const bm of bombs) if (!bm.dead && Math.hypot(bm.x - b.x, bm.y - b.y) < 9 + b.r) { bm.dead = true; SFX.crack(); addScore(10, bm.x, bm.y); burst(bm.x, bm.y, '#ff9a3d', 8); }
     // keep it from going flat
     const s2 = Math.hypot(b.vx, b.vy), mv = s2 * .28; if (Math.abs(b.vy) < mv) { b.vy = (b.vy < 0 ? -1 : 1) * mv; const nx = Math.sqrt(s2 * s2 - b.vy * b.vy); b.vx = Math.sign(b.vx || 1) * nx; }
   }
   bricks = bricks.filter(x => !x.dead);
 }
 function spawnScarab(x, y) { scarabs.push({ x: x == null ? 30 + Math.random() * (W - 60) : x, y: y == null ? TOP + 6 : y, bx: 0, vy: 85 + level * 12 + Math.random() * 30, ph: Math.random() * 6, dead: false }); const s = scarabs[scarabs.length - 1]; s.bx = s.x; }
-function defeat() { state = 'clear'; stateT = 0; balls = []; scarabs.forEach(s => { s.dead = true; burst(s.x, s.y, '#4dffb8', 6); }); SFX.win(); addScore(500 + lives * 100, W / 2, 300); burst(pharaoh.x + pharaoh.w / 2, pharaoh.y + pharaoh.h / 2, '#ffe066', 60, 260); for (const br of bricks) { br.dead = true; burst(br.x + br.w / 2, br.y + br.h / 2, '#ffd27a', 4, 160); } shake = 14; }
+function defeat() { state = 'clear'; stateT = 0; balls = []; chariots = []; bombs = []; workers = []; ruins = []; scarabs.forEach(s => { s.dead = true; burst(s.x, s.y, '#4dffb8', 6); }); SFX.win(); addScore(500 + lives * 100, W / 2, 300); burst(pharaoh.x + pharaoh.w / 2, pharaoh.y + pharaoh.h / 2, '#ffe066', 60, 260); for (const br of bricks) { br.dead = true; burst(br.x + br.w / 2, br.y + br.h / 2, '#ffd27a', 4, 160); } shake = 14; }
 function loseLife() {
-  state = 'dead'; stateT = 0; lives--; SFX.lose(); shake = 10; burst(paddle.x, paddle.y, '#5ff0ff', 30, 220); scarabs.forEach(s => s.dead = true); balls = [];
+  state = 'dead'; stateT = 0; lives--; SFX.lose(); shake = 10; burst(paddle.x, paddle.y, '#5ff0ff', 30, 220); scarabs.forEach(s => s.dead = true); bombs = []; balls = [];
 }
 
 /* ---------- input ---------- */
@@ -193,6 +197,21 @@ function update(dt) {
       if (s.y > H + 20) s.dead = true;
     }
     scarabs = scarabs.filter(s => !s.dead);
+    // chariots: horse + carriage race across the top and drop bombs
+    chT -= dt; if (chT <= 0 && chariots.length < (level >= 4 ? 2 : 1)) { const dir = Math.random() < .5 ? 1 : -1; chariots.push({ x: dir > 0 ? -50 : W + 50, y: 86, dir, sp: 100 + level * 12 + Math.random() * 30, bt: .8, dead: false, ph: 0 }); chT = Math.max(6, 15 - level * 1.5) * (.8 + Math.random() * .5); }
+    for (const c of chariots) { c.x += c.dir * c.sp * dt; c.ph += dt * c.sp * .09; c.bt -= dt; if (c.x > 24 && c.x < W - 24 && c.bt <= 0) { bombs.push({ x: c.x, y: c.y + 18, vy: 60, dead: false }); c.bt = .9 + Math.random() * .9 - Math.min(.4, level * .05); tone(500, .12, 'triangle', .08, -300); } if ((c.dir > 0 && c.x > W + 60) || (c.dir < 0 && c.x < -60)) c.dead = true; }
+    chariots = chariots.filter(c => !c.dead);
+    for (const bm of bombs) { bm.vy += 260 * dt; bm.y += bm.vy * dt; if (bm.y > paddle.y - 6 && bm.y < paddle.y + paddle.h + 8 && Math.abs(bm.x - paddle.x) < paddle.w / 2 + 8) { bm.dead = true; SFX.zap(); burst(bm.x, bm.y, '#ff9a3d', 16, 180); if (state === 'play') loseLife(); } if (bm.y > H) bm.dead = true; }
+    bombs = bombs.filter(x => !x.dead);
+    // builders: little workers haul blocks back to wrecked spots in the pyramid
+    wkT -= dt; const maxW = Math.min(3, 1 + (level >> 1)); const free = ruins.filter(r => !r.claimed);
+    if (wkT <= 0 && free.length && workers.length < maxW) { const def = free[Math.random() * free.length | 0]; def.claimed = true; const dir = (def.x + def.w / 2) < W / 2 ? 1 : -1; workers.push({ x: dir > 0 ? -10 : W + 10, y: def.y + def.h - 1, dir, def, st: 'walk', bt: 0, dead: false, ph: 0 }); wkT = Math.max(3, 7 - level * .5) * (.8 + Math.random() * .5); }
+    for (const w of workers) {
+      w.ph += dt * 9;
+      if (w.st === 'walk') { w.x += w.dir * 58 * dt; const tx = w.def.x + w.def.w / 2; if ((w.dir > 0 && w.x >= tx) || (w.dir < 0 && w.x <= tx)) { w.x = tx; w.st = 'build'; w.bt = 0; } }
+      else { w.bt += dt; if (w.bt > 1.1 && !balls.some(b => Math.abs(b.x - (w.def.x + w.def.w / 2)) < w.def.w && Math.abs(b.y - (w.def.y + w.def.h / 2)) < w.def.h + 14)) { bricks.push({ x: w.def.x, y: w.def.y, w: w.def.w, h: w.def.h, hp: 1, max: 1, row: 0, flash: .2 }); ruins = ruins.filter(r => r !== w.def); w.dead = true; tone(440, .08, 'square', .1); tone(660, .1, 'square', .1, 0, .08); burst(w.x, w.y - 10, '#e8c47a', 6, 70); } }
+    }
+    workers = workers.filter(w => !w.dead);
   }
   if (state === 'dead' && stateT > 1.4) { if (lives > 0) serve(); else { state = 'over'; stateT = 0; SFX.over(); } }
   if (state === 'clear' && stateT > 3.2) { level++; buildLevel(); serve(); }
@@ -237,6 +256,32 @@ function drawScarab(s) {
   for (const d of [-1, 1]) { ctx.beginPath(); ctx.moveTo(d * 7, -5); ctx.lineTo(d * (13 + w), -9); ctx.moveTo(d * 8, 0); ctx.lineTo(d * (14 + w), 1); ctx.moveTo(d * 7, 5); ctx.lineTo(d * (13 + w), 10); ctx.stroke(); }
   ctx.fillStyle = '#ff4d6a'; ctx.shadowBlur = 0; ctx.fillRect(-4, -10, 2, 2); ctx.fillRect(2, -10, 2, 2); ctx.restore();
 }
+function drawChariot(c) {
+  ctx.save(); ctx.translate(c.x, c.y); ctx.scale(c.dir, 1); glow('#ffb347', 10); ctx.lineWidth = 2; const run = Math.sin(c.ph * 2) * 4;
+  // horse (front, to the right)
+  ctx.fillStyle = '#7a3a1a'; ctx.beginPath(); ctx.ellipse(20, -2, 14, 7, 0, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(30, -6); ctx.lineTo(38, -18); ctx.lineTo(46, -16); ctx.lineTo(44, -10); ctx.lineTo(36, -4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(36, -18); ctx.lineTo(38, -23); ctx.lineTo(40, -17); ctx.stroke();
+  for (const [lx, sg] of [[10, 1], [15, -1], [26, -1], [31, 1]]) { ctx.beginPath(); ctx.moveTo(lx, 3); ctx.lineTo(lx + sg * run, 14); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(6, -4); ctx.quadraticCurveTo(0, -10 + run, -3, -2); ctx.stroke(); // tail
+  ctx.shadowBlur = 0; ctx.fillStyle = '#ff4d6a'; ctx.fillRect(41, -15, 3, 2);
+  // pole + carriage
+  ctx.shadowColor = '#ffb347'; ctx.shadowBlur = 10; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-10, 4); ctx.stroke();
+  ctx.fillStyle = '#1b3a8c'; ctx.beginPath(); ctx.moveTo(-30, -14); ctx.lineTo(-8, -14); ctx.lineTo(-10, 8); ctx.lineTo(-32, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0; ctx.fillStyle = '#ffd93b'; ctx.fillRect(-30, -14, 22, 3); ctx.fillRect(-32, 5, 22, 3);
+  ctx.fillStyle = '#f0c24a'; ctx.beginPath(); ctx.arc(-19, -20, 5, 0, TAU); ctx.fill(); ctx.fillStyle = '#1b3a8c'; ctx.fillRect(-25, -26, 12, 4); // driver
+  ctx.shadowColor = '#ffb347'; ctx.shadowBlur = 8; ctx.strokeStyle = '#ffb347'; ctx.beginPath(); ctx.arc(-20, 10, 8, 0, TAU); ctx.stroke(); for (let k = 0; k < 4; k++) { const a = c.ph * 2 + k * Math.PI / 2; ctx.beginPath(); ctx.moveTo(-20, 10); ctx.lineTo(-20 + Math.cos(a) * 8, 10 + Math.sin(a) * 8); ctx.stroke(); }
+  ctx.restore();
+}
+function drawBomb(b) { ctx.save(); glow('#ff9a3d', 10); ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, TAU); ctx.fillStyle = '#222'; ctx.fill(); ctx.lineWidth = 2; ctx.stroke(); ctx.beginPath(); ctx.moveTo(b.x + 3, b.y - 5); ctx.lineTo(b.x + 6, b.y - 10); ctx.stroke(); ctx.fillStyle = '#ffe066'; ctx.fillRect(b.x + 5, b.y - 12, 3, 3); ctx.restore(); }
+function drawWorker(w) {
+  ctx.save(); ctx.translate(w.x, w.y); ctx.scale(w.dir, 1); ctx.shadowBlur = 0; const st = Math.sin(w.ph) * 3, bld = w.st === 'build';
+  ctx.strokeStyle = 'rgba(205,150,80,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-400, 1); ctx.lineTo(0, 1); ctx.stroke(); // plank
+  ctx.strokeStyle = '#f2e0b0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(0, -3); ctx.moveTo(0, -3); ctx.lineTo(-3 + (bld ? 0 : st), 0); ctx.moveTo(0, -3); ctx.lineTo(3 - (bld ? 0 : st), 0); ctx.stroke();
+  ctx.fillStyle = '#f0c24a'; ctx.beginPath(); ctx.arc(0, -12, 3.2, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(-3, -16, 6, 2.5);
+  ctx.fillStyle = '#e8c47a'; if (bld) { ctx.fillRect(2, -9 + Math.sin(w.bt * 14) * 2, 6, 4); } else { ctx.fillRect(-4, -23, 10, 7); }
+  ctx.restore();
+}
 function drawPaddle() {
   if (state === 'dead' || state === 'clear' || state === 'over') return;
   ctx.save(); ctx.translate(paddle.x, paddle.y + paddle.h / 2); ctx.rotate(tilt * .01); glow('#5ff0ff', 14); ctx.lineWidth = 3;
@@ -252,6 +297,8 @@ function draw() {
   drawBG();
   if (state !== 'title') {
     for (const b of bricks) drawBrick(b); drawPharaoh();
+    for (const w of workers) drawWorker(w); for (const r of ruins) { if (r.claimed) { ctx.strokeStyle = 'rgba(255,217,59,.35)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1; ctx.strokeRect(r.x + .5, r.y + .5, r.w - 1, r.h - 1); ctx.setLineDash([]); } }
+    for (const c of chariots) drawChariot(c); for (const b of bombs) drawBomb(b);
     for (const s of scarabs) drawScarab(s);
     drawPaddle(); for (const b of balls) drawBall(b);
   } else {
@@ -273,7 +320,7 @@ function draw() {
     text("PHARAOH'S", W / 2, 150, 54, '#ffd93b'); text('BREAK', W / 2, 212, 64, '#5ff0ff');
     text('Smash the pyramid.', W / 2, 290, 20, '#e8dcff'); text('Wake the Pharaoh.', W / 2, 318, 20, '#e8dcff');
     if (Math.sin(t0 * 4) > -.3) text('TAP TO START', W / 2, 640, 28, '#ff6ad5');
-    text('drag anywhere to slide · mouse or arrows on a laptop', W / 2, 700, 12, '#9a8ad0'); text('beware the scarabs!', W / 2, 722, 14, '#4dffb8');
+    text('drag anywhere to slide · mouse or arrows on a laptop', W / 2, 700, 12, '#9a8ad0'); text('beware scarabs, chariots & bombs!', W / 2, 722, 13, '#4dffb8');
   }
   if (state === 'serve' && stateT > .1) { if (Math.sin(t0 * 5) > -.3) text('TAP TO LAUNCH', W / 2, 600, 22, '#ff6ad5'); if (level === 1 && lives === 3 && score === 0) { text('Dig down to the Pharaoh!', W / 2, 560, 16, '#ffe066'); } }
   if (state === 'dead') text(lives > 0 ? 'OUCH!' : '', W / 2, 460, 40, '#ff4d6a');
@@ -285,7 +332,7 @@ pharaoh = null; buildLevel(); balls = [];
 let last = performance.now();
 function loop(now) { const dt = Math.min(.05, (now - last) / 1000); last = now; update(dt); draw(); requestAnimationFrame(loop); }
 requestAnimationFrame(loop);
-window.G = { get state() { return state; }, get score() { return score; }, get lives() { return lives; }, get level() { return level; }, get bricks() { return bricks.length; }, get ball() { return balls[0]; }, paddle, get pharaoh() { return pharaoh; }, get scarabs() { return scarabs.length; },
+window.G = { get state() { return state; }, get score() { return score; }, get lives() { return lives; }, get level() { return level; }, get bricks() { return bricks.length; }, get ball() { return balls[0]; }, paddle, get pharaoh() { return pharaoh; }, get scarabs() { return scarabs.length; }, get chariots() { return chariots.length; }, get workers() { return workers.length; }, get ruins() { return ruins.length; }, get bombs() { return bombs.length; }, spawnChariot() { chT = 0; }, spawnWorker() { wkT = 0; },
   clearBricks() { for (const b of bricks) { b.dead = true; } bricks = bricks.filter(b => !b.dead); }, spawnScarab };
 </script>
 </body>
