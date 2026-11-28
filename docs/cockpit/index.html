@@ -12,7 +12,7 @@
   body { margin:0; color:var(--ink); font:15px/1.5 var(--ui); padding-block:10px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
   .wrap { max-width:1800px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
   header { display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
-  .deck { display:grid; grid-template-columns:225px minmax(0,1fr) 235px; gap:10px; align-items:start; }
+  .deck { display:grid; grid-template-columns:minmax(0,1fr) 235px; gap:12px; align-items:start; } .main { min-width:0; }
   .col { display:flex; flex-direction:column; gap:10px; min-width:0; }
   .pnl { background:linear-gradient(180deg,#0d1731,#080f22); border:1px solid var(--line); border-radius:8px; padding:10px 12px 12px; box-shadow:inset 0 0 18px rgba(40,90,200,.12), 0 0 14px rgba(40,90,200,.1); position:relative; }
   .pnl::before,.pnl::after { content:""; position:absolute; top:6px; width:5px; height:5px; border-radius:50%; background:#1c2f5c; box-shadow:inset 0 0 2px #000; }
@@ -53,10 +53,14 @@
   .route { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; } .route span { font:10px var(--mono); padding:2px 4px; border:1px solid #1d2f5a; border-radius:3px; color:#3d5288; }
   .route .done { color:#aaffd0; border-color:#2a7a52; } .route .cur { color:#fff; border-color:var(--cy); box-shadow:0 0 8px rgba(95,240,255,.5); }
   #nvObj { color:var(--ink); font:12px var(--mono); }
-  @media (max-width:1100px) { .deck { grid-template-columns:1fr; } .col { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); } #stage { order:-1; } }
+  @media (max-width:1100px) { .deck { grid-template-columns:1fr; } .col { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); } .under, .rrow { grid-template-columns:1fr; } }
   h1 { font:700 22px/1.2 var(--ui); letter-spacing:.04em; margin:0; text-transform:uppercase; color:var(--cy); text-shadow:0 0 14px rgba(95,240,255,.45); }
   .sub { color:var(--dim); margin:2px 0 0; max-width:62ch; }
-  #stage { position:relative; width:100%; aspect-ratio:16/9; background:#000; border:1px solid var(--line); border-radius:6px; overflow:hidden; box-shadow:0 0 30px rgba(60,120,255,.18); }
+  #stage { position:relative; width:calc(100% - 32px); max-width:calc((100vh - 130px) * 16 / 9); aspect-ratio:16/9; margin:16px auto 22px; background:#000; border-radius:24px; overflow:hidden;
+    box-shadow:0 0 0 9px #0a1022, 0 0 0 11px #2a4a92, 0 0 0 15px #060a16, 0 0 0 16px #1a2f60, 0 0 40px 10px rgba(60,120,255,.22), inset 0 0 60px rgba(0,0,0,.85); }
+  #stage::after { content:""; position:absolute; inset:0; border-radius:24px; pointer-events:none; background:linear-gradient(118deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,0) 26%), radial-gradient(ellipse at center, rgba(0,0,0,0) 60%, rgba(0,0,0,.45) 100%); }
+  .under { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:10px; } .rrow { display:grid; grid-template-columns:150px minmax(0,1fr) minmax(0,1fr); gap:14px; align-items:start; } .rrow .freq { font-size:26px; }
+  .rrow .btns { margin-top:6px; } .rrow .tunes { margin-top:0; }
   canvas { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:none; touch-action:none; }
   .bar { display:flex; flex-wrap:wrap; gap:10px 22px; align-items:center; font:13px var(--mono); color:var(--dim); }
   .bar label { display:flex; align-items:center; gap:8px; }
@@ -77,30 +81,32 @@
 <div class="wrap">
   <header>
     <h1>Cockpit Asteroids</h1>
-    <p class="sub">Hunt the orange jets, dodge the pink ones, mind the rocks. <kbd>R</kbd> radio &middot; <kbd>,</kbd> <kbd>.</kbd> tune &middot; <kbd>N</kbd> next song</p>
+    <p class="sub">Hunt the orange jets, dodge the pink ones, mind the rocks. <kbd>R</kbd> radio &middot; <kbd>,</kbd> <kbd>.</kbd> tune &middot; <kbd>N</kbd> next song &middot; <kbd>V</kbd> view</p>
   </header>
   <div class="deck">
-    <div class="col" id="left">
-      <section class="pnl" aria-label="Cockpit radio">
-        <h2>Radio</h2>
-        <div id="freq" class="freq off">---.-</div>
-        <div id="stn" class="stn">RADIO OFF</div>
-        <div id="np" class="np">Press POWER to switch on</div>
-        <canvas id="viz" width="240" height="34"></canvas>
-        <div class="btns"><button id="pwr" type="button" title="Radio on/off (R)">POWER</button><button id="prv" type="button" title="Previous station (,)">&#9664; TUNE</button><button id="nxt" type="button" title="Next station (.)">TUNE &#9654;</button><button id="skp" type="button" title="Next song (N)">SKIP</button></div>
-        <label class="small" for="rvol" style="display:block">VOLUME</label><input id="rvol" type="range" min="0" max="100" value="70" aria-label="Radio volume">
-        <ul id="tunes" class="tunes" aria-label="Your uploaded tunes"></ul>
-        <label class="upl" for="upl">+ UPLOAD YOUR TUNE (107.7)</label><input id="upl" type="file" accept="audio/*" multiple style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px">
-        <div class="small">Your songs live on 107.7 and stay saved in this browser.</div>
-      </section>
-      <section class="pnl" aria-label="Cockpit sounds">
-        <h2>Cockpit noise</h2>
-        <label class="row" for="sfxon"><input id="sfxon" type="checkbox" checked> Cockpit sounds</label>
-        <label class="row" for="sfxv"><b>LEVEL</b><input id="sfxv" type="range" min="0" max="100" value="60"></label>
-        <div class="small">Engine hum, vents, radar pings, lasers, alarms, shield whine.</div>
-      </section>
-    </div>
+    <div class="main">
     <div id="stage"><canvas id="c" width="1280" height="720" aria-label="Cockpit view game"></canvas></div>
+      <div class="under">
+        <section class="pnl" aria-label="Cockpit radio">
+          <h2>Radio</h2>
+          <div class="rrow">
+            <div><div id="freq" class="freq off">---.-</div><div id="stn" class="stn">RADIO OFF</div><div id="np" class="np">Press POWER to switch on</div></div>
+            <div><canvas id="viz" width="240" height="34"></canvas>
+              <div class="btns"><button id="pwr" type="button" title="Radio on/off (R)">POWER</button><button id="prv" type="button" title="Previous station (,)">&#9664; TUNE</button><button id="nxt" type="button" title="Next station (.)">TUNE &#9654;</button><button id="skp" type="button" title="Next song (N)">SKIP</button></div>
+              <label class="small" for="rvol" style="display:block">VOLUME</label><input id="rvol" type="range" min="0" max="100" value="70" aria-label="Radio volume"></div>
+            <div><ul id="tunes" class="tunes" aria-label="Your uploaded tunes"></ul>
+              <label class="upl" for="upl">+ UPLOAD YOUR TUNE (107.7)</label><input id="upl" type="file" accept="audio/*" multiple style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px">
+              <div class="small">Your songs live on 107.7 and stay saved in this browser.</div></div>
+          </div>
+        </section>
+        <section class="pnl" aria-label="Cockpit sounds">
+          <h2>Cockpit noise</h2>
+          <label class="row" for="sfxon"><input id="sfxon" type="checkbox" checked> Cockpit sounds</label>
+          <label class="row" for="sfxv"><b>LEVEL</b><input id="sfxv" type="range" min="0" max="100" value="60"></label>
+          <div class="small">Engine hum, vents, radar pings, lasers, alarms, shield whine.</div>
+        </section>
+      </div>
+    </div>
     <div class="col" id="right">
       <section class="pnl" aria-label="Navigation">
         <h2>Navigation</h2>
@@ -134,6 +140,7 @@
     <label for="auto"><input id="auto" type="checkbox" checked> Auto-fire on target</label>
     <label for="voice"><input id="voice" type="checkbox" checked> Computer voice</label>
     <label for="gridc"><input id="gridc" type="checkbox" checked> Orientation grid</label>
+    <button id="viewBtn" type="button" title="Switch view (V)">View: cockpit</button>
     <button id="reset" type="button">Restart</button>
     <button id="tiltBtn" type="button">Tilt steering</button>
     <button id="recenter" type="button">Recenter tilt</button>
@@ -163,7 +170,7 @@
   let yaw = 0, pitch = 0, vel = [0, 0, 0], pos = [0, 0, 0], hull = 100, score = 0, wave = 0, over = false, shake = 0, flash = 0, hitT = 0, fireT = 0, time = 0;
   const mouse = { x: W / 2, y: H / 2, in: false, down: false, rdown: false }, keys = {};
   const rocks = [], shots = [], sparks = [], jets = [], ebolts = [];
-  let shPrev = false, arrowShown = false, flipT = 0, rockT = 5, touchMode = false, throttle = 0, leverId = null, fireId = null, incoming = 0;
+  let yawRate = 0, prevYaw = 0, viewMode = 'cockpit', shPrev = false, arrowShown = false, flipT = 0, rockT = 5, touchMode = false, throttle = 0, leverId = null, fireId = null, incoming = 0;
   const stick = { on: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
   const BTNS = [
     { id: 'fire', x: W * .5, y: H * .625, r: 62, col: '#ff4d5e', label: 'FIRE', hold: 1 },
@@ -309,7 +316,7 @@
     const KMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down' };
   addEventListener('keydown', e => { if (e.target && e.target.matches && e.target.matches('input[type=text],textarea')) e.stopImmediatePropagation(); }, true);
   addEventListener('keydown', e => { if (e.repeat) return; if (e.code === 'KeyR') RAD.power(); else if (e.code === 'Comma') RAD.tune(-1); else if (e.code === 'Period') RAD.tune(1); else if (e.code === 'KeyN') RAD.skip(); });
-  addEventListener('keydown', e => { if (e.key === 'Shift') keys.shift = true; if (e.code === 'KeyC' && !e.repeat) TX.end(); if (e.code === 'KeyX') press('flip'); if (e.code === 'KeyB' && !e.repeat) press('gren'); if (e.code === 'KeyT' && !e.repeat) press('tgt'); if (e.code === 'KeyH' && !e.repeat) press('help'); if (e.code === 'Escape') helpOpen = false; if (e.code === 'Space') { keys.space = true; e.preventDefault(); } if (KMAP[e.code]) { keys[KMAP[e.code]] = true; e.preventDefault(); } });
+  addEventListener('keydown', e => { if (e.key === 'Shift') keys.shift = true; if (e.code === 'KeyC' && !e.repeat) TX.end(); if (e.code === 'KeyV' && !e.repeat) toggleView(); if (e.code === 'KeyX') press('flip'); if (e.code === 'KeyB' && !e.repeat) press('gren'); if (e.code === 'KeyT' && !e.repeat) press('tgt'); if (e.code === 'KeyH' && !e.repeat) press('help'); if (e.code === 'Escape') helpOpen = false; if (e.code === 'Space') { keys.space = true; e.preventDefault(); } if (KMAP[e.code]) { keys[KMAP[e.code]] = true; e.preventDefault(); } });
   addEventListener('keyup', e => { if (e.key === 'Shift') keys.shift = false; if (e.code === 'Space') keys.space = false; if (KMAP[e.code]) keys[KMAP[e.code]] = false; });
   addEventListener('blur', () => { keys.shift = keys.up = keys.down = keys.space = false; mouse.down = mouse.rdown = false; });
 
@@ -379,6 +386,7 @@
   function update(dt) {
     time += dt; if (over || helpOpen) return;
     if (msg.t > 0) msg.t -= dt;
+    yawRate = clamp(yawRate + (clamp((yaw - prevYaw) / Math.max(dt, 1e-3), -3, 3) - yawRate) * Math.min(1, dt * 8), -3, 3); prevYaw = yaw;
     // shield: hold Space / SHIELD / right-click. It soaks hits, drains energy, and blocks your guns while up.
     const want = keys.space || mouse.rdown || isHeld('shield'); if (shieldLock && energy >= 30) shieldLock = false;
     shieldOn = want && !shieldLock && energy > 2; if (shieldHit > 0) shieldHit -= dt; if (shieldOn !== shPrev) { AU.shield(shieldOn); shPrev = shieldOn; }
@@ -599,8 +607,16 @@
       ctx.strokeStyle = `rgba(120,255,190,${.25 + (shieldHit > 0 ? .5 : 0)})`; ctx.lineWidth = 2; for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.arc(W / 2, H / 2, H * (.62 + .03 * Math.abs(i)), 0, TAU); ctx.stroke(); } }
     // red hit wash
     if (flash > 0) { ctx.fillStyle = `rgba(255,60,70,${flash * .35})`; ctx.fillRect(0, 0, W, H); }
-    cockpit(); radar(); reticle(); hud(); compass(); navHud(); warpFx(); txDraw(); touchUI(); computer();
+    if (viewMode === 'chase') chaseShip(); else cockpit(); radar(); reticle(); hud(); compass(); navHud(); warpFx(); txDraw(); touchUI(); computer();
     if (over) { ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H); glow('#ff4d5e', 20); ctx.textAlign = 'center'; ctx.font = '700 54px "Space Grotesk", sans-serif'; ctx.fillText('HULL BREACH', W / 2, H / 2 - 6); glow('#d6e6ff', 6); ctx.font = '22px "Share Tech Mono", monospace'; ctx.fillText('SCORE ' + score + '   -   CLICK TO FLY AGAIN', W / 2, H / 2 + 40); }
+  }
+  function toggleView() { viewMode = viewMode === 'cockpit' ? 'chase' : 'cockpit'; $('viewBtn').textContent = 'View: ' + viewMode; say(viewMode === 'chase' ? 'Chase view. Your ship banks as you turn.' : 'Cockpit view.', 2, false); }
+  function chaseShip() { // the player's ship seen from behind: it banks and slides the way you turn
+    ctx.shadowBlur = 0; const yr = clamp(yawRate / 1.6, -1, 1), bank = yr * .6, S = 42, cx = W / 2 + yr * 130, cy = H * .675, th = clamp(Math.hypot(vel[0], vel[1], vel[2]) / 300, 0, 1), cb = Math.cos(bank), sb = Math.sin(bank);
+    const T = p => { const x = p[0] + p[2] * yr * .3, y = p[1], rx = x * cb - y * sb, ry = x * sb + y * cb, sc = 1 / (1 + (p[2] + 2) * .09); return [cx + rx * S * sc, cy - ry * S * sc - p[2] * 6]; };
+    const g = ctx.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.5)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const pp = JET.pts.map(T); for (const q of [[-.7, 0, -1.5], [.7, 0, -1.5]]) { const f = T(q), r = 5 + th * 12 + Math.random() * 3; const fg = ctx.createRadialGradient(f[0], f[1], 0, f[0], f[1], r * 2.2); fg.addColorStop(0, 'rgba(180,240,255,.95)'); fg.addColorStop(.4, `rgba(80,180,255,${.4 + th * .4})`); fg.addColorStop(1, 'rgba(40,80,255,0)'); ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(f[0], f[1], r * 2.2, 0, TAU); ctx.fill(); }
+    glow('#5ff0ff', 14); ctx.lineWidth = 2.4; ctx.beginPath(); for (const [i, j] of JET.edges) { ctx.moveTo(pp[i][0], pp[i][1]); ctx.lineTo(pp[j][0], pp[j][1]); } ctx.stroke(); ctx.shadowBlur = 0;
   }
   function cockpit() { // canopy struts and the dashboard, drawn over the view
     ctx.shadowBlur = 0; ctx.fillStyle = '#070a18'; ctx.strokeStyle = '#1b2f63'; ctx.lineWidth = 2;
@@ -608,6 +624,13 @@
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W * .07, 0); ctx.lineTo(0, H * .46); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(W, 0); ctx.lineTo(W * .93, 0); ctx.lineTo(W, H * .46); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W, 0); ctx.lineTo(W, H * .035); ctx.lineTo(0, H * .035); ctx.closePath(); ctx.fill();
+    // the bow: a fixed nose that sits in front of you, so you can see the stars slide past as you turn
+    const tipY = H * .645, hg = ctx.createLinearGradient(0, tipY, 0, H); hg.addColorStop(0, '#16224a'); hg.addColorStop(.5, '#0b1330'); hg.addColorStop(1, '#050813');
+    ctx.fillStyle = hg; ctx.strokeStyle = '#3a63b8'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(W * .1, H); ctx.lineTo(W * .1, H * .9); ctx.lineTo(W * .27, H * .79); ctx.lineTo(W * .42, H * .69); ctx.lineTo(W * .485, tipY + 8); ctx.lineTo(W * .5, tipY); ctx.lineTo(W * .515, tipY + 8); ctx.lineTo(W * .58, H * .69); ctx.lineTo(W * .73, H * .79); ctx.lineTo(W * .9, H * .9); ctx.lineTo(W * .9, H); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(95,160,255,.5)'; for (const sg of [-1, 1]) { ctx.beginPath(); ctx.moveTo(W * (.5 + sg * .012), tipY + 14); ctx.lineTo(W * (.5 + sg * .16), H * .86); ctx.moveTo(W * (.5 + sg * .008), tipY + 6); ctx.lineTo(W * (.5 + sg * .07), H * .95); ctx.moveTo(W * (.5 + sg * .21), H * .75); ctx.lineTo(W * (.5 + sg * .3), H * .93); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(W * .5, tipY + 4); ctx.lineTo(W * .5, H * .74); ctx.stroke();
+    ctx.fillStyle = '#ffd23d'; ctx.shadowColor = '#ffd23d'; ctx.shadowBlur = 10; ctx.beginPath(); ctx.moveTo(W * .5, tipY - 4); ctx.lineTo(W * .5 - 5, tipY + 6); ctx.lineTo(W * .5 + 5, tipY + 6); ctx.fill(); ctx.shadowBlur = 0;
+    const yr = clamp(yawRate / 1.6, -1, 1); for (const sg of [-1, 1]) for (let i = 0; i < 4; i++) { const lit = Math.abs(yr) > (i + .4) * .22 && Math.sign(yr) === sg, x = W * .5 + sg * (W * .095 + i * 20), y = H * .735 + i * 3; ctx.fillStyle = lit ? '#ffb23d' : '#1d2f5a'; if (lit) { ctx.shadowColor = '#ffb23d'; ctx.shadowBlur = 8; } ctx.beginPath(); ctx.moveTo(x + sg * 8, y); ctx.lineTo(x - sg * 3, y - 7); ctx.lineTo(x - sg * 3, y + 7); ctx.fill(); ctx.shadowBlur = 0; }
     const g = ctx.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   }
   function radar() { // the whole sphere, flattened: ahead is up, behind is down
@@ -846,7 +869,7 @@
   $('pwr').addEventListener('click', () => RAD.power()); $('prv').addEventListener('click', () => RAD.tune(-1)); $('nxt').addEventListener('click', () => RAD.tune(1)); $('skp').addEventListener('click', () => RAD.skip());
   $('rvol').addEventListener('input', e => { RAD.vol = +e.target.value / 100; RAD.setVol(); RAD.save(); });
   $('upl').addEventListener('change', e => { ctxAudio(); RAD.addFiles([...e.target.files]); e.target.value = ''; });
-  $('sfxon').addEventListener('change', () => ctxAudio()); addEventListener('pointerdown', () => ctxAudio(), { once: true }); addEventListener('keydown', () => ctxAudio(), { once: true });
+  $('viewBtn').addEventListener('click', toggleView); $('sfxon').addEventListener('change', () => ctxAudio()); addEventListener('pointerdown', () => ctxAudio(), { once: true }); addEventListener('keydown', () => ctxAudio(), { once: true });
   const vz = $('viz'), vx = vz.getContext('2d'), vbuf = new Uint8Array(32);
   function viz() { vx.clearRect(0, 0, 240, 34); if (!an || !RAD.on) return; an.getByteFrequencyData(vbuf); for (let i = 0; i < 24; i++) { const v = vbuf[i] / 255, h = Math.max(2, v * 32); vx.fillStyle = `hsl(${180 + i * 4},90%,${45 + v * 25}%)`; vx.fillRect(i * 10 + 1, 34 - h, 8, h); } }
 
@@ -927,7 +950,7 @@
       rec.onresult = ev => { const t = ev.results[0][0].transcript; aria(t); }; rec.onerror = ev => { if (ev.error === 'not-allowed') alog('sh', 'Microphone blocked. Allow it in the browser address bar to talk to ARIA.'); };
       rec.onend = () => { live = false; mic.classList.remove('live'); mic.textContent = 'MIC'; }; try { rec.start(); } catch (x) {} }); } }
   RAD.init();
-  window.G = Object.assign(window.G || {}, { RAD, aria, AU, advise, J, ROUTE, beginTransit, arrive, addJet, jets, rocks, DR, buildLM, TX, setYaw: v => { yaw = v; } });
+  window.G = Object.assign(window.G || {}, { RAD, aria, AU, advise, J, ROUTE, beginTransit, arrive, addJet, jets, rocks, DR, buildLM, TX, setYaw: v => { yaw = v; }, toggleView });
   let last = performance.now();
   function loop(t) { if (arrowShown && !warned.arrows && time > 4) { warned.arrows = 1; say('Arrows at the screen edge point to things you cannot see. Turn toward them.', 6); } const dt = Math.min(.05, (t - last) / 1000); last = t; update(dt); draw(); AU.tick(dt); panel(dt); viz(); requestAnimationFrame(loop); }
   reset(); requestAnimationFrame(loop);
