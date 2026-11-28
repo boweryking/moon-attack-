@@ -41,6 +41,7 @@
     <label for="spd">Rock speed <input id="spd" type="range" min="40" max="220" value="70"><span id="spdv">70</span></label>
     <label for="auto"><input id="auto" type="checkbox" checked> Auto-fire on target</label>
     <label for="voice"><input id="voice" type="checkbox" checked> Computer voice</label>
+    <label for="gridc"><input id="gridc" type="checkbox" checked> Orientation grid</label>
     <button id="reset" type="button">Restart</button>
     <button id="tiltBtn" type="button">Tilt steering</button>
     <button id="recenter" type="button">Recenter tilt</button>
@@ -70,7 +71,7 @@
   let yaw = 0, pitch = 0, vel = [0, 0, 0], pos = [0, 0, 0], hull = 100, score = 0, wave = 0, over = false, shake = 0, flash = 0, hitT = 0, fireT = 0, time = 0;
   const mouse = { x: W / 2, y: H / 2, in: false, down: false, rdown: false }, keys = {};
   const rocks = [], shots = [], sparks = [], jets = [], ebolts = [];
-  let flipT = 0, rockT = 5, touchMode = false, throttle = 0, leverId = null, fireId = null, incoming = 0;
+  let arrowShown = false, flipT = 0, rockT = 5, touchMode = false, throttle = 0, leverId = null, fireId = null, incoming = 0;
   const stick = { on: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
   const BTNS = [
     { id: 'fire', x: W * .5, y: H * .625, r: 62, col: '#ff4d5e', label: 'FIRE', hold: 1 },
@@ -300,6 +301,45 @@
   // --- drawing
   const stars = Array.from({ length: 260 }, () => { const u = rnd(-1, 1), t = rnd(0, TAU), r = Math.sqrt(1 - u * u); return [r * Math.cos(t), u, r * Math.sin(t), rnd(.5, 1.6)]; });
   const dust = Array.from({ length: 140 }, () => [rnd(0, 1400), rnd(0, 1400), rnd(0, 1400)]);
+
+  // --- scenery: far-off landmarks fixed on the sky sphere (they only rotate, so they show you which way you are turning)
+  const gridEl = document.getElementById('gridc');
+  const dirOf = (az, el) => [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
+  const LM = [
+    { n: 'NEBULA', az: 0, el: .08, r: .5, t: 'neb' }, { n: 'MOON', az: .42, el: .13, r: .055, t: 'moon' }, { n: 'SUN', az: 1.15, el: .22, r: .1, t: 'sun' },
+    { n: 'RINGWORLD', az: 2.35, el: .26, r: .2, t: 'ring' }, { n: 'STATION', az: 3.55, el: -.08, r: .05, t: 'stn' }, { n: 'GAS GIANT', az: -2.15, el: .18, r: .23, t: 'gas' }, { n: 'ICE MOON', az: -1.0, el: -.2, r: .09, t: 'moon2' }].map(o => ({ ...o, d: dirOf(o.az, o.el) }));
+  const wrapA = a => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };
+  function ball(x, y, R, c0, c1, c2) { const g = ctx.createRadialGradient(x - R * .38, y - R * .38, R * .1, x, y, R); g.addColorStop(0, c0); g.addColorStop(.55, c1); g.addColorStop(1, c2); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.fill(); }
+  function drawScenery() {
+    ctx.shadowBlur = 0;
+    for (const L of LM) {
+      const c = toCam(L.d[0], L.d[1], L.d[2]); if (c[2] <= .03) continue; const p = proj(c), R = Math.min(900, L.r * F / c[2]); if (p[0] < -R * 2.6 || p[0] > W + R * 2.6 || p[1] < -R * 2.6 || p[1] > H + R * 2.6) continue; const x = p[0], y = p[1];
+      ctx.save();
+      if (L.t === 'neb') { for (const [dx, dy, k, col] of [[0, 0, 1, '120,60,200'], [.5, -.2, .8, '40,160,200'], [-.55, .25, .75, '220,70,150'], [.1, .5, .6, '90,80,220']]) { const g = ctx.createRadialGradient(x + dx * R, y + dy * R, 0, x + dx * R, y + dy * R, R * k); g.addColorStop(0, `rgba(${col},.30)`); g.addColorStop(.6, `rgba(${col},.10)`); g.addColorStop(1, `rgba(${col},0)`); ctx.fillStyle = g; ctx.fillRect(x + dx * R - R * k, y + dy * R - R * k, R * k * 2, R * k * 2); } }
+      else if (L.t === 'sun') { const g = ctx.createRadialGradient(x, y, 0, x, y, R * 4); g.addColorStop(0, 'rgba(255,250,210,1)'); g.addColorStop(.25, 'rgba(255,210,90,.55)'); g.addColorStop(1, 'rgba(255,140,40,0)'); ctx.fillStyle = g; ctx.fillRect(x - R * 4, y - R * 4, R * 8, R * 8); ball(x, y, R, '#fffbe0', '#ffe27a', '#ffb020'); ctx.strokeStyle = 'rgba(255,230,140,.25)'; ctx.lineWidth = 2; for (let k = 0; k < 8; k++) { const a = k * TAU / 8 + time * .05; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * R * 1.3, y + Math.sin(a) * R * 1.3); ctx.lineTo(x + Math.cos(a) * R * 3, y + Math.sin(a) * R * 3); ctx.stroke(); } }
+      else if (L.t === 'moon' || L.t === 'moon2') { ball(x, y, R, L.t === 'moon' ? '#e8e8f0' : '#cfeaff', L.t === 'moon' ? '#9a9aa8' : '#7fb0d8', L.t === 'moon' ? '#3a3a48' : '#243a5a'); ctx.fillStyle = 'rgba(0,0,0,.16)'; for (const [dx, dy, k] of [[.2, .1, .25], [-.3, .35, .18], [.15, -.4, .15], [-.1, -.1, .12]]) { ctx.beginPath(); ctx.arc(x + dx * R, y + dy * R, k * R, 0, TAU); ctx.fill(); } ctx.fillStyle = 'rgba(2,3,10,.4)'; ctx.beginPath(); ctx.arc(x + R * .45, y + R * .2, R * 1.02, 0, TAU); ctx.arc(x, y, R, 0, TAU, true); ctx.fill(); }
+      else if (L.t === 'ring') { const tilt = -.35; ctx.save(); ctx.translate(x, y); ctx.rotate(tilt); ctx.lineWidth = Math.max(2, R * .12); for (const [k, col] of [[2.1, 'rgba(210,170,120,.55)'], [1.8, 'rgba(240,210,160,.7)'], [1.55, 'rgba(180,140,100,.5)']]) { ctx.strokeStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, R * k, R * k * .26, 0, Math.PI, TAU); ctx.stroke(); } ctx.restore();
+        ball(x, y, R, '#f6dfb0', '#c8924e', '#4a2a14'); ctx.save(); ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.clip(); for (let k = -4; k <= 4; k++) { ctx.fillStyle = `rgba(${k % 2 ? '120,70,30' : '250,220,160'},.18)`; ctx.fillRect(x - R, y + k * R * .2 - R * .06, R * 2, R * .12); } ctx.restore();
+        ctx.save(); ctx.translate(x, y); ctx.rotate(tilt); ctx.lineWidth = Math.max(2, R * .12); for (const [k, col] of [[2.1, 'rgba(210,170,120,.55)'], [1.8, 'rgba(240,210,160,.7)'], [1.55, 'rgba(180,140,100,.5)']]) { ctx.strokeStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, R * k, R * k * .26, 0, 0, Math.PI); ctx.stroke(); } ctx.restore(); }
+      else if (L.t === 'gas') { ball(x, y, R, '#bdeaff', '#3a86b8', '#0c2a4a'); ctx.save(); ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.clip(); for (let k = -5; k <= 5; k++) { ctx.fillStyle = `rgba(${k % 2 ? '20,80,140' : '200,240,255'},.2)`; ctx.fillRect(x - R, y + k * R * .17, R * 2, R * .1); } ctx.fillStyle = 'rgba(255,120,90,.55)'; ctx.beginPath(); ctx.ellipse(x + R * .25, y + R * .3, R * .22, R * .12, 0, 0, TAU); ctx.fill(); ctx.restore(); ball(x + R * 1.5, y - R * .5, R * .1, '#fff', '#bbb', '#666'); ball(x - R * 1.35, y + R * .6, R * .07, '#ffd0a0', '#b87a50', '#503020'); }
+      else if (L.t === 'stn') { ctx.strokeStyle = '#9fb4e6'; ctx.lineWidth = Math.max(1.5, R * .15); ctx.beginPath(); ctx.ellipse(x, y, R * 2.2, R * .9, .3, 0, TAU); ctx.stroke(); ctx.fillStyle = '#c9d8ff'; ctx.beginPath(); ctx.arc(x, y, R * .55, 0, TAU); ctx.fill(); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - R * 2, y - R * .6); ctx.lineTo(x + R * 2, y + R * .6); ctx.moveTo(x + R * 2, y - R * .5); ctx.lineTo(x - R * 2, y + R * .5); ctx.stroke(); for (let k = 0; k < 10; k++) { const a = k * TAU / 10 + time * .3; ctx.fillStyle = Math.sin(time * 3 + k) > 0 ? '#ffe9a0' : '#5a6a90'; ctx.fillRect(x + Math.cos(a) * R * 2.2 * Math.cos(.3) - Math.sin(a) * R * .9 * Math.sin(.3) - 1, y + Math.cos(a) * R * 2.2 * Math.sin(.3) + Math.sin(a) * R * .9 * Math.cos(.3) - 1, 2.5, 2.5); } }
+      ctx.restore();
+      if (p[0] > 60 && p[0] < W - 60 && p[1] > 60 && p[1] < H - 60 && L.t !== 'neb') { ctx.fillStyle = 'rgba(190,215,255,.55)'; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText(L.n, x, y + R * (L.t === 'ring' ? 1.0 : 1.0) + 18 + (L.t === 'sun' ? R * 1.3 : 0)); }
+    }
+  }
+  function drawGrid() { // faint latitude/longitude lines on the sky sphere: you can see yourself rotating against them
+    ctx.shadowBlur = 0; ctx.lineWidth = 1;
+    const line = (f, n, col) => { ctx.strokeStyle = col; ctx.beginPath(); let pen = false; for (let i = 0; i <= n; i++) { const d = f(i / n), c = toCam(d[0], d[1], d[2]); if (c[2] < .06) { pen = false; continue; } const p = proj(c); if (pen) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); pen = true; } ctx.stroke(); };
+    for (const el of [-1.05, -.52, 0, .52, 1.05]) line(t => dirOf(t * TAU, el), 96, el === 0 ? 'rgba(95,240,255,.22)' : 'rgba(95,240,255,.09)');
+    for (let k = 0; k < 12; k++) line(t => dirOf(k * TAU / 12, -1.4 + t * 2.8), 28, k === 0 ? 'rgba(255,200,90,.22)' : 'rgba(95,240,255,.09)');
+  }
+  function compass() { // heading tape across the top, with the landmarks marked on it
+    const K = 330, y0 = H * .045, hh = 26, hd = ((yaw % TAU) + TAU) % TAU; ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(4,10,26,.72)'; ctx.fillRect(W / 2 - 300, y0, 600, hh); ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1; ctx.strokeRect(W / 2 - 300, y0, 600, hh);
+    ctx.save(); ctx.beginPath(); ctx.rect(W / 2 - 300, y0, 600, hh); ctx.clip();
+    for (let g = 0; g < 360; g += 10) { const b = wrapA(g * Math.PI / 180 - yaw), x = W / 2 + b * K; if (Math.abs(x - W / 2) > 300) continue; ctx.strokeStyle = g % 30 === 0 ? '#7f93c4' : '#3a5590'; ctx.beginPath(); ctx.moveTo(x, y0 + hh); ctx.lineTo(x, y0 + hh - (g % 30 === 0 ? 9 : 5)); ctx.stroke(); if (g % 30 === 0) { ctx.fillStyle = '#7f93c4'; ctx.font = '10px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText(String(g).padStart(3, '0'), x, y0 + 12); } }
+    for (const L of LM) { if (L.t === 'neb') continue; const b = wrapA(L.az - yaw), x = W / 2 + b * K; if (Math.abs(x - W / 2) > 296) continue; ctx.fillStyle = L.t === 'sun' ? '#ffd860' : '#5ff0ff'; ctx.beginPath(); ctx.moveTo(x, y0 + hh - 2); ctx.lineTo(x - 4, y0 + hh - 9); ctx.lineTo(x + 4, y0 + hh - 9); ctx.fill(); ctx.font = '9px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText(L.n, x, y0 + 10); }
+    ctx.restore(); ctx.fillStyle = '#ffd23d'; ctx.beginPath(); ctx.moveTo(W / 2, y0 + hh + 2); ctx.lineTo(W / 2 - 5, y0 + hh + 10); ctx.lineTo(W / 2 + 5, y0 + hh + 10); ctx.fill();
+  }
   function glow(col, b) { ctx.strokeStyle = col; ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = b; }
   const JET = { pts: [[0, 0, 3.2], [-2.4, 0, -1.4], [2.4, 0, -1.4], [0, .5, -1.6], [0, 1.5, -2.0], [0, -.5, -1.2], [-1.2, 0, -.2], [1.2, 0, -.2]], edges: [[0, 1], [0, 2], [1, 3], [2, 3], [3, 4], [0, 3], [0, 5], [1, 5], [2, 5], [1, 6], [2, 7], [0, 6], [0, 7]] };
   function drawJet(e) {
@@ -325,6 +365,7 @@
     if (shake > 0) ctx.translate(rnd(-1, 1) * shake * 16, rnd(-1, 1) * shake * 16);
     // stars (a fixed sphere around us, so turning shows real motion)
     ctx.shadowBlur = 0; for (const s of stars) { const c = toCam(s[0], s[1], s[2]); if (c[2] <= .05) continue; const p = proj(c); if (p[0] < -4 || p[0] > W + 4 || p[1] < -4 || p[1] > H + 4) continue; ctx.fillStyle = `rgba(190,215,255,${.35 + s[3] * .25})`; ctx.fillRect(p[0], p[1], s[3], s[3]); }
+    if (gridEl.checked) drawGrid(); drawScenery();
     // dust: points fixed in space around the ship, so you can see yourself moving
     for (const d of dust) { const c = toCam(((d[0] - pos[0]) % 1400 + 1400) % 1400 - 700, ((d[1] - pos[1]) % 1400 + 1400) % 1400 - 700, ((d[2] - pos[2]) % 1400 + 1400) % 1400 - 700); if (c[2] < 30) continue; const p = proj(c); if (p[0] < 0 || p[0] > W || p[1] < 0 || p[1] > H) continue; const sz = clamp(260 / c[2], .8, 3); ctx.fillStyle = 'rgba(160,200,255,.45)'; ctx.fillRect(p[0], p[1], sz, sz); }
     // rocks, far to near
@@ -342,11 +383,13 @@
       const d = Math.hypot(r.x, r.y, r.z); if (d > 700) continue; const c = toCam(r.x, r.y, r.z), p = c[2] > 20 ? proj(c) : null;
       if (p && p[0] > 30 && p[0] < W - 30 && p[1] > 30 && p[1] < H - 30) continue;
       const ang = Math.atan2(-c[1], c[0]), ex = W / 2 + Math.cos(ang) * (W * .43), ey = H / 2 + Math.sin(ang) * (H * .40), pulse = .55 + .45 * Math.sin(time * 9 + d);
+      arrowShown = true; ctx.save(); ctx.shadowBlur = 0; ctx.fillStyle = '#ff8a96'; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('ROCK ' + Math.round(d), ex - Math.cos(ang) * 40, ey - Math.sin(ang) * 40 + 4); ctx.restore();
       glow('#ff4d5e', 14); ctx.globalAlpha = pulse; ctx.beginPath(); ctx.moveTo(ex + Math.cos(ang) * 16, ey + Math.sin(ang) * 16); ctx.lineTo(ex + Math.cos(ang + 2.5) * 14, ey + Math.sin(ang + 2.5) * 14); ctx.lineTo(ex + Math.cos(ang - 2.5) * 14, ey + Math.sin(ang - 2.5) * 14); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
     }
     for (const e of jets) { // jets out of sight: a steady chevron points the way
       const c = toCam(e.x, e.y, e.z), p = c[2] > 20 ? proj(c) : null; if (p && p[0] > 30 && p[0] < W - 30 && p[1] > 30 && p[1] < H - 30) continue;
       const ang = Math.atan2(-c[1], c[0]), ex = W / 2 + Math.cos(ang) * (W * .39), ey = H / 2 + Math.sin(ang) * (H * .36), col = e === target ? '#ffe066' : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d';
+      arrowShown = true; ctx.save(); ctx.shadowBlur = 0; ctx.fillStyle = col; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText((e.kind === 'attack' ? 'HUNTER ' : 'RUNNER ') + Math.round(Math.hypot(e.x, e.y, e.z)), ex - Math.cos(ang) * 44, ey - Math.sin(ang) * 44 + 4); ctx.restore();
       glow(col, 10); ctx.lineWidth = e === target ? 5 : 3; ctx.beginPath(); ctx.moveTo(ex + Math.cos(ang + 2.4) * 15, ey + Math.sin(ang + 2.4) * 15); ctx.lineTo(ex + Math.cos(ang) * 12, ey + Math.sin(ang) * 12); ctx.lineTo(ex + Math.cos(ang - 2.4) * 15, ey + Math.sin(ang - 2.4) * 15); ctx.stroke();
     }
     ctx.restore(); ctx.shadowBlur = 0;
@@ -356,7 +399,7 @@
       ctx.strokeStyle = `rgba(120,255,190,${.25 + (shieldHit > 0 ? .5 : 0)})`; ctx.lineWidth = 2; for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.arc(W / 2, H / 2, H * (.62 + .03 * Math.abs(i)), 0, TAU); ctx.stroke(); } }
     // red hit wash
     if (flash > 0) { ctx.fillStyle = `rgba(255,60,70,${flash * .35})`; ctx.fillRect(0, 0, W, H); }
-    cockpit(); radar(); reticle(); hud(); touchUI(); computer();
+    cockpit(); radar(); reticle(); hud(); compass(); touchUI(); computer();
     if (over) { ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H); glow('#ff4d5e', 20); ctx.textAlign = 'center'; ctx.font = '700 54px "Space Grotesk", sans-serif'; ctx.fillText('HULL BREACH', W / 2, H / 2 - 6); glow('#d6e6ff', 6); ctx.font = '22px "Share Tech Mono", monospace'; ctx.fillText('SCORE ' + score + '   -   CLICK TO FLY AGAIN', W / 2, H / 2 + 40); }
   }
   function cockpit() { // canopy struts and the dashboard, drawn over the view
@@ -380,7 +423,7 @@
     ctx.shadowBlur = 0; ctx.fillStyle = '#7f93c4'; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('AHEAD', cx, cyy - R - 6); ctx.fillText('BEHIND', cx, cyy + R + 14);
   }
   function reticle() {
-    ctx.shadowBlur = 0; ctx.setLineDash([6, 9]); ctx.strokeStyle = 'rgba(95,240,255,.22)'; ctx.lineWidth = 1.5; ctx.strokeRect(W / 2 - BOX.w, H / 2 - BOX.h, BOX.w * 2, BOX.h * 2); ctx.setLineDash([]);
+    ctx.shadowBlur = 0; ctx.setLineDash([6, 9]); ctx.strokeStyle = 'rgba(95,240,255,.14)'; ctx.lineWidth = 1.5; ctx.strokeRect(W / 2 - BOX.w, H / 2 - BOX.h, BOX.w * 2, BOX.h * 2); ctx.setLineDash([]);
     if (!mouse.in) { ctx.fillStyle = 'rgba(214,230,255,.8)'; ctx.font = '16px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('MOVE THE CURSOR OVER THE WINDOW', W / 2, H / 2 - BOX.h - 18); return; }
     const lock = cv._lock, col = lock ? '#ff5a6e' : '#5dffa0', x = mouse.x, y = mouse.y; glow(col, 10); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 14, 0, TAU);
     ctx.moveTo(x - 24, y); ctx.lineTo(x - 8, y); ctx.moveTo(x + 8, y); ctx.lineTo(x + 24, y); ctx.moveTo(x, y - 24); ctx.lineTo(x, y - 8); ctx.moveTo(x, y + 8); ctx.lineTo(x, y + 24); ctx.stroke();
@@ -413,7 +456,8 @@
     ['GRENADES', 'Press B (or BOMB). A blast around you destroys rocks and jets that are close and wipes out incoming bolts. You start with 3 and get 1 more each wave.'],
     ['SHIELD', 'Hold Space, right-click or SHIELD. It soaks hits instead of your hull, but drains energy and your guns stop while it is up. If it empties, it needs time to recharge.'],
     ['FLYING', 'Trackpad edge, left stick or tilt turns the ship. Up arrow or the lever thrusts. X or 180 spins you around.'],
-    ['WARNINGS', 'Red pulsing arrow: a rock is close and out of sight. Pink arrow: a hunter jet. Orange: a runner. INCOMING FIRE: a bolt is about to hit you.']];
+    ['ARROWS', 'Arrows at the screen edge point to something you cannot see, and they are labelled with its distance. PINK = hunter jet (it attacks), ORANGE = runner jet (chase it), RED = a rock that is close. Turn toward the arrow and it comes into view. INCOMING FIRE means a bolt is about to hit you.'],
+    ['LANDMARKS', 'The planets, sun, moon and station are far away and never get closer. They just swing across the view when you turn, so use them (and the heading tape at the top) to tell which way you are facing. The faint grid can be switched off under the screen.']];
   function computer() { // onboard computer: short call-outs from the ship, and a help screen you can open any time
     ctx.shadowBlur = 0; ctx.textAlign = 'center';
     if (msg.t > 0 && !helpOpen && !over) { ctx.globalAlpha = Math.min(1, msg.t * 2); ctx.fillStyle = 'rgba(4,16,40,.8)'; ctx.font = '15px "Share Tech Mono", monospace'; const w = Math.min(W * .7, ctx.measureText(msg.text).width + 70); ctx.fillRect(W / 2 - w / 2, H * .205, w, 34); ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.strokeRect(W / 2 - w / 2, H * .205, w, 34); ctx.fillStyle = '#5ff0ff'; ctx.fillText(msg.text, W / 2, H * .205 + 22); ctx.globalAlpha = 1; }
@@ -424,7 +468,7 @@
     ctx.fillStyle = '#7f93c4'; ctx.font = '13px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('GAME PAUSED  -  PRESS H, ESC OR TAP ANYWHERE TO RETURN', W / 2, H * .775);
   }
   let last = performance.now();
-  function loop(t) { const dt = Math.min(.05, (t - last) / 1000); last = t; update(dt); draw(); requestAnimationFrame(loop); }
+  function loop(t) { if (arrowShown && !warned.arrows && time > 4) { warned.arrows = 1; say('Arrows at the screen edge point to things you cannot see. Turn toward them.', 6); } const dt = Math.min(.05, (t - last) / 1000); last = t; update(dt); draw(); requestAnimationFrame(loop); }
   reset(); requestAnimationFrame(loop);
 })();
 </script>
