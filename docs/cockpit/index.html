@@ -176,9 +176,11 @@
   let grenades = 3, energy = 100, shieldOn = false, shieldLock = false, shieldHit = 0, target = null, helpOpen = false, msg = { t: 0, text: '' }, sixT = 0, callT = 0, rockCallT = 0, warned = {}, blasts = [];
   // ===================== THE JOURNEY: Earth -> Moon -> Mars ... out to Pluto, then in past Venus to Mercury =====================
   const ROUTE = [
-    { n: 'EARTH', t: 'earth', waves: 1, leg: 30, belt: .15, al: 0 }, { n: 'MOON', t: 'moon', waves: 3, leg: 60, belt: .85, al: .2 }, { n: 'MARS', t: 'mars', waves: 3, leg: 75, belt: 1, al: .35 },
-    { n: 'JUPITER', t: 'jup', waves: 3, leg: 70, belt: .4, al: .4 }, { n: 'SATURN', t: 'ring', waves: 3, leg: 70, belt: .4, al: .5 }, { n: 'URANUS', t: 'uran', waves: 3, leg: 70, belt: .35, al: .55 },
-    { n: 'NEPTUNE', t: 'nep', waves: 3, leg: 70, belt: .35, al: .6 }, { n: 'PLUTO', t: 'plu', waves: 4, leg: 80, belt: .5, al: .7 }, { n: 'VENUS', t: 'ven', waves: 4, leg: 80, belt: .3, al: .7 }, { n: 'MERCURY', t: 'mer', waves: 5, leg: 0, belt: 0, al: .8 }];
+    { n: 'EARTH', t: 'earth', waves: 1, leg: 40, belt: .15, al: 0, av: 0 }, { n: 'MOON', t: 'moon', waves: 3, leg: 120, belt: .85, al: .2, av: 0 }, { n: 'MARS', t: 'mars', waves: 3, leg: 150, belt: 1, al: .35, av: 0, job: 'flagship' },
+    { n: 'JUPITER', t: 'jup', waves: 3, leg: 130, belt: .4, al: .4, av: 1 }, { n: 'SATURN', t: 'ring', waves: 3, leg: 130, belt: .4, al: .5, av: 1 }, { n: 'URANUS', t: 'uran', waves: 3, leg: 130, belt: .35, al: .55, av: 2 },
+    { n: 'NEPTUNE', t: 'nep', waves: 3, leg: 130, belt: .35, al: .6, av: 2 }, { n: 'PLUTO', t: 'plu', waves: 4, leg: 140, belt: .5, al: .7, av: 3 }, { n: 'VENUS', t: 'ven', waves: 4, leg: 130, belt: .3, al: .7, av: 3 }, { n: 'MERCURY', t: 'mer', waves: 5, leg: 0, belt: 0, al: .8, av: 3 }];
+  const ANAMES = ['RAIDER', 'URCHIN', 'CLAW', 'TRIAD'], ACOL = ['#9dff3a', '#c27bff', '#ff7a3a', '#5ff0ff'];
+  const acol = e => e.boss ? '#ffd23d' : ACOL[e.av || 0], alname = e => e.boss ? 'FLAGSHIP' : ANAMES[e.av || 0];
   const FACTS = {
     EARTH: ['Earth is home. Seventy percent of the surface is ocean, and it is the only planet we know with life.', 'Earth spins once a day and circles the Sun once a year, at about thirty kilometres a second.'],
     MOON: ['The Moon is about a quarter the width of Earth. It is slowly drifting away, about four centimetres a year.', 'The Moon always shows us the same face. Its far side was first photographed in nineteen fifty nine.'],
@@ -211,18 +213,19 @@
     let dir = [r * Math.cos(t), u, r * Math.sin(t)]; if (front) { const q = Math.hypot(rnd(-.45, .45), rnd(-.3, .3), 1); dir = toWorldDir(rnd(-.45, .45) / q, rnd(-.3, .3) / q, 1 / q); }
     addRock(3, dir[0] * d, dir[1] * d, dir[2] * d, [-dir[0] * s + rnd(-25, 25), -dir[1] * s + rnd(-25, 25), -dir[2] * s + rnd(-25, 25)]);
   }
+  function bossDown() { J.bossLive = false; J.job = null; score += 0; say('Flagship destroyed! The raiders are scattering.', 6); DR.say('happy', true); AU.chime(); flash = .5; }
   function startWave(quiet) {
     wave++; J.waveLive = true; const k = J.cleared;
     if (!quiet && wave > 1) { AU.chime(); DR.say('happy', true); grenades = Math.min(5, grenades + 1); say(J.done ? 'Wave ' + wave + '. More hostiles inbound.' : 'Wave ' + (k + 1) + ' of ' + J.need + ' at ' + ROUTE[J.i].n + '. Grenade restocked.', 4); }
-    const nj = Math.min(1 + Math.ceil(k + 1 + J.i * .6), 6), al = ROUTE[J.i].al; for (let i = 0; i < nj; i++) addJet(i % 2 ? 'run' : 'attack', i < 2, i % 2 === 0 && Math.random() < al);
+    const nj = Math.min(1 + Math.ceil(k + 1 + J.i * .6), 6), al = ROUTE[J.i].al; if (J.job === 'flagship' && k === J.need - 1) { addJet('attack', true, true, ROUTE[J.i].av, true); J.bossLive = true; say('Alien flagship detected. Lock it with T.', 5); DR.say('alien', true); } for (let i = 0; i < nj; i++) addJet(i % 2 ? 'run' : 'attack', i < 2, i % 2 === 0 && Math.random() < al);
     for (let i = rocks.length; i < Math.min(2 + k + J.i, 7); i++) spawn(i < 1);
   }
-  function addJet(kind, front, alien) { // 'attack' jets come at you and shoot; 'run' jets flee and you hunt them
+  function addJet(kind, front, alien, av, boss) { // 'attack' jets come at you and shoot; 'run' jets flee and you hunt them
     const d = rnd(900, 1300); let dir;
     if (front) { const q = Math.hypot(rnd(-.5, .5), rnd(-.3, .3), 1); dir = toWorldDir(rnd(-.5, .5) / q, rnd(-.3, .3) / q, 1 / q); }
     else { const u = rnd(-.5, .5), t = rnd(0, TAU), r = Math.sqrt(1 - u * u); dir = [r * Math.cos(t), u, r * Math.sin(t)]; }
     const sp = (kind === 'run' ? 150 : alien ? 195 : 175) + Math.min(wave, 12) * 8, h = kind === 'run' ? dir : dir.map(v => -v);
-    jets.push({ x: dir[0] * d, y: dir[1] * d, z: dir[2] * d, vx: h[0] * sp, vy: h[1] * sp, vz: h[2] * sp, sp, kind, alien: !!alien, hp: alien ? 3 : 2, evade: 0, fireT: rnd(1.5, 3), hit: 0, jink: rnd(0, TAU) });
+    jets.push({ x: dir[0] * d, y: dir[1] * d, z: dir[2] * d, vx: h[0] * sp, vy: h[1] * sp, vz: h[2] * sp, sp: boss ? 120 : sp, kind, alien: !!alien, av: av == null ? ROUTE[J.i].av : av, boss: !!boss, hp: boss ? 10 : alien ? 3 : 2, hp0: boss ? 10 : alien ? 3 : 2, evade: 0, fireT: rnd(1.5, 3), hit: 0, jink: rnd(0, TAU) });
   }
   function steer(e, tx, ty, tz, turn, dt) {
     const l = Math.hypot(tx, ty, tz) || 1; tx /= l; ty /= l; tz /= l; const vl = Math.hypot(e.vx, e.vy, e.vz) || 1; let dx = e.vx / vl, dy = e.vy / vl, dz = e.vz / vl; const k = Math.min(1, turn * dt);
@@ -230,7 +233,7 @@
   }
   function say(text, secs = 3.8, speak = true) {
     msg = { t: secs, text }; alog('sh', text); AU.blip();
-    if (speak && voiceEl.checked) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1.05; u.pitch = .85; speechSynthesis.speak(u); } catch (x) {} }
+    if (speak && voiceEl.checked && !TX.on) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1.05; u.pitch = .85; speechSynthesis.speak(u); } catch (x) {} }
   }
   function damage(n) {
     if (shieldOn) { energy -= n * 1.6; shieldHit = .35; shake = .2; if (energy <= 0) { energy = 0; shieldLock = true; say('Shields down.', 2.5); DR.say('sad', true); } return; }
@@ -238,12 +241,12 @@
   }
   function cycleTarget() { AU.lock(); DR.say('curious');
     const list = jets.slice().sort((a, b) => Math.hypot(a.x, a.y, a.z) - Math.hypot(b.x, b.y, b.z)); if (!list.length) { say('No hostile jets.', 2); return; }
-    const i = list.indexOf(target); target = i < 0 ? list[0] : (i + 1 < list.length ? list[i + 1] : null); if (target) { target.prev = Math.hypot(target.x, target.y, target.z); target.close = 0; say(target.alien ? 'Target locked. Alien raider.' : target.kind === 'attack' ? 'Target locked. Hunter jet.' : 'Target locked. Runner jet.', 2.5); } else say('Target released.', 2);
+    const i = list.indexOf(target); target = i < 0 ? list[0] : (i + 1 < list.length ? list[i + 1] : null); if (target) { target.prev = Math.hypot(target.x, target.y, target.z); target.close = 0; say(target.alien ? (target.boss ? 'Target locked. Alien flagship.' : 'Target locked. Alien raider.') : target.kind === 'attack' ? 'Target locked. Hunter jet.' : 'Target locked. Runner jet.', 2.5); } else say('Target released.', 2);
   }
   function grenade() {
     if (grenades <= 0) { say('No grenades left.', 2); return; } grenades--; blasts.push({ t: .6 }); AU.gren(); flash = .6; shake = .4; const R = 520;
     for (let i = rocks.length - 1; i >= 0; i--) { const r = rocks[i]; if (Math.hypot(r.x, r.y, r.z) < R + r.r) { boom(r.x, r.y, r.z, 16, '#ffd27a'); score += 40; rocks.splice(i, 1); } }
-    for (let i = jets.length - 1; i >= 0; i--) { const e = jets[i]; if (Math.hypot(e.x, e.y, e.z) < R) { boom(e.x, e.y, e.z, 40, '#ffd27a'); score += 300; if (target === e) target = null; jets.splice(i, 1); } }
+    for (let i = jets.length - 1; i >= 0; i--) { const e = jets[i]; if (Math.hypot(e.x, e.y, e.z) < R) { if (e.boss) { e.hp -= 1; e.hit = .3; boom(e.x, e.y, e.z, 20, '#ffd27a'); continue; } boom(e.x, e.y, e.z, 40, '#ffd27a'); score += 300; if (target === e) target = null; jets.splice(i, 1); } }
     ebolts.length = 0; say('Grenade away. ' + grenades + ' left.', 2.5);
   }
   function press(id) { if (id === 'flip') { if (flipT <= 0) { flipT = .35; AU.whoosh(); } } else if (id === 'gren') grenade(); else if (id === 'tgt') cycleTarget(); else if (id === 'help') helpOpen = !helpOpen; }
@@ -306,7 +309,7 @@
     const KMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down' };
   addEventListener('keydown', e => { if (e.target && e.target.matches && e.target.matches('input[type=text],textarea')) e.stopImmediatePropagation(); }, true);
   addEventListener('keydown', e => { if (e.repeat) return; if (e.code === 'KeyR') RAD.power(); else if (e.code === 'Comma') RAD.tune(-1); else if (e.code === 'Period') RAD.tune(1); else if (e.code === 'KeyN') RAD.skip(); });
-  addEventListener('keydown', e => { if (e.key === 'Shift') keys.shift = true; if (e.code === 'KeyX') press('flip'); if (e.code === 'KeyB' && !e.repeat) press('gren'); if (e.code === 'KeyT' && !e.repeat) press('tgt'); if (e.code === 'KeyH' && !e.repeat) press('help'); if (e.code === 'Escape') helpOpen = false; if (e.code === 'Space') { keys.space = true; e.preventDefault(); } if (KMAP[e.code]) { keys[KMAP[e.code]] = true; e.preventDefault(); } });
+  addEventListener('keydown', e => { if (e.key === 'Shift') keys.shift = true; if (e.code === 'KeyC' && !e.repeat) TX.end(); if (e.code === 'KeyX') press('flip'); if (e.code === 'KeyB' && !e.repeat) press('gren'); if (e.code === 'KeyT' && !e.repeat) press('tgt'); if (e.code === 'KeyH' && !e.repeat) press('help'); if (e.code === 'Escape') helpOpen = false; if (e.code === 'Space') { keys.space = true; e.preventDefault(); } if (KMAP[e.code]) { keys[KMAP[e.code]] = true; e.preventDefault(); } });
   addEventListener('keyup', e => { if (e.key === 'Shift') keys.shift = false; if (e.code === 'Space') keys.space = false; if (KMAP[e.code]) keys[KMAP[e.code]] = false; });
   addEventListener('blur', () => { keys.shift = keys.up = keys.down = keys.space = false; mouse.down = mouse.rdown = false; });
 
@@ -340,29 +343,33 @@
     } else { L.push({ n: R.n, az: 3.1, el: .1, r: .2, t: R.t, orig: true }); L.push({ n: N.n, az: .2, el: .06, r: .02, t: N.t, dest: true }); }
     LM = L.map(o => ({ ...o, d: dirOf(o.az, o.el) }));
   }
-  function resetJ() { Object.assign(J, { i: 0, phase: 'fight', cleared: 0, need: ROUTE[0].waves, waveLive: false, t: 0, dur: 0, warp: 0, flashW: 0, fired: {}, done: false, raids: 0 }); buildLM(); }
+  function resetJ() { Object.assign(J, { i: 0, phase: 'fight', cleared: 0, need: ROUTE[0].waves, waveLive: false, t: 0, dur: 0, warp: 0, flashW: 0, fired: {}, done: false, raids: 0, job: null }); buildLM(); }
   function beginTransit() {
     const R = ROUTE[J.i], N = ROUTE[J.i + 1]; J.waveLive = false;
     if (!N) { J.done = true; say('Journey complete, Captain. You have flown the whole solar system. Fight on as long as you like.', 8); alog('sh', 'JOURNEY COMPLETE. Endless mode.'); DR.say('happy', true); AU.chime(); return; }
     J.phase = 'transit'; J.t = 0; J.dur = R.leg; J.fired = {}; J.raids = 0; jets.length = 0; ebolts.length = 0; target = null; J.flashW = .5; AU.chime(); buildLM();
     if (R.belt > .5) for (let k = 0; k < 4; k++) spawn(k < 3);
   }
-  function arrive() {
-    J.i++; J.phase = 'fight'; J.cleared = 0; J.need = ROUTE[J.i].waves; rocks.length = jets.length = ebolts.length = 0; target = null; J.flashW = 1; J.warp = 0; hull = Math.min(100, hull + 25); energy = 100; grenades = Math.min(5, grenades + 1);
+  function arrive() { TX.end();
+    J.i++; J.phase = 'fight'; J.cleared = 0; J.need = ROUTE[J.i].waves; J.job = ROUTE[J.i].job || null; rocks.length = jets.length = ebolts.length = 0; target = null; J.flashW = 1; J.warp = 0; hull = Math.min(100, hull + 25); energy = 100; grenades = Math.min(5, grenades + 1);
     buildLM(); startWave(true); AU.chime(); say('Arrived at ' + ROUTE[J.i].n + '. Supplies loaded: hull plus twenty five and one grenade. Hostiles on scope.', 6); DR.say('arrive', true);
   }
   function journey(dt) {
     J.warp = Math.max(0, J.warp - dt * .6); if (J.flashW > 0) J.flashW = Math.max(0, J.flashW - dt * 1.2);
     for (const L of LM) { if (L.dest) L.r = .02 + .24 * Math.pow(J.t / J.dur, 1.6); else if (L.orig) L.r = Math.max(.02, .2 * (1 - J.t / J.dur * 1.4)); }
     if (J.phase === 'fight') {
-      if (!jets.length) { if (J.waveLive) { J.waveLive = false; J.cleared++; } if (!J.done && J.cleared >= J.need) beginTransit(); else startWave(); }
+      TX.tick(dt); if (!jets.length) { if (J.waveLive) { J.waveLive = false; J.cleared++; } if (!J.done && J.cleared >= J.need && !J.job) beginTransit(); else startWave(); }
       return;
     }
-    J.t += dt; const R = ROUTE[J.i], N = ROUTE[J.i + 1], rem = J.dur - J.t, once = (k, fn) => { if (!J.fired[k]) { J.fired[k] = 1; fn(); } };
+    TX.tick(dt); J.t += dt; const R = ROUTE[J.i], N = ROUTE[J.i + 1], rem = J.dur - J.t, once = (k, fn) => { if (!J.fired[k]) { J.fired[k] = 1; fn(); } };
     if (J.t < 3) J.warp = Math.max(J.warp, 1 - J.t / 3); if (rem < 6) J.warp = Math.max(J.warp, 1 - rem / 6);
     once('go', () => { say('Sector clear. Course plotted for ' + N.n + '. Estimated flight time ' + (R.leg >= 60 ? Math.round(R.leg / 60 * 10) / 10 + ' minutes' : R.leg + ' seconds') + '. ' + (R.belt > .7 ? 'Asteroid belt ahead. Stay sharp.' : 'Watch for debris.'), 7); DR.say('hyper', true); });
-    if (J.t > 9) once('belt', () => { if (R.belt > .5) DR.say('belt', true); else DR.say('ack', true); });
-    const nr = R.al <= 0 ? 0 : R.al < .3 ? 1 : 2; for (let k = 0; k < nr; k++) if (J.t > R.leg * (.3 + k * .3)) once('raid' + k, () => { const n = Math.min(5, 2 + Math.floor(J.i / 2) + k); say('Warning. Unknown vessels on intercept. Those are not Earth designs.', 5); DR.say('alien', true); for (let q = 0; q < n; q++) addJet('attack', q < 2, true); });
+    if (J.t > R.leg * .45) once('belt', () => { if (R.belt > .5) DR.say('belt', true); else DR.say('ack', true); });
+    const brief = BRIEFS[N.n], t0 = brief ? 50 : 20, nr = R.al <= 0 ? 0 : R.leg >= 100 ? 3 : R.al < .3 ? 1 : 2;
+    if (brief && J.t > 8) once('tx', () => TX.start(N.n));
+    for (let k = 0; k < nr; k++) if (!TX.on && J.t > t0 + k * (R.leg - 35 - t0) / nr) once('raid' + k, () => { const n = Math.min(5, 2 + Math.floor(J.i / 2) + k), av = k === nr - 1 ? N.av : R.av; say('Warning. Unknown vessels on intercept. Those are not Earth designs.', 5); DR.say('alien', true); for (let q = 0; q < n; q++) addJet('attack', q < 2, true, av); });
+    if (R.leg >= 100 && rem < 90) once('m90', () => say('Ninety seconds to ' + N.n + '. Hyperspace is stable.', 4));
+    if (R.leg >= 100 && rem < 60) once('m60', () => say('One minute to ' + N.n + '. Use the time to tune the radio, or ask ARIA about ' + N.n + '.', 6));
     if (R.leg > 40 && rem < R.leg - 20 && rem < 45) once('m45', () => say(Math.round(rem) + ' seconds to ' + N.n + '. Check your information computer. ARIA can tell you about ' + N.n + '.', 5));
     if (rem < 30 && R.leg > 30) once('m30', () => say('Thirty seconds to ' + N.n + '. The radio is available if you want some music.', 5));
     if (rem < 22 && R.leg > 40) once('fact', () => ariaSpeak('Fun fact about ' + N.n + '. ' + FACTS[N.n][Math.floor(Math.random() * 2)]));
@@ -410,7 +417,7 @@
       const s = shots[i]; s.life -= dt; const nx = s.x + s.vx * dt, ny = s.y + s.vy * dt, nz = s.z + s.vz * dt; let gone = s.life <= 0;
       for (let j = rocks.length - 1; j >= 0 && !gone; j--) { const r = rocks[j], mx = (s.x + nx) / 2, my = (s.y + ny) / 2, mz = (s.z + nz) / 2; if (Math.hypot(r.x - mx, r.y - my, r.z - mz) < r.r + 24) { breakRock(j); gone = true; } }
       for (let j = jets.length - 1; j >= 0 && !gone; j--) { const e = jets[j], mx = (s.x + nx) / 2, my = (s.y + ny) / 2, mz = (s.z + nz) / 2;
-        if (Math.hypot(e.x - mx, e.y - my, e.z - mz) < 38) { e.hp--; e.hit = .15; gone = true; boom(e.x, e.y, e.z, 8, '#ff9cf6'); if (e.hp <= 0) { boom(e.x, e.y, e.z, 40, '#ffd27a'); jets.splice(j, 1); score += 300; shake = .15; DR.say('proud'); } } }
+        if (Math.hypot(e.x - mx, e.y - my, e.z - mz) < 38) { e.hp--; e.hit = .15; gone = true; boom(e.x, e.y, e.z, 8, '#ff9cf6'); if (e.hp <= 0) { boom(e.x, e.y, e.z, 40, '#ffd27a'); jets.splice(j, 1); score += e.boss ? 2500 : 300; shake = .15; if (e.boss) bossDown(); else DR.say('proud'); } } }
       s.x = nx; s.y = ny; s.z = nz; if (gone) shots.splice(i, 1);
     }
     // rocks
@@ -427,16 +434,17 @@
         if (e.evade > 0) { e.evade -= dt; steer(e, -to[0] + Math.sin(e.jink) * .8, -to[1] + Math.cos(e.jink * 1.3) * .6, -to[2], 1.6, dt); }
         else { steer(e, to[0] + (e.alien ? Math.sin(e.jink * 1.6) * .35 : 0), to[1] + (e.alien ? Math.cos(e.jink * 1.1) * .3 : 0), to[2], 1.2, dt); if (d < 170) e.evade = 2.4; }
         e.fireT -= dt; const facing = (e.vx * to[0] + e.vy * to[1] + e.vz * to[2]) / e.sp;
-        if (e.evade <= 0 && e.fireT <= 0 && d < 950 && d > 140 && facing > .92) { ebolts.push({ x: e.x, y: e.y, z: e.z, vx: to[0] * 700 + rnd(-30, 30), vy: to[1] * 700 + rnd(-30, 30), vz: to[2] * 700 + rnd(-30, 30), life: 3, alien: e.alien }); e.fireT = e.alien ? rnd(.8, 1.7) : rnd(1.1, 2.2); }
+        if (e.evade <= 0 && e.fireT <= 0 && d < 950 && d > 140 && facing > .92) { ebolts.push({ x: e.x, y: e.y, z: e.z, vx: to[0] * 700 + rnd(-30, 30), vy: to[1] * 700 + rnd(-30, 30), vz: to[2] * 700 + rnd(-30, 30), life: 3, alien: e.alien, av: e.av });
+        if (e.boss) for (const sg of [-1, 1]) ebolts.push({ x: e.x, y: e.y, z: e.z, vx: to[0] * 700 + sg * 90, vy: to[1] * 700 + sg * 40, vz: to[2] * 700, life: 3, alien: true, av: e.av }); e.fireT = e.alien ? rnd(.8, 1.7) : rnd(1.1, 2.2); }
       } else if (d > 1700) steer(e, to[0], to[1], to[2], .8, dt);
       else steer(e, -to[0] + Math.sin(e.jink) * .7, -to[1] + Math.cos(e.jink * 1.3) * .5, -to[2], 1.0, dt);
       e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
-      if (d < 44) { damage(15); boom(e.x, e.y, e.z, 30, '#ffd27a'); jets.splice(i, 1); }
+      if (d < 44 && !e.boss) { damage(15); boom(e.x, e.y, e.z, 30, '#ffd27a'); jets.splice(i, 1); }
     }
     incoming = 0;
     for (let i = ebolts.length - 1; i >= 0; i--) {
       const b = ebolts[i]; b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; const d = Math.hypot(b.x, b.y, b.z);
-      if (d < 34) { damage(b.alien ? 9 : 7); boom(b.x, b.y, b.z, 10, b.alien ? '#9dff3a' : '#ff9a3d'); ebolts.splice(i, 1); continue; }
+      if (d < 34) { damage(b.alien ? 9 : 7); boom(b.x, b.y, b.z, 10, b.alien ? acol(b) : '#ff9a3d'); ebolts.splice(i, 1); continue; }
       if (d < 600) incoming = 1; if (b.life <= 0) ebolts.splice(i, 1);
     }
     for (let i = sparks.length - 1; i >= 0; i--) { const p = sparks[i]; p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; if (p.life <= 0) sparks.splice(i, 1); }
@@ -526,12 +534,20 @@
   const JET = { pts: [[0, 0, 3.2], [-2.4, 0, -1.4], [2.4, 0, -1.4], [0, .5, -1.6], [0, 1.5, -2.0], [0, -.5, -1.2], [-1.2, 0, -.2], [1.2, 0, -.2]], edges: [[0, 1], [0, 2], [1, 3], [2, 3], [3, 4], [0, 3], [0, 5], [1, 5], [2, 5], [1, 6], [2, 7], [0, 6], [0, 7]] };
   const ALN = { pts: [[0, 0, 2.8], [0, 1, 0], [0, -1, 0], [-1, 0, .3], [1, 0, .3], [0, 0, -1.7], [-2.2, .9, -.3], [-3.4, 1.9, -1.4], [-3.9, 3, -2.9], [2.2, .9, -.3], [3.4, 1.9, -1.4], [3.9, 3, -2.9], [-2, -.9, .2], [-3, -1.7, -.9], [2, -.9, .2], [3, -1.7, -.9]],
     edges: [[0, 1], [0, 2], [0, 3], [0, 4], [1, 3], [3, 2], [2, 4], [4, 1], [5, 1], [5, 2], [5, 3], [5, 4], [3, 6], [6, 7], [7, 8], [4, 9], [9, 10], [10, 11], [6, 1], [9, 1], [3, 12], [12, 13], [4, 14], [14, 15], [8, 5], [11, 5]] };
+  const ALNS = [ALN, {
+    pts: [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1.6], [0, 0, -1.6], [0, 3.2, 0], [0, -3.2, 0], [3.4, 0, 0], [-3.4, 0, 0], [0, 0, 3.6], [0, 0, -3], [2.2, 2.2, 0], [-2.2, 2.2, 0], [2.2, -2.2, 0], [-2.2, -2.2, 0]], eye: 4,
+    edges: [[0, 2], [0, 3], [0, 4], [0, 5], [1, 2], [1, 3], [1, 4], [1, 5], [2, 4], [4, 3], [3, 5], [5, 2], [0, 6], [1, 7], [2, 8], [3, 9], [4, 10], [5, 11], [0, 12], [2, 12], [0, 13], [3, 13], [1, 14], [2, 14], [1, 15], [3, 15]] },
+   { pts: [[0, 0, 1.8], [0, .9, -.4], [-.9, -.5, -.4], [.9, -.5, -.4], [0, 0, -1.4], [1.2, .4, .2], [2.4, 1.5, .6], [3.2, 2.6, 1.6], [3, 3.5, 2.9], [1.2, -.2, .2], [2.4, -1.4, .6], [3.2, -2.5, 1.6], [3, -3.4, 2.9], [-1.2, .4, .2], [-2.4, 1.5, .6], [-3.2, 2.6, 1.6], [-3, 3.5, 2.9], [-1.2, -.2, .2], [-2.4, -1.4, .6], [-3.2, -2.5, 1.6], [-3, -3.4, 2.9]], eye: 0,
+    edges: [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3], [4, 1], [4, 2], [4, 3], [1, 5], [5, 6], [6, 7], [7, 8], [3, 9], [9, 10], [10, 11], [11, 12], [1, 13], [13, 14], [14, 15], [15, 16], [2, 17], [17, 18], [18, 19], [19, 20]] },
+   (() => { const pts = [], edges = []; [[0, 1.8, 0], [-1.7, -.9, 0], [1.7, -.9, 0]].forEach(c => { const b = pts.length; for (const d of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1.5], [0, 0, -1.5]]) pts.push([c[0] + d[0] * .9, c[1] + d[1] * .9, c[2] + d[2] * .9]); for (const [a, q] of [[0, 2], [0, 3], [1, 2], [1, 3], [0, 4], [1, 4], [2, 4], [3, 4], [0, 5], [1, 5], [2, 5], [3, 5]]) edges.push([b + a, b + q]); });
+     edges.push([4, 10], [10, 16], [16, 4], [5, 11], [11, 17], [17, 5], [0, 7], [1, 8]); return { pts, edges, eye: 4 }; })()];
   function drawJet(e) {
     const vl = Math.hypot(e.vx, e.vy, e.vz) || 1, f = [e.vx / vl, e.vy / vl, e.vz / vl]; let r = [f[2], 0, -f[0]], rl = Math.hypot(r[0], r[1], r[2]); if (rl < 1e-3) { r = [1, 0, 0]; rl = 1; } r = r.map(v => v / rl);
-    const u = [f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2], f[0] * r[1] - f[1] * r[0]], S = e.alien ? 27 : 20, G = e.alien ? ALN : JET, ca = e.alien ? Math.cos(time * 1.1 + e.jink) : 1, sa = e.alien ? Math.sin(time * 1.1 + e.jink) : 0;
+    const u = [f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2], f[0] * r[1] - f[1] * r[0]], S = e.boss ? 52 : e.alien ? 27 : 20, G = e.alien ? ALNS[e.av || 0] : JET, ca = e.alien ? Math.cos(time * 1.1 + e.jink) : 1, sa = e.alien ? Math.sin(time * 1.1 + e.jink) : 0;
     const pp = G.pts.map(p => { const q0 = p[0] * ca - p[1] * sa, q1 = p[0] * sa + p[1] * ca, c = toCam(e.x + (r[0] * q0 + u[0] * q1 + f[0] * p[2]) * S, e.y + (r[1] * q0 + u[1] * q1 + f[1] * p[2]) * S, e.z + (r[2] * q0 + u[2] * q1 + f[2] * p[2]) * S); return c[2] > 20 ? proj(c) : null; });
-    const col = e.hit > 0 ? '#ffffff' : e.alien ? '#9dff3a' : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d'; glow(col, 12); ctx.lineWidth = 2; ctx.beginPath();
-    for (const [i, j] of G.edges) if (pp[i] && pp[j]) { ctx.moveTo(pp[i][0], pp[i][1]); ctx.lineTo(pp[j][0], pp[j][1]); } ctx.stroke(); if (e.alien && pp[0]) { ctx.fillStyle = '#eaffc8'; ctx.beginPath(); ctx.arc(pp[0][0], pp[0][1], 3 + Math.sin(time * 6) * 1.2, 0, TAU); ctx.fill(); }
+    const col = e.hit > 0 ? '#ffffff' : e.alien ? acol(e) : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d'; glow(col, 12); ctx.lineWidth = 2; ctx.beginPath();
+    for (const [i, j] of G.edges) if (pp[i] && pp[j]) { ctx.moveTo(pp[i][0], pp[i][1]); ctx.lineTo(pp[j][0], pp[j][1]); } ctx.stroke(); const ey = G.eye || 0; if (e.alien && pp[ey]) { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(pp[ey][0], pp[ey][1], (e.boss ? 6 : 3) + Math.sin(time * 6) * 1.2, 0, TAU); ctx.fill(); }
+    if (e.boss) { const c0 = toCam(e.x, e.y, e.z); if (c0[2] > 20) { const q = proj(c0), w = 90; ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(q[0] - w / 2, q[1] - 110, w, 8); ctx.fillStyle = '#ffd23d'; ctx.fillRect(q[0] - w / 2 + 1, q[1] - 109, (w - 2) * Math.max(0, e.hp) / e.hp0, 6); ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('FLAGSHIP', q[0], q[1] - 118); } }
   }
   function drawRock(r) {
     const cr = Math.cos(r.rx), sr = Math.sin(r.rx), cq = Math.cos(r.ry), sq = Math.sin(r.ry), pp = [], ok = [];
@@ -558,7 +574,7 @@
     if (target) { const dist = Math.hypot(target.x, target.y, target.z), lt = dist / 2100, c = toCam(target.x, target.y, target.z), cl = toCam(target.x + target.vx * lt, target.y + target.vy * lt, target.z + target.vz * lt);
       if (c[2] > 20) { const p = proj(c), q = proj(cl); glow('#ffe066', 12); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(p[0], p[1] - 46); ctx.lineTo(p[0] + 46, p[1]); ctx.lineTo(p[0], p[1] + 46); ctx.lineTo(p[0] - 46, p[1]); ctx.closePath(); ctx.stroke();
         glow('#5ff0ff', 10); ctx.beginPath(); ctx.arc(q[0], q[1], 11, 0, TAU); ctx.stroke(); ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); ctx.setLineDash([]); } }
-    for (const b of ebolts) { const c = toCam(b.x, b.y, b.z), c2 = toCam(b.x - b.vx * .05, b.y - b.vy * .05, b.z - b.vz * .05); if (c[2] < 20 || c2[2] < 20) continue; const a = proj(c), q = proj(c2); glow(b.alien ? '#7dff3a' : '#ffa23d', 16); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); }
+    for (const b of ebolts) { const c = toCam(b.x, b.y, b.z), c2 = toCam(b.x - b.vx * .05, b.y - b.vy * .05, b.z - b.vz * .05); if (c[2] < 20 || c2[2] < 20) continue; const a = proj(c), q = proj(c2); glow(b.alien ? acol(b) : '#ffa23d', 16); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); }
     // shots
     for (const s of shots) { const c = toCam(s.x, s.y, s.z), c2 = toCam(s.x - s.vx * .035, s.y - s.vy * .035, s.z - s.vz * .035); if (c[2] < 20 || c2[2] < 20) continue; const a = proj(c), b = proj(c2); glow('#ff5a6e', 14); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
     for (const p of sparks) { const c = toCam(p.x, p.y, p.z); if (c[2] < 20) continue; const q = proj(c); glow(p.col, 8); ctx.globalAlpha = clamp(p.life, 0, 1); ctx.fillRect(q[0], q[1], 3, 3); ctx.globalAlpha = 1; }
@@ -572,8 +588,8 @@
     }
     for (const e of jets) { // jets out of sight: a steady chevron points the way
       const c = toCam(e.x, e.y, e.z), p = c[2] > 20 ? proj(c) : null; if (p && p[0] > 30 && p[0] < W - 30 && p[1] > 30 && p[1] < H - 30) continue;
-      const ang = Math.atan2(-c[1], c[0]), ex = W / 2 + Math.cos(ang) * (W * .39), ey = H / 2 + Math.sin(ang) * (H * .36), col = e === target ? '#ffe066' : e.alien ? '#9dff3a' : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d';
-      arrowShown = true; ctx.save(); ctx.shadowBlur = 0; ctx.fillStyle = col; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText((e.alien ? 'ALIEN ' : e.kind === 'attack' ? 'HUNTER ' : 'RUNNER ') + Math.round(Math.hypot(e.x, e.y, e.z)), ex - Math.cos(ang) * 44, ey - Math.sin(ang) * 44 + 4); ctx.restore();
+      const ang = Math.atan2(-c[1], c[0]), ex = W / 2 + Math.cos(ang) * (W * .39), ey = H / 2 + Math.sin(ang) * (H * .36), col = e === target ? '#ffe066' : e.alien ? acol(e) : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d';
+      arrowShown = true; ctx.save(); ctx.shadowBlur = 0; ctx.fillStyle = col; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText((e.alien ? alname(e) + ' ' : e.kind === 'attack' ? 'HUNTER ' : 'RUNNER ') + Math.round(Math.hypot(e.x, e.y, e.z)), ex - Math.cos(ang) * 44, ey - Math.sin(ang) * 44 + 4); ctx.restore();
       glow(col, 10); ctx.lineWidth = e === target ? 5 : 3; ctx.beginPath(); ctx.moveTo(ex + Math.cos(ang + 2.4) * 15, ey + Math.sin(ang + 2.4) * 15); ctx.lineTo(ex + Math.cos(ang) * 12, ey + Math.sin(ang) * 12); ctx.lineTo(ex + Math.cos(ang - 2.4) * 15, ey + Math.sin(ang - 2.4) * 15); ctx.stroke();
     }
     ctx.restore(); ctx.shadowBlur = 0;
@@ -583,7 +599,7 @@
       ctx.strokeStyle = `rgba(120,255,190,${.25 + (shieldHit > 0 ? .5 : 0)})`; ctx.lineWidth = 2; for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.arc(W / 2, H / 2, H * (.62 + .03 * Math.abs(i)), 0, TAU); ctx.stroke(); } }
     // red hit wash
     if (flash > 0) { ctx.fillStyle = `rgba(255,60,70,${flash * .35})`; ctx.fillRect(0, 0, W, H); }
-    cockpit(); radar(); reticle(); hud(); compass(); navHud(); warpFx(); touchUI(); computer();
+    cockpit(); radar(); reticle(); hud(); compass(); navHud(); warpFx(); txDraw(); touchUI(); computer();
     if (over) { ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H); glow('#ff4d5e', 20); ctx.textAlign = 'center'; ctx.font = '700 54px "Space Grotesk", sans-serif'; ctx.fillText('HULL BREACH', W / 2, H / 2 - 6); glow('#d6e6ff', 6); ctx.font = '22px "Share Tech Mono", monospace'; ctx.fillText('SCORE ' + score + '   -   CLICK TO FLY AGAIN', W / 2, H / 2 + 40); }
   }
   function cockpit() { // canopy struts and the dashboard, drawn over the view
@@ -603,7 +619,7 @@
       const px = cx + lx / RANGE * R, pz = cyy - lz / RANGE * R, behind = lz < 0, near = d < 650;
       if (Math.hypot(px - cx, pz - cyy) > R - 2) continue; glow(behind && near ? '#ff4d5e' : behind ? '#ffb23d' : '#5ff0ff', 8); ctx.globalAlpha = behind && near ? .6 + .4 * Math.sin(time * 9) : 1; ctx.beginPath(); ctx.arc(px, pz, 2 + r.size, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
     }
-    for (const e of jets) { const a = Math.cos(yaw), b = Math.sin(yaw), lx = e.x * a - e.z * b, lz = e.x * b + e.z * a, px = cx + lx / RANGE * R, pz = cyy - lz / RANGE * R; if (Math.hypot(px - cx, pz - cyy) > R - 2) continue; glow(e.alien ? '#9dff3a' : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d', 8); ctx.fillRect(px - 4, pz - 4, 8, 8); }
+    for (const e of jets) { const a = Math.cos(yaw), b = Math.sin(yaw), lx = e.x * a - e.z * b, lz = e.x * b + e.z * a, px = cx + lx / RANGE * R, pz = cyy - lz / RANGE * R; if (Math.hypot(px - cx, pz - cyy) > R - 2) continue; glow(e.alien ? acol(e) : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d', 8); ctx.fillRect(px - 4, pz - 4, 8, 8); }
     ctx.shadowBlur = 0; ctx.fillStyle = '#7f93c4'; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('AHEAD', cx, cyy - R - 6); ctx.fillText('BEHIND', cx, cyy + R + 14);
   }
   function reticle() {
@@ -619,7 +635,7 @@
     ctx.shadowBlur = 0; const bw = W * .2, bx = W * .06, by = H - 42;
     ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillText('SHIELD', bx + bw + 16, by - 8); ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.strokeRect(bx + bw + 16, by, W * .12, 14); ctx.fillStyle = shieldLock ? '#ff4d5e' : '#5dffa0'; ctx.fillRect(bx + bw + 18, by + 2, (W * .12 - 4) * energy / 100, 10);
     ctx.fillStyle = '#ffd23d'; ctx.fillText('BOMBS ' + '\u25CF'.repeat(grenades) + '\u25CB'.repeat(Math.max(0, 5 - grenades)), bx, by - 28);
-    if (target) { const d = Math.round(Math.hypot(target.x, target.y, target.z)); ctx.fillStyle = '#ffe066'; ctx.fillText('TARGET  ' + (target.alien ? 'ALIEN' : target.kind === 'attack' ? 'HUNTER' : 'RUNNER') + '   RNG ' + d + '   CLOSING ' + Math.round(target.close || 0), bx, by - 46); } ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillText('HULL', bx, by - 8);
+    if (target) { const d = Math.round(Math.hypot(target.x, target.y, target.z)); ctx.fillStyle = '#ffe066'; ctx.fillText('TARGET  ' + (target.alien ? alname(target) : target.kind === 'attack' ? 'HUNTER' : 'RUNNER') + '   RNG ' + d + '   CLOSING ' + Math.round(target.close || 0), bx, by - 46); } ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillText('HULL', bx, by - 8);
     ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.strokeRect(bx, by, bw, 14); ctx.fillStyle = hull > 50 ? '#5dffa0' : hull > 25 ? '#ffb23d' : '#ff4d5e'; ctx.fillRect(bx + 2, by + 2, (bw - 4) * hull / 100, 10);
     const h = (Math.round(((yaw % TAU) + TAU) % TAU / TAU * 360)); ctx.fillStyle = '#7f93c4'; ctx.textAlign = 'right'; if (incoming && Math.floor(time * 6) % 2) { glow('#ffa23d', 12); ctx.textAlign = 'center'; ctx.font = '700 22px "Share Tech Mono", monospace'; ctx.fillText('INCOMING FIRE', W / 2, H * .17); ctx.textAlign = 'right'; ctx.shadowBlur = 0; }
     ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; if (!touchMode) { ctx.textAlign = 'right'; ctx.fillText('SPACE shield  B bomb  T target  X turn  H help', W - W * .06, by - 8); } ctx.fillText('HDG ' + String(h).padStart(3, '0') + '   PITCH ' + Math.round(pitch * 57.3), W - W * .06, by + 12);
@@ -644,7 +660,7 @@
     ['LANDMARKS', 'The planets, sun, moon and station are far away and never get closer. They just swing across the view when you turn, so use them (and the heading tape at the top) to tell which way you are facing. The faint grid can be switched off under the screen.']];
   function computer() { // onboard computer: short call-outs from the ship, and a help screen you can open any time
     ctx.shadowBlur = 0; ctx.textAlign = 'center';
-    if (msg.t > 0 && !helpOpen && !over) { ctx.globalAlpha = Math.min(1, msg.t * 2); ctx.fillStyle = 'rgba(4,16,40,.8)'; ctx.font = '15px "Share Tech Mono", monospace'; const w = Math.min(W * .7, ctx.measureText(msg.text).width + 70); ctx.fillRect(W / 2 - w / 2, H * .205, w, 34); ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.strokeRect(W / 2 - w / 2, H * .205, w, 34); ctx.fillStyle = '#5ff0ff'; ctx.fillText(msg.text, W / 2, H * .205 + 22); ctx.globalAlpha = 1; }
+    if (msg.t > 0 && !helpOpen && !over && !TX.on) { ctx.globalAlpha = Math.min(1, msg.t * 2); ctx.fillStyle = 'rgba(4,16,40,.8)'; ctx.font = '15px "Share Tech Mono", monospace'; const w = Math.min(W * .7, ctx.measureText(msg.text).width + 70); ctx.fillRect(W / 2 - w / 2, H * .205, w, 34); ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.strokeRect(W / 2 - w / 2, H * .205, w, 34); ctx.fillStyle = '#5ff0ff'; ctx.fillText(msg.text, W / 2, H * .205 + 22); ctx.globalAlpha = 1; }
     if (!helpOpen) return;
     ctx.fillStyle = 'rgba(2,6,18,.92)'; ctx.fillRect(W * .1, H * .08, W * .8, H * .72); glow('#5ff0ff', 12); ctx.strokeStyle = '#5ff0ff'; ctx.lineWidth = 2; ctx.strokeRect(W * .1, H * .08, W * .8, H * .72); ctx.shadowBlur = 0;
     ctx.textAlign = 'left'; ctx.fillStyle = '#5ff0ff'; ctx.font = '700 26px "Space Grotesk", sans-serif'; ctx.fillText('ONBOARD COMPUTER', W * .13, H * .165);
@@ -660,7 +676,7 @@
     try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (x) { return null; }
     sfxBus = AC.createGain(); sfxBus.connect(AC.destination); radBus = AC.createGain(); an = AC.createAnalyser(); an.fftSize = 64; radBus.connect(an); an.connect(AC.destination);
     noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    AU.start(); DR.load(); return AC;
+    AU.start(); DR.load(); TX.load(); return AC;
   }
   const sfxOn = () => $('sfxon').checked, sfxLevel = () => +$('sfxv').value / 100;
   const AU = {
@@ -699,6 +715,65 @@
   };
 
 
+
+  // ===================== TRANSMISSIONS: distorted incoming comms =====================
+  const BRIEFS = {
+    MARS: { file: 'tx_mars.mp3', from: 'FLEET COMMAND', who: 'ADM. VEGA', job: 'KILL THE ALIEN FLAGSHIP', map: 'MARS',
+      lines: ['Captain, this is Fleet Command. Hold your course and listen carefully.', 'Long range scans have found an alien flagship hiding in the Mars sector.', 'It is the command ship directing every raider you have been fighting.', 'It is heavily armored, and it takes ten direct hits to destroy.', 'When you drop out of hyperspace, lock it with T and keep it in your sights.', 'Grenades only scratch it, so use your guns.', 'Take it down, and the raiders will scatter. Supplies are waiting at Mars.', 'The whole fleet is counting on you. Command out.'] }
+  };
+  const TX = { on: false, t: 0, dur: 30, spec: null, name: '', src: null, an: null, td: null, lvl: 0, gl: 0, nextGl: 1, ld: {},
+    load() { for (const k in BRIEFS) fetch(A + BRIEFS[k].file).then(r => r.arrayBuffer()).then(b => AC.decodeAudioData(b)).then(d => { this.ld[k] = d; }).catch(() => {}); },
+    start(name) { const sp = BRIEFS[name]; if (!sp || this.on) return; this.spec = sp; this.name = name; this.on = true; this.t = 0; this.dur = 32; this.lvl = 0; this.nextGl = .8; const b = this.ld[name];
+      if (b && AU.ok()) { this.dur = b.duration + 1.8; const s = AC.createBufferSource(), g = AC.createGain(); this.an = AC.createAnalyser(); this.an.fftSize = 512; this.td = new Uint8Array(512); s.buffer = b; g.gain.value = 1.6; s.connect(this.an); s.connect(g); g.connect(sfxBus); s.start(AC.currentTime + .8); this.src = s; } else this.an = null;
+      speaking = true; RAD.duck(RAD.ducking); AU.noise(.7, 3200, 500, .35, 'bandpass'); alog('sh', 'INCOMING TRANSMISSION: ' + sp.from + ' // ' + sp.who + '. Press C to skip.'); },
+    end() { if (!this.on) return; this.on = false; try { if (this.src) this.src.stop(); } catch (x) {} this.src = null; speaking = false; RAD.duck(RAD.ducking); AU.noise(.4, 2500, 300, .25, 'bandpass'); if (this.spec) alog('sh', 'JOB: ' + this.spec.job); },
+    tick(dt) { if (!this.on) return; this.t += dt;
+      if (this.an) { this.an.getByteTimeDomainData(this.td); let m = 0; for (let i = 0; i < 512; i++) { const v = (this.td[i] - 128) / 128; m += v * v; } this.lvl += (Math.min(1, Math.sqrt(m / 512) * 7) - this.lvl) * .5; } else this.lvl = this.t > .8 && this.t < this.dur - 1.5 ? Math.abs(Math.sin(this.t * 9)) * .6 : 0;
+      this.nextGl -= dt; if (this.nextGl <= 0) { this.gl = rnd(.15, .4); this.nextGl = rnd(1.2, 3.4); AU.noise(.15, 3600, 800, .16, 'bandpass'); } else this.gl = Math.max(0, this.gl - dt);
+      if (this.t >= this.dur) this.end(); },
+    caption() { const L = this.spec.lines, tot = L.reduce((a, l) => a + l.length, 0), t0 = .8, span = Math.max(1, this.dur - 1.8 - t0); let acc = 0; const u = this.t - t0;
+      for (const l of L) { const a = acc / tot * span, b = (acc + l.length) / tot * span; acc += l.length; if (u >= a && u < b) return l.slice(0, Math.ceil(l.length * Math.min(1, (u - a) / ((b - a) * .8)))); } return ''; }
+  };
+  function txDraw() {
+    if (!TX.on) return; const sp = TX.spec, t = TX.t, dur = TX.dur, k = Math.min(1, t / .45, (dur - t) / .35), X = W * .04, Y = H * .17, Wd = W * .44, Ht = H * .52, hh = Ht * Math.max(.03, k), y0 = Y + (Ht - hh) / 2, gl = TX.gl + (k < 1 ? .45 : 0), bg = '#021218';
+    ctx.save(); ctx.shadowBlur = 0; ctx.beginPath(); ctx.rect(X, y0, Wd, hh); ctx.clip(); ctx.fillStyle = 'rgba(2,18,24,.93)'; ctx.fillRect(X, y0, Wd, hh);
+    // header
+    ctx.fillStyle = 'rgba(255,60,80,.2)'; ctx.fillRect(X, Y, Wd, 26); ctx.fillStyle = Math.floor(time * 2.5) % 2 ? '#ff4d5e' : '#661a22'; ctx.beginPath(); ctx.arc(X + 14, Y + 13, 5, 0, TAU); ctx.fill();
+    ctx.font = '700 13px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillStyle = '#ff9aa4'; ctx.fillText('INCOMING TRANSMISSION', X + 28, Y + 18);
+    for (let i = 0; i < 5; i++) { const on = Math.random() > gl * 1.4 + .05 ? Math.sin(time * 3 + i) * .5 + .5 > i / 5 : false; ctx.fillStyle = on ? '#5dffa0' : '#1f3a3a'; ctx.fillRect(X + Wd - 56 + i * 9, Y + 20 - i * 3 - 4, 6, 4 + i * 3); }
+    ctx.font = '11px "Share Tech Mono", monospace'; ctx.fillStyle = '#6fb4c8'; ctx.fillText(sp.from + '  //  ' + sp.who + '   ENCRYPTION: DEGRADED', X + 10, Y + 42);
+    // hologram bust
+    const xL = X + 10, yL = Y + 52, wL = Wd * .46, hL = Ht * .56, cx = xL + wL / 2, cy = yL + hL * .42;
+    ctx.save(); ctx.beginPath(); ctx.rect(xL, yL, wL, hL); ctx.clip(); ctx.fillStyle = 'rgba(10,50,60,.35)'; ctx.fillRect(xL, yL, wL, hL);
+    const bust = (ox, col) => { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); const rx = 52, ry = 66, hy = cy - 28;
+      for (let y = -ry; y <= ry; y += 4) { const w = rx * Math.sqrt(1 - (y / ry) ** 2) * (y > ry * .35 ? 1 - (y - ry * .35) / ry * .55 : 1), off = ox + (gl > 0 ? Math.sin(y * .23 + time * 45) * gl * 55 * (Math.random() < .35 ? 1 : .15) : Math.sin(y * .07 + time * 3) * 1.4); ctx.moveTo(cx - w + off, hy + y); ctx.lineTo(cx + w + off, hy + y); }
+      for (let y = hy + ry * .8; y < yL + hL; y += 4) { const f = (y - (hy + ry * .8)) / (yL + hL - hy - ry * .8), w = 20 + f * f * 120 + f * 40, off = ox + (gl > 0 ? Math.sin(y * .2 + time * 40) * gl * 40 : 0); ctx.moveTo(cx - w + off, y); ctx.lineTo(cx + w + off, y); } ctx.stroke(); };
+    ctx.globalCompositeOperation = 'lighter'; bust(-3.5, 'rgba(255,70,100,.55)'); bust(3.5, 'rgba(70,255,255,.6)'); ctx.globalCompositeOperation = 'source-over'; bust(0, 'rgba(170,245,255,.55)');
+    const hy = cy - 28, blink = (time % 3.4) < .12; ctx.fillStyle = bg; if (!blink) { ctx.fillRect(cx - 28, hy - 14, 18, 5); ctx.fillRect(cx + 10, hy - 14, 18, 5); } else { ctx.fillRect(cx - 28, hy - 12, 18, 1.5); ctx.fillRect(cx + 10, hy - 12, 18, 1.5); }
+    ctx.fillRect(cx - 3, hy - 6, 6, 22); ctx.beginPath(); ctx.ellipse(cx, hy + 34, 15, 2 + TX.lvl * 11, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(200,250,255,.7)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, hy - 20, 58, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke(); ctx.fillStyle = 'rgba(255,210,80,.9)'; ctx.beginPath(); ctx.arc(cx, hy - 76, 5, 0, TAU); ctx.fill();
+    ctx.restore(); ctx.strokeStyle = 'rgba(95,240,255,.35)'; ctx.lineWidth = 1; ctx.strokeRect(xL, yL, wL, hL);
+    // tactical map
+    const xR = X + Wd * .52, wR = Wd * .46, mcx = xR + wR / 2, mcy = yL + hL / 2, pr = hL * .26, rt = ROUTE.find(r => r.n === sp.map);
+    ctx.save(); ctx.beginPath(); ctx.rect(xR, yL, wR, hL); ctx.clip(); ctx.fillStyle = 'rgba(5,24,34,.8)'; ctx.fillRect(xR, yL, wR, hL); ctx.strokeStyle = 'rgba(95,240,255,.14)'; ctx.lineWidth = 1;
+    for (let g = 0; g < wR; g += 24) { ctx.beginPath(); ctx.moveTo(xR + g, yL); ctx.lineTo(xR + g, yL + hL); ctx.stroke(); } for (let g = 0; g < hL; g += 24) { ctx.beginPath(); ctx.moveTo(xR, yL + g); ctx.lineTo(xR + wR, yL + g); ctx.stroke(); }
+    drawBody(rt.t, mcx, mcy, pr); ctx.strokeStyle = 'rgba(95,240,255,.35)'; for (const q of [1.6, 2.3]) { ctx.beginPath(); ctx.ellipse(mcx, mcy, pr * q, pr * q * .45, -.3, 0, TAU); ctx.stroke(); }
+    const sw = time * 1.6; ctx.strokeStyle = 'rgba(93,255,160,.5)'; ctx.beginPath(); ctx.moveTo(mcx, mcy); ctx.lineTo(mcx + Math.cos(sw) * wR * .5, mcy + Math.sin(sw) * hL * .5); ctx.stroke();
+    const pg = Math.min(1, t / (dur - 2)), sx = xR + 14 + pg * (mcx - pr * 1.9 - xR - 14), sy = yL + hL - 22 - pg * (hL * .3); ctx.fillStyle = '#5ff0ff'; ctx.beginPath(); ctx.moveTo(sx, sy - 5); ctx.lineTo(sx - 4, sy + 4); ctx.lineTo(sx + 4, sy + 4); ctx.fill(); ctx.font = '10px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillText('YOU', sx + 7, sy + 4);
+    ctx.setLineDash([3, 4]); ctx.strokeStyle = 'rgba(95,240,255,.5)'; ctx.beginPath(); ctx.moveTo(xR + 14, yL + hL - 22); ctx.lineTo(sx, sy); ctx.stroke(); ctx.setLineDash([]);
+    if (t > 8) { const tx0 = mcx + pr * 1.7, ty0 = mcy + pr * .55, pulse = (time * 1.5) % 1; ctx.strokeStyle = `rgba(255,70,90,${1 - pulse})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(tx0, ty0, 8 + pulse * 22, 0, TAU); ctx.stroke(); ctx.strokeStyle = '#ff4d5e'; ctx.beginPath(); ctx.moveTo(tx0 - 10, ty0); ctx.lineTo(tx0 + 10, ty0); ctx.moveTo(tx0, ty0 - 10); ctx.lineTo(tx0, ty0 + 10); ctx.stroke(); ctx.fillStyle = '#ff9aa4'; ctx.fillText('ALIEN FLAGSHIP', tx0 - 40, ty0 + 24); ctx.fillStyle = '#ffd23d'; ctx.fillText('ARMOR: 10 HITS', tx0 - 40, ty0 + 36); }
+    ctx.restore(); ctx.strokeStyle = 'rgba(95,240,255,.35)'; ctx.strokeRect(xR, yL, wR, hL);
+    // caption + job
+    ctx.font = '13px "Share Tech Mono", monospace'; ctx.fillStyle = '#c4f2ff'; ctx.textAlign = 'left'; const cap = TX.caption(); if (cap) wrap(cap, X + 12, Y + Ht - 54, Wd - 24, 17);
+    if (t > dur - 7) { ctx.font = '700 14px "Share Tech Mono", monospace'; ctx.fillStyle = Math.floor(time * 3) % 2 ? '#ffd23d' : '#ff9a3d'; ctx.fillText('JOB: ' + sp.job, X + 12, Y + Ht - 10); }
+    ctx.font = '10px "Share Tech Mono", monospace'; ctx.fillStyle = '#4f7f90'; ctx.textAlign = 'right'; ctx.fillText('[C] SKIP', X + Wd - 8, Y + Ht - 8); ctx.fillStyle = 'rgba(95,240,255,.5)'; ctx.fillRect(X, Y + Ht - 3, Wd * Math.min(1, t / dur), 3);
+    // distortion overlays
+    for (let i = 0; i < 160; i++) { ctx.fillStyle = `rgba(200,240,255,${Math.random() * (.12 + gl * .5)})`; ctx.fillRect(X + Math.random() * Wd, Y + Math.random() * Ht, 1 + Math.random() * 3, 1); }
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; for (let y = Y; y < Y + Ht; y += 3) ctx.fillRect(X, y, Wd, 1);
+    const rb = ((time * 90) % (Ht + 80)) - 40; ctx.fillStyle = 'rgba(180,255,255,.07)'; ctx.fillRect(X, Y + rb, Wd, 40);
+    if (gl > 0) { for (let i = 0; i < 4; i++) { const sy2 = Y + 30 + Math.random() * (Ht - 80), sh = 6 + Math.random() * 20, dx = (Math.random() - .5) * gl * 160; try { ctx.drawImage(cv, X, sy2, Wd, sh, X + dx, sy2, Wd, sh); } catch (x) {} } if (gl > .3) { ctx.fillStyle = 'rgba(180,230,255,.12)'; ctx.fillRect(X, Y, Wd, Ht); } }
+    ctx.restore(); ctx.save(); ctx.shadowColor = '#5ff0ff'; ctx.shadowBlur = 14; ctx.strokeStyle = 'rgba(95,240,255,.8)'; ctx.lineWidth = 2; ctx.strokeRect(X, y0, Wd, hh); ctx.restore();
+  }
+
   // ===================== BLIP: the astromech droid =====================
   const DRL = {
     happy: ['Woohoo! New sector, boss. We got this!', 'Beep boop! I knew you could do it!', 'Supplies restocked. Good job, Captain!'],
@@ -715,7 +790,7 @@
   const DRC = { happy: 'h', alarm: 'a', curious: 'c', sad: 's', proud: 'p', ack: 'k', alien: 'l', hyper: 'y', belt: 'b', arrive: 'r' };
   const DR = { buf: {}, cd: 0, loaded: false, busy: 0,
     load() { if (this.loaded || !AC) return; this.loaded = true; for (const k in DRL) DRL[k].forEach((_, n) => fetch(A + 'droid_' + DRC[k] + (n + 1) + '.mp3').then(r => r.arrayBuffer()).then(b => AC.decodeAudioData(b)).then(d => { this.buf[k + n] = d; }).catch(() => {})); },
-    say(kind, force) { const now = time; if (!AU.ok()) return; if (now < this.busy) return; if (!force && (now < this.cd || Math.random() > .65)) return; if (force && now < this.cd - 5) return;
+    say(kind, force) { const now = time; if (!AU.ok() || TX.on) return; if (now < this.busy) return; if (!force && (now < this.cd || Math.random() > .65)) return; if (force && now < this.cd - 5) return;
       const n = Math.floor(Math.random() * DRL[kind].length), b = this.buf[kind + n]; if (!b) return; this.cd = now + (force ? 6 : 10); this.busy = now + b.duration + .3;
       const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = b; g.gain.value = 1.4; s.connect(g); g.connect(sfxBus); s.start(); alog('dr', 'BLIP: ' + DRL[kind][n]); }
   };
@@ -787,7 +862,7 @@
     setT('nvLoc', J.phase === 'transit' ? 'HYPERSPACE' : ROUTE[J.i].n); setT('nvObj', J.phase === 'transit' ? 'Survive the trip. ETA ' + fmtT(J.dur - J.t) : J.done ? 'Journey complete' : 'Destroy hostiles: wave ' + Math.min(J.need, J.cleared + 1) + ' of ' + J.need);
     setT('nvNext', ROUTE[J.i + 1] ? (J.phase === 'transit' ? ROUTE[J.i + 1].n : ROUTE[J.i + 1].n + ' (after ' + J.need + ' waves)') : '-'); setW('mNav', Math.round(J.phase === 'transit' ? J.t / J.dur * 100 : (J.cleared + (J.waveLive ? .4 : 0)) / J.need * 100));
     if (pc.route !== J.i + J.phase + J.done) { pc.route = J.i + J.phase + J.done; $('route').innerHTML = ROUTE.map((q, k) => '<span class="' + (k < J.i || (J.done && k === J.i) ? 'done' : k === J.i ? 'cur' : '') + '" title="' + q.n + '">' + q.n.slice(0, 3) + '</span>').join(''); }
-    lamp('lInc', !!incoming); lamp('lSix', sixT > .6); lamp('lRock', rc); lamp('lHull', hull < 30 && hull > 0); lamp('lShl', false, shieldOn); lamp('lTgt', false, !!target); setT('lTgt', target ? (target.alien ? 'LOCK: ALIEN' : target.kind === 'attack' ? 'LOCK: HUNTER' : 'LOCK: RUNNER') : 'NO LOCK'); }
+    lamp('lInc', !!incoming); lamp('lSix', sixT > .6); lamp('lRock', rc); lamp('lHull', hull < 30 && hull > 0); lamp('lShl', false, shieldOn); lamp('lTgt', false, !!target); setT('lTgt', target ? (target.alien ? 'LOCK: ' + alname(target) : target.kind === 'attack' ? 'LOCK: HUNTER' : 'LOCK: RUNNER') : 'NO LOCK'); }
 
   // ===================== ARIA: ship advisor =====================
   let speaking = false;
@@ -852,7 +927,7 @@
       rec.onresult = ev => { const t = ev.results[0][0].transcript; aria(t); }; rec.onerror = ev => { if (ev.error === 'not-allowed') alog('sh', 'Microphone blocked. Allow it in the browser address bar to talk to ARIA.'); };
       rec.onend = () => { live = false; mic.classList.remove('live'); mic.textContent = 'MIC'; }; try { rec.start(); } catch (x) {} }); } }
   RAD.init();
-  window.G = Object.assign(window.G || {}, { RAD, aria, AU, advise, J, ROUTE, beginTransit, arrive, addJet, jets, rocks, DR, buildLM, setYaw: v => { yaw = v; } });
+  window.G = Object.assign(window.G || {}, { RAD, aria, AU, advise, J, ROUTE, beginTransit, arrive, addJet, jets, rocks, DR, buildLM, TX, setYaw: v => { yaw = v; } });
   let last = performance.now();
   function loop(t) { if (arrowShown && !warned.arrows && time > 4) { warned.arrows = 1; say('Arrows at the screen edge point to things you cannot see. Turn toward them.', 6); } const dt = Math.min(.05, (t - last) / 1000); last = t; update(dt); draw(); AU.tick(dt); panel(dt); viz(); requestAnimationFrame(loop); }
   reset(); requestAnimationFrame(loop);
