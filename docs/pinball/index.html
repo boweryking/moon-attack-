@@ -39,7 +39,7 @@
     <div class="panel"><h1>Silver Ball</h1><p class="sub">An old-fashioned pinball table with real physics: gravity down a tilted playfield, bouncing, spring plunger and flippers that swing as solid bodies.</p></div>
     <div class="panel"><h2>Score</h2><div class="reels" id="score">0000000</div>
       <div class="row">BALL <b id="ball">-</b></div><div class="row">HIGH SCORE <b id="hi">0</b></div><div class="row">BONUS <b id="bonus">0</b> &times; <b id="mult">1</b></div>
-      <div class="lights" id="lanes"><div class="lt">1</div><div class="lt">2</div><div class="lt">3</div></div><div class="lights" id="tgts"><div class="lt">A</div><div class="lt">B</div><div class="lt">C</div><div class="lt">D</div></div>
+      <div class="lights" id="lanes"><div class="lt">1</div><div class="lt">2</div><div class="lt">3</div></div><div class="lights" id="tgts"><div class="lt">A</div><div class="lt">B</div><div class="lt">C</div><div class="lt">D</div></div><div class="lights" id="drops"><div class="lt">DROP</div><div class="lt">DROP</div><div class="lt">DROP</div></div><div class="lights" id="lows"><div class="lt">IN</div><div class="lt">IN</div><div class="lt">OUT</div><div class="lt">OUT</div></div>
       <div class="sub">Top lanes and the four side targets build your bonus. Light all four targets to raise the multiplier.</div></div>
     <button id="start" type="button">START GAME</button>
     <div class="panel keys"><h2>Controls</h2><kbd>Z</kbd> <kbd>&larr;</kbd> left flipper &nbsp; <kbd>/</kbd> <kbd>&rarr;</kbd> right flipper<br>Hold <kbd>Space</kbd> to pull the plunger back, let go to shoot<br><kbd>A</kbd> <kbd>D</kbd> shove the table left or right, <kbd>W</kbd> bump it. Too much and it TILTS.<br>On a phone: touch the left or right half of the table for the flippers, and press and hold the shooter lane on the right to pull the plunger.</div>
@@ -54,7 +54,8 @@
       <label class="sl" for="pBounce">Wall bounce <span id="vBounce"></span><input id="pBounce" type="range" min="20" max="90" step="5" value="55"></label>
       <label class="sl" for="pTime">Time speed <span id="vTime"></span><input id="pTime" type="range" min="5" max="100" step="5" value="100"></label>
       <label class="chk" for="pTrail"><input id="pTrail" type="checkbox"> Show the ball's path</label>
-      <label class="chk" for="pSound"><input id="pSound" type="checkbox" checked> Sound</label></div>
+      <label class="chk" for="pSound"><input id="pSound" type="checkbox" checked> Sound effects</label>
+      <label class="chk" for="pMusic"><input id="pMusic" type="checkbox" checked> Music</label><label class="sl" for="pMvol">Music volume <span id="vMvol"></span><input id="pMvol" type="range" min="0" max="100" step="5" value="45"></label><button id="nextTune" type="button" style="width:100%">Next tune</button></div>
   </div>
 </div>
 <div id="touch"><button id="tL" type="button">LEFT</button><button id="tP" type="button">SHOOT</button><button id="tN" type="button">NUDGE</button><button id="tR" type="button">RIGHT</button></div>
@@ -95,6 +96,12 @@
   const LANES = [{ x1: 140, x2: 250, lit: 0, cx: 221 }, { x1: 250, x2: 308, lit: 0, cx: 279 }, { x1: 308, x2: 420, lit: 0, cx: 337 }];
   // the flippers: pivot, length, tapered radii, resting and raised angles
   const FL = [{ s: 1, px: 185, py: 985, L: 70, r0: 17, r1: 9, rest: .5, up: -.45, th: .5, w: 0, on: false }, { s: -1, px: 373, py: 985, L: 70, r0: 17, r1: 9, rest: .5, up: -.45, th: .5, w: 0, on: false }];
+  // a bank of three drop targets, free-standing posts, a spinner, a saucer (kick-out hole) and rollover buttons in the in/outlanes
+  const DROPS = [0, 1, 2].map(i => ({ i, x: 92, y1: 420 + i * 36, y2: 452 + i * 36, down: false, f: 0 })); for (const d of DROPS) seg(d.x, d.y1, d.x, d.y2, { drop: d, e: .35 });
+  const POSTS = [{ x: 140, y: 595, r: 9 }, { x: 418, y: 595, r: 9 }, { x: 279, y: 235, r: 10 }];
+  const SPIN = { x: 470, y: 500, ang: 0, w: 0, inside: false, acc: 0 };
+  const SAUCER = { x: 90, y: 612, r: 20, held: false, t: 0, cool: 0 };
+  const LOWS = [{ x: 84, y: 840, lit: 0 }, { x: 474, y: 840, lit: 0 }, { x: 42, y: 860, lit: 0 }, { x: 516, y: 860, lit: 0 }];
   const PL = { x: 555, y0: 1050, pull: 0, pv: 0, max: 56, K: 1800, held: false, rest: true };
 
   // ===================== THE BALL AND THE GAME =====================
@@ -105,7 +112,7 @@
   function say(t, s = 2.2) { G.msg = t; G.msgT = s; }
   function addScore(n) { G.score += n; AUDIO.bell(n); if (!G.free && G.score >= 25000) { G.free = true; G.balls++; say('FREE BALL!', 2.5); } if (G.score > G.hi) { G.hi = G.score; try { localStorage.setItem('pb_hi', G.hi); } catch (x) {} } }
   function resetBall() { ball.x = PL.x; ball.y = PL.y0 - P.R - 0.5; ball.vx = ball.vy = 0; PL.pull = PL.pv = 0; PL.held = false; G.plunged = false; G.stuckT = 0; G.trail.length = 0; }
-  function newGame() { G.score = 0; G.balls = 3; G.ballNo = 1; G.bonus = 0; G.mult = 1; G.tilted = false; G.tiltMeter = 0; G.free = false; for (const t of TGT) t.lit = 0; for (const l of LANES) l.lit = 0; resetBall(); G.state = 'ready'; say('HOLD SPACE, THEN LET GO', 3); }
+  function newGame() { G.score = 0; G.balls = 3; G.ballNo = 1; G.bonus = 0; G.mult = 1; G.tilted = false; G.tiltMeter = 0; G.free = false; for (const t of TGT) t.lit = 0; for (const l of LANES) l.lit = 0; for (const d of DROPS) d.down = false; for (const l of LOWS) l.lit = 0; SAUCER.held = false; resetBall(); G.state = 'ready'; MUS.start(); say('HOLD SPACE, THEN LET GO', 3); }
 
   // ===================== SOUND: everything synthesised =====================
   const AUDIO = { ac: null, out: null, roll: null,
@@ -130,6 +137,7 @@
     const eff = -vn < 90 ? 0 : e; const jn = -(1 + eff) * vn; ball.vx += jn * nx; ball.vy += jn * ny;
     const tx = -ny, ty = nx, vt = ball.vx * tx + ball.vy * ty, ft = clamp(mu * jn, 0, Math.abs(vt)); ball.vx -= Math.sign(vt) * ft * tx; ball.vy -= Math.sign(vt) * ft * ty; }
   function hitSegment(s) {
+    if (s.drop && s.drop.down) return;
     const dx = s.x2 - s.x1, dy = s.y2 - s.y1, l2 = dx * dx + dy * dy; let t = clamp(((ball.x - s.x1) * dx + (ball.y - s.y1) * dy) / l2, 0, 1);
     const qx = s.x1 + t * dx, qy = s.y1 + t * dy; let nx = ball.x - qx, ny = ball.y - qy; const d2 = nx * nx + ny * ny; if (d2 >= P.R * P.R) return;
     if (s.gate && (ball.x - s.x1) * s.nx + (ball.y - s.y1) * s.ny < 0) return; // a one-way gate lets the ball through from the lane side
@@ -137,6 +145,7 @@
     ball.x += nx * (P.R - d); ball.y += ny * (P.R - d); const vn = ball.vx * nx + ball.vy * ny; if (vn >= 0) return;
     const e = s.e * (P.bounce / .55); respond(vn, nx, ny, Math.min(e, .95), s.mu);
     if (s.sling && -vn > 110 && ny < 0.2 + 1) { const sl = s.sling; ball.vx += nx * P.sling; ball.vy += ny * P.sling; sl.f = 1; addScore(10); AUDIO.snap(); G.bonus += 0; return; }
+    if (s.drop && -vn > 60) { const d = s.drop; d.down = true; d.f = 1; AUDIO.ting(); addScore(500); G.bonus += 500; if (DROPS.every(q => q.down)) { addScore(3000); G.bonus += 2000; say('DROP BANK  3000', 2.2); G.dropReset = 1.4; } return; }
     if (s.target && -vn > 60) { const tg = s.target; tg.f = 1; AUDIO.ting(); if (!tg.lit) { tg.lit = 1; G.bonus += 1000; } addScore(1000); if (TGT.every(q => q.lit)) { for (const q of TGT) q.lit = 0; G.mult = Math.min(5, G.mult + 1); addScore(3000); say('BONUS x' + G.mult, 2.2); } return; }
     if (-vn > 250) AUDIO.thud(-vn);
   }
@@ -159,24 +168,34 @@
     if (moving && jn > 400) AUDIO.thud(jn * 1.4); }
   function hitPlunger() {
     if (ball.x < 540 || ball.x > 570) return; const tip = PL.y0 + PL.pull; if (ball.y + P.R > tip && ball.y < tip + 10) { ball.y = tip - P.R; const rel = ball.vy - PL.pv; if (rel > 0) ball.vy = PL.pv - .05 * rel; } }
+  function hitPost(p) { let nx = ball.x - p.x, ny = ball.y - p.y; const d = Math.hypot(nx, ny), R = P.R + p.r; if (d >= R) return; if (d < 1e-6) { nx = 0; ny = -1; } else { nx /= d; ny /= d; } ball.x = p.x + nx * R; ball.y = p.y + ny * R; const vn = ball.vx * nx + ball.vy * ny; if (vn < 0) { respond(vn, nx, ny, .6 * (P.bounce / .55), .05); if (-vn > 250) AUDIO.thud(-vn); } }
+  function saucerAward() { addScore(2500); G.bonus += 500; AUDIO.tone(200, 90, .25, 'square', .14); AUDIO.ting(); const k = Math.floor(Math.random() * 3); if (k === 0) { addScore(2500); say('SAUCER JACKPOT  5000', 2.4); } else if (k === 1) { G.mult = Math.min(5, G.mult + 1); say('SAUCER: BONUS x' + G.mult, 2.4); } else { G.bonus += 2000; say('SAUCER: BONUS +2000', 2.4); } }
   function stepPhysics(dt) {
     // flippers swing at a fixed angular speed (fast up, slower on the way back down), stopping at their end stops
     for (const [i, f] of FL.entries()) { const goal = f.on && !G.tilted ? f.up : f.rest, sp = f.on && !G.tilted ? P.flipW : P.flipW * .75; if (Math.abs(f.th - goal) < 1e-6) { f.w = 0; } else { const dir = Math.sign(goal - f.th); f.w = dir * sp; f.th += f.w * dt; if ((goal - f.th) * dir < 0) { f.th = goal; f.w = 0; } } }
     // plunger: held back by your finger, then driven by a spring (force proportional to how far it is pulled back)
     if (PL.held) { PL.pv = PL.pull < PL.max ? 120 : 0; PL.pull = Math.min(PL.max, PL.pull + PL.pv * dt); } else if (PL.pull > 0 || PL.pv !== 0) { PL.pv += -PL.K * PL.pull * dt; PL.pull += PL.pv * dt; if (PL.pull <= 0) { PL.pull = 0; PL.pv = 0; } }
+    if (SAUCER.held) { SAUCER.t -= dt; ball.x = SAUCER.x; ball.y = SAUCER.y; ball.vx = ball.vy = 0; if (SAUCER.t <= 0) { SAUCER.held = false; SAUCER.cool = .8; ball.vx = 850; ball.vy = -1150; AUDIO.snap(); } return; }
+    SAUCER.cool = Math.max(0, SAUCER.cool - dt);
     ball.vy += gAlong() * dt; ball.x += ball.vx * dt; ball.y += ball.vy * dt; const drag = 1 - .06 * dt; ball.vx *= drag; ball.vy *= drag;
-    for (let pass = 0; pass < 2; pass++) { for (const s of segs) hitSegment(s); for (const b of BUMPERS) hitBumper(b); for (const f of FL) hitFlipper(f); hitPlunger(); }
+    for (let pass = 0; pass < 2; pass++) { for (const s of segs) hitSegment(s); for (const b of BUMPERS) hitBumper(b); for (const f of FL) hitFlipper(f); hitPlunger(); for (const p of POSTS) hitPost(p); }
+    // spinner: the ball passes through the blade and sets it spinning
+    if (Math.abs(ball.x - SPIN.x) < 24 && Math.abs(ball.y - SPIN.y) < 9) { if (!SPIN.inside) { SPIN.inside = true; SPIN.w = Math.min(75, SPIN.w + Math.hypot(ball.vx, ball.vy) * .03); ball.vx *= .97; ball.vy *= .97; } } else SPIN.inside = false;
+    // saucer: a slow ball that rolls over the hole drops in, is held for a moment, then kicked back out
+    if (!SAUCER.cool && !SAUCER.held && G.state === 'play' && Math.hypot(ball.x - SAUCER.x, ball.y - SAUCER.y) < 14 && Math.hypot(ball.vx, ball.vy) < 2200) { SAUCER.held = true; SAUCER.t = 1.2; saucerAward(); }
   }
-  function lanesCheck() { if (ball.y > 80 && ball.y < 125 && ball.x < 420 && ball.vy > 0) for (const l of LANES) if (ball.x >= l.x1 && ball.x < l.x2 && !l.lit) { l.lit = 1; G.bonus += 500; addScore(500); AUDIO.tick(900); if (LANES.every(q => q.lit)) { for (const q of LANES) q.lit = 0; addScore(5000); G.bonus += 2000; say('LANES COMPLETE', 2); } } }
+  function lanesCheck() { for (const l of LOWS) if (!l.lit && Math.hypot(ball.x - l.x, ball.y - l.y) < 16) { l.lit = 1; addScore(250); G.bonus += 250; AUDIO.tick(1600); if (LOWS.every(q => q.lit)) { for (const q of LOWS) q.lit = 0; addScore(5000); G.bonus += 2000; say('ROLLOVERS  5000', 2); } } if (ball.y > 80 && ball.y < 125 && ball.x < 420 && ball.vy > 0) for (const l of LANES) if (ball.x >= l.x1 && ball.x < l.x2 && !l.lit) { l.lit = 1; G.bonus += 500; addScore(500); AUDIO.tick(900); if (LANES.every(q => q.lit)) { for (const q of LANES) q.lit = 0; addScore(5000); G.bonus += 2000; say('LANES COMPLETE', 2); } } }
 
   // ===================== GAME FLOW =====================
   function drained() {
     G.state = 'drain'; G.drainT = 0; AUDIO.drain(); if (G.tilted) { G.bonusPaid = 0; say('TILT: NO BONUS', 2.4); } else { G.bonusPaid = G.bonus * G.mult; if (G.bonusPaid) { addScore(G.bonusPaid); say('BONUS ' + G.bonus + ' x ' + G.mult, 2.4); } } }
-  function nextBall() { G.bonus = 0; G.mult = 1; G.tilted = false; G.tiltMeter = 0; for (const t of TGT) t.lit = 0; G.ballNo++; G.balls--; if (G.balls <= 0) { G.state = 'over'; say('GAME OVER', 5); return; } resetBall(); G.state = 'ready'; say('BALL ' + G.ballNo, 2); }
+  function nextBall() { G.bonus = 0; G.mult = 1; G.tilted = false; G.tiltMeter = 0; for (const t of TGT) t.lit = 0; for (const d of DROPS) d.down = false; SAUCER.held = false; G.ballNo++; G.balls--; if (G.balls <= 0) { G.state = 'over'; say('GAME OVER', 5); MUS.stop(); return; } resetBall(); G.state = 'ready'; say('BALL ' + G.ballNo, 2); }
   function nudge(dx, dy) { if (G.state !== 'play') return; ball.vx += dx; ball.vy += dy; G.tiltMeter += 1; G.shake = 1; AUDIO.thud(2500); if (G.tiltMeter >= 3.2 && !G.tilted) { G.tilted = true; for (const f of FL) f.on = false; say('TILT', 3); AUDIO.tilt(); } }
   function update(dtFrame) {
     const dt = Math.min(dtFrame, 1 / 30) * P.time, steps = clamp(Math.ceil(dt / .0008), 1, 60), h = dt / steps;
     if (G.state === 'ready' || G.state === 'play') { for (let i = 0; i < steps; i++) stepPhysics(h); } else if (G.state === 'drain') { G.drainT += dtFrame; if (G.drainT > 2.4) nextBall(); } else { for (const f of FL) { f.th += (f.rest - f.th) * .2; } }
+    SPIN.ang += SPIN.w * dtFrame; SPIN.w *= Math.exp(-1.1 * dtFrame); if (SPIN.w < .5) SPIN.w = 0; SPIN.acc += SPIN.w * dtFrame; while (SPIN.acc > Math.PI) { SPIN.acc -= Math.PI; addScore(100); AUDIO.tick(1800); }
+    if (G.dropReset > 0) { G.dropReset -= dtFrame; if (G.dropReset <= 0) { for (const d of DROPS) d.down = false; AUDIO.tone(500, 900, .12, 'square', .08); } } for (const d of DROPS) d.f = Math.max(0, d.f - dtFrame * 4);
     G.tiltMeter = Math.max(0, G.tiltMeter - dtFrame * .45); G.shake = Math.max(0, G.shake - dtFrame * 5); if (G.msgT > 0) G.msgT -= dtFrame;
     for (const b of BUMPERS) b.f = Math.max(0, b.f - dtFrame * 6); for (const t of TGT) t.f = Math.max(0, t.f - dtFrame * 4); for (const s of SLINGS) s.f = Math.max(0, s.f - dtFrame * 7);
     if (G.state === 'play') {
@@ -184,6 +203,7 @@
       if (ball.x < 538 && ball.y > 1100) { drained(); }
       else if (ball.y > 1180 || ball.y < -60 || ball.x < -40 || ball.x > W + 40) { resetBall(); G.state = 'ready'; say('BALL RETURNED', 2); }
       if (!G.plunged && ball.x < 536) G.plunged = true;
+      if (ball.x > 538 && ball.y > 1000 && spd < 80) { G.state = 'ready'; G.plunged = false; PL.held = false; say('BALL BACK IN THE LANE: SHOOT AGAIN', 2.2); }
       if (spd < 12 && G.plunged) { G.stuckT += dtFrame; if (G.stuckT > 3.5) { ball.vx += rnd(-260, 260); ball.vy -= 200; G.stuckT = 0; } } else G.stuckT = 0;
       AUDIO.tickRoll(spd, ball.y < 1100); ball.rot += (ball.vx * dt) / P.R;
     } else AUDIO.tickRoll(0, false);
@@ -192,7 +212,7 @@
 
   // ===================== INPUT =====================
   function setFlip(i, on) { const f = FL[i]; if (G.tilted && on) return; if (f.on !== on) { f.on = on; if (G.state === 'play' || G.state === 'ready') AUDIO.flip(on); } }
-  function plungerDown() { AUDIO.init(); if (G.state === 'idle' || G.state === 'over') { newGame(); return; } if (G.state === 'ready') PL.held = true; }
+  function plungerDown() { AUDIO.init(); if (G.state === 'idle' || G.state === 'over') { newGame(); return; } if (G.state === 'ready') PL.held = true; else if (G.state === 'play' && ball.x > 538 && ball.y > 1000) { G.state = 'ready'; G.plunged = false; PL.held = true; } }
   function plungerUp() { if (PL.held) { PL.held = false; const v = PL.pull * Math.sqrt(PL.K); if (G.state === 'ready' && PL.pull > 4) { G.state = 'play'; AUDIO.plunge(v); } } }
   const KEYFL = { KeyZ: 0, ArrowLeft: 0, ShiftLeft: 0, Slash: 1, ArrowRight: 1, ShiftRight: 1, KeyM: 1 };
   addEventListener('keydown', e => { AUDIO.init(); if (e.target && e.target.matches && e.target.matches('input[type=range]') && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) return; if (e.code in KEYFL) { setFlip(KEYFL[e.code], true); e.preventDefault(); } if (e.repeat) return;
@@ -209,6 +229,8 @@
   $('tN').addEventListener('pointerdown', e => { nudge(380 * (Math.random() < .5 ? 1 : -1), -200); e.preventDefault(); });
   const sl = (id, k, f, fmt) => { const el = $(id), v = $('v' + id.slice(1)); const set = () => { P[k] = f(+el.value); v.textContent = fmt(+el.value); }; el.addEventListener('input', set); set(); };
   sl('pTilt', 'tilt', v => v, v => v.toFixed(1) + '°'); sl('pFlip', 'flipW', v => v, v => v + ' rad/s'); sl('pKick', 'kick', v => v, v => (v / 1000).toFixed(1) + ' m/s'); sl('pBounce', 'bounce', v => v / 100, v => v + '%'); sl('pTime', 'time', v => v / 100, v => v + '%');
+  const MUS = { a: new Audio(), i: 0, on: true, tunes: ['audio/pinball_ragtime.mp3', 'audio/pinball_surf.mp3'], play() { if (!this.on) return; this.a.src = this.tunes[this.i]; this.a.loop = true; this.a.play().catch(() => {}); }, start() { if (!this.on) return; if (!this.a.src || this.a.paused) this.play(); }, stop() { this.a.pause(); }, next() { this.i = (this.i + 1) % this.tunes.length; this.play(); } };
+  MUS.a.volume = .45; $('pMusic').addEventListener('change', e => { MUS.on = e.target.checked; if (MUS.on) { if (G.state !== 'idle' && G.state !== 'over') MUS.play(); } else MUS.stop(); }); $('pMvol').addEventListener('input', e => { MUS.a.volume = +e.target.value / 100; $('vMvol').textContent = e.target.value + '%'; }); $('vMvol').textContent = '45%'; $('nextTune').addEventListener('click', () => { MUS.on = true; $('pMusic').checked = true; MUS.next(); $('nextTune').blur(); });
   $('pTrail').addEventListener('change', e => { P.trail = e.target.checked; }); $('pSound').addEventListener('change', e => { P.sound = e.target.checked; });
 
   // ===================== DRAWING =====================
@@ -224,7 +246,7 @@
     A.fillStyle = 'rgba(255,200,90,.16)'; star(A, 279, 660, 190, 95, 8); A.fill(); A.strokeStyle = 'rgba(255,225,150,.4)'; A.lineWidth = 3; A.stroke();
     A.strokeStyle = 'rgba(226,72,59,.55)'; A.lineWidth = 8; A.beginPath(); A.arc(279, 660, 88, 0, TAU); A.stroke(); A.strokeStyle = 'rgba(255,240,200,.5)'; A.lineWidth = 3; A.beginPath(); A.arc(279, 660, 108, 0, TAU); A.stroke();
     A.fillStyle = 'rgba(255,240,200,.65)'; A.font = '700 34px "Space Grotesk", sans-serif'; A.textAlign = 'center'; A.fillText('SILVER BALL', 279, 672); A.font = '700 13px "Space Grotesk", sans-serif'; A.fillStyle = 'rgba(255,240,200,.5)'; A.fillText('★  FIVE  ★  BALL  ★  ORIGINAL  ★', 279, 698);
-    A.fillStyle = 'rgba(255,240,200,.35)'; A.font = '700 12px "Space Grotesk", sans-serif'; A.fillText('OUT', 42, 842); A.fillText('OUT', 516, 842); A.fillText('IN', 90, 818); A.fillText('IN', 468, 818); A.fillText('SHOOT', 555, 350);
+    A.fillStyle = 'rgba(255,240,200,.35)'; A.font = '700 12px "Space Grotesk", sans-serif'; A.fillText('OUT', 42, 842); A.fillText('OUT', 516, 842); A.fillText('IN', 90, 818); A.fillText('IN', 468, 818); A.fillText('SHOOT', 555, 350); A.fillText('SPIN', SPIN.x, SPIN.y - 24); A.fillText('SAUCER', SAUCER.x, SAUCER.y + 40); A.fillText('DROP BANK', 92, 408);
     A.strokeStyle = 'rgba(255,240,200,.3)'; A.lineWidth = 3; for (const l of LANES) { A.beginPath(); A.moveTo(l.cx, 150); A.lineTo(l.cx, 210); A.lineTo(l.cx - 7, 200); A.moveTo(l.cx, 210); A.lineTo(l.cx + 7, 200); A.stroke(); }
     A.restore();
     // chrome rails
@@ -240,6 +262,12 @@
     // lane lights and targets
     for (const l of LANES) { const g = ctx.createRadialGradient(l.cx, 100, 1, l.cx, 100, 18); g.addColorStop(0, l.lit ? '#fff4c0' : '#3a2a10'); g.addColorStop(1, l.lit ? 'rgba(255,200,80,.0)' : '#1a1208'); if (l.lit) { ctx.fillStyle = 'rgba(255,200,80,.28)'; ctx.beginPath(); ctx.arc(l.cx, 100, 26, 0, TAU); ctx.fill(); } ctx.fillStyle = l.lit ? '#ffcf5a' : '#4a3314'; ctx.strokeStyle = '#d8c28a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(l.cx, 100, 12, 0, TAU); ctx.fill(); ctx.stroke(); }
     for (const t of TGT) { ctx.lineCap = 'butt'; ctx.strokeStyle = '#0a0604'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(t.x, t.y1); ctx.lineTo(t.x, t.y2); ctx.stroke(); ctx.strokeStyle = t.f > 0 ? '#fff' : t.lit ? '#ffcf5a' : '#b23a2c'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(t.x, t.y1); ctx.lineTo(t.x, t.y2); ctx.stroke(); }
+    // drop targets, posts, spinner, saucer, rollover buttons
+    for (const d of DROPS) { if (d.down) { ctx.fillStyle = '#2a1a0c'; ctx.fillRect(d.x - 3, d.y1, 6, d.y2 - d.y1); continue; } ctx.lineCap = 'butt'; ctx.strokeStyle = '#0a0604'; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(d.x, d.y1); ctx.lineTo(d.x, d.y2); ctx.stroke(); ctx.strokeStyle = d.f > 0 ? '#fff' : '#f2c14e'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(d.x, d.y1 + 1); ctx.lineTo(d.x, d.y2 - 1); ctx.stroke(); }
+    for (const q of POSTS) { const g = ctx.createRadialGradient(q.x - 3, q.y - 3, 1, q.x, q.y, q.r); g.addColorStop(0, '#fff'); g.addColorStop(1, '#8a919e'); ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(q.x + 3, q.y + 4, q.r, 0, TAU); ctx.fill(); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, TAU); ctx.fill(); ctx.fillStyle = '#d8453a'; ctx.beginPath(); ctx.arc(q.x, q.y, q.r * .45, 0, TAU); ctx.fill(); }
+    { ctx.strokeStyle = '#9aa3b0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(SPIN.x - 28, SPIN.y); ctx.lineTo(SPIN.x + 28, SPIN.y); ctx.stroke(); const h = 3 + 14 * Math.abs(Math.sin(SPIN.ang)); ctx.fillStyle = SPIN.w > 1 ? '#fff0b0' : '#f2c14e'; ctx.fillRect(SPIN.x - 22, SPIN.y - h / 2, 44, h); ctx.strokeStyle = '#7a5a10'; ctx.lineWidth = 1.5; ctx.strokeRect(SPIN.x - 22, SPIN.y - h / 2, 44, h); for (const sx of [-28, 28]) { ctx.fillStyle = '#cfd5de'; ctx.beginPath(); ctx.arc(SPIN.x + sx, SPIN.y, 4, 0, TAU); ctx.fill(); } }
+    { const c = SAUCER; const g = ctx.createRadialGradient(c.x, c.y, 2, c.x, c.y, c.r + 5); g.addColorStop(0, '#000'); g.addColorStop(.7, '#120a04'); g.addColorStop(1, '#3a2a14'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, TAU); ctx.fill(); ctx.strokeStyle = c.held ? '#fff0b0' : '#c9a24a'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(c.x, c.y, c.r + 2, 0, TAU); ctx.stroke(); }
+    for (const l of LOWS) { ctx.fillStyle = l.lit ? '#ffcf5a' : '#4a3314'; ctx.strokeStyle = '#d8c28a'; ctx.lineWidth = 2; if (l.lit) { ctx.fillStyle = 'rgba(255,200,80,.3)'; ctx.beginPath(); ctx.arc(l.x, l.y, 16, 0, TAU); ctx.fill(); ctx.fillStyle = '#ffcf5a'; } ctx.beginPath(); ctx.arc(l.x, l.y, 8, 0, TAU); ctx.fill(); ctx.stroke(); }
     // slingshots
     for (const s of SLINGS) { ctx.fillStyle = '#7a1f16'; ctx.strokeStyle = '#d05a48'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(...s.T); ctx.lineTo(...s.B); ctx.lineTo(...s.K); ctx.closePath(); ctx.fill(); ctx.stroke(); if (s.f > 0) { ctx.strokeStyle = `rgba(255,240,200,${s.f})`; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(...s.T); ctx.lineTo(...s.K); ctx.stroke(); } }
     // pop bumpers
@@ -258,13 +286,13 @@
   // ===================== PANELS =====================
   let pTim = 0; const pc = {}; const setT = (id, v) => { if (pc[id] !== v) { pc[id] = v; $(id).textContent = v; } };
   function panels(dt) { pTim -= dt; if (pTim > 0) return; pTim = .1; setT('score', String(G.score).padStart(7, '0')); setT('hi', String(G.hi)); setT('ball', G.state === 'idle' ? '-' : G.state === 'over' ? 'OVER' : G.ballNo + ' / 3' + (G.balls > 3 ? ' +' : '')); setT('bonus', String(G.bonus)); setT('mult', String(G.mult));
-    $('lanes').children.forEach ? 0 : 0; [...$('lanes').children].forEach((el, i) => el.classList.toggle('on', !!LANES[i].lit)); [...$('tgts').children].forEach((el, i) => el.classList.toggle('on', !!TGT[i].lit));
+    $('lanes').children.forEach ? 0 : 0; [...$('lanes').children].forEach((el, i) => el.classList.toggle('on', !!LANES[i].lit)); [...$('tgts').children].forEach((el, i) => el.classList.toggle('on', !!TGT[i].lit)); [...$('drops').children].forEach((el, i) => el.classList.toggle('on', DROPS[i].down)); [...$('lows').children].forEach((el, i) => el.classList.toggle('on', !!LOWS[i].lit));
     const spd = Math.hypot(ball.vx, ball.vy); setT('kTilt', P.tilt.toFixed(1) + '°'); setT('kG', (gAlong() / 1000).toFixed(2) + ' m/s²'); setT('kV', (spd / 1000).toFixed(2) + ' m/s'); setT('kH', Math.max(0, (1100 - ball.y) / 1000).toFixed(2) + ' m up'); setT('kF', (P.flipW * FL[0].L / 1000).toFixed(2) + ' m/s'); setT('kP', PL.pull.toFixed(0) + ' / ' + PL.max + ' mm'); setT('kT', G.tilted ? 'TILT' : G.tiltMeter.toFixed(1) + ' / 3.2'); }
   // ===================== LOOP =====================
   let last = performance.now(); paintStatic(); resetBall();
   function loop(t) { const dt = Math.min(.05, (t - last) / 1000); last = t; update(dt); draw(); panels(dt); requestAnimationFrame(loop); }
   requestAnimationFrame(loop);
-  window.G = { ball, G, P, FL, PL, BUMPERS, segs, newGame, stepPhysics, setFlip, nudge, update };
+  window.G = { DROPS, SPIN, SAUCER, LOWS, MUS, ball, G, P, FL, PL, BUMPERS, segs, newGame, stepPhysics, setFlip, nudge, update };
 })();
 </script>
 </body>
