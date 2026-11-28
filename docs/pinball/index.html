@@ -82,7 +82,7 @@
     const pts = []; for (let i = 0; i <= 56; i++) { const a = Math.PI + i / 56 * Math.PI; pts.push([DOME.cx + Math.cos(a) * DOME.r, DOME.cy + Math.sin(a) * DOME.r]); } poly(pts, { rail: 1, e: .6 });
     seg(20, 300, 20, 1120, { rail: 1 }); seg(572, 300, 572, 1120, { rail: 1 }); seg(538, 372, 538, 1120, { rail: 1 }); seg(538, 1118, 572, 1118, { rail: 1 });
     seg(572, 330, 538, 372, { gate: 1, nx: -.777, ny: -.629, wire: 1, e: .3 });
-    poly([[64, 820], [64, 900], [166, 981]], { rail: 1 }); poly([[494, 820], [494, 900], [392, 981]], { rail: 1 });
+    poly([[64, 820], [64, 900], [190, 972]], { rail: 1 }); poly([[494, 820], [494, 900], [368, 972]], { rail: 1 }); // each inlane guide ends exactly on top of its flipper's pivot, so the ball rolls straight on with no pocket to get stuck in
     for (const sl of SLINGS) { seg(sl.T[0], sl.T[1], sl.B[0], sl.B[1], { e: .6, rubber: 1 }); seg(sl.B[0], sl.B[1], sl.K[0], sl.K[1], { e: .6, rubber: 1 }); seg(sl.T[0], sl.T[1], sl.K[0], sl.K[1], { sling: sl, e: .55, rubber: 1 }); }
     LOWS.push({ x: 84, y: 840, lit: 0 }, { x: 474, y: 840, lit: 0 }, { x: 42, y: 860, lit: 0 }, { x: 516, y: 860, lit: 0 });
     FL.push(mkFlip(1, 185, 985, 70, 17, 9, .5, -.45, 0), mkFlip(-1, 373, 985, 70, 17, 9, .5, -.45, 1));
@@ -162,7 +162,7 @@
   // ===================== PHYSICS =====================
   function respond(vn, nx, ny, e, mu) { // bounce the ball off a surface with normal (nx,ny); vn is its speed into the surface (negative)
     const eff = -vn < 90 ? 0 : e; const jn = -(1 + eff) * vn; ball.vx += jn * nx; ball.vy += jn * ny;
-    const tx = -ny, ty = nx, vt = ball.vx * tx + ball.vy * ty, ft = clamp(mu * jn, 0, Math.abs(vt)); ball.vx -= Math.sign(vt) * ft * tx; ball.vy -= Math.sign(vt) * ft * ty; }
+    const tx = -ny, ty = nx, vt = ball.vx * tx + ball.vy * ty, ft = jn > 150 ? clamp(mu * jn, 0, Math.abs(vt)) : 0; ball.vx -= Math.sign(vt) * ft * tx; ball.vy -= Math.sign(vt) * ft * ty; /* friction only bites on a real impact: a ball that is simply rolling is not held back (it was sticking on shallow slopes) */ }
   function hitSegment(s) {
     if (s.drop && s.drop.down) return;
     const dx = s.x2 - s.x1, dy = s.y2 - s.y1, l2 = dx * dx + dy * dy; let t = clamp(((ball.x - s.x1) * dx + (ball.y - s.y1) * dy) / l2, 0, 1);
@@ -192,7 +192,7 @@
     const vsx = f.w * f.L * t * (-f.s * Math.sin(f.th)), vsy = f.w * f.L * t * Math.cos(f.th);
     const rvx = ball.vx - vsx, rvy = ball.vy - vsy, vn = rvx * nx + rvy * ny; if (vn >= 0) return;
     const moving = Math.abs(f.w) > 1, e = moving ? .42 : .22, jn = -(1 + (-vn < 90 ? 0 : e)) * vn; ball.vx += jn * nx; ball.vy += jn * ny;
-    const tx2 = -ny, ty2 = nx, vt = rvx * tx2 + rvy * ty2, ft = clamp(.32 * jn, 0, Math.abs(vt)); ball.vx -= Math.sign(vt) * ft * tx2; ball.vy -= Math.sign(vt) * ft * ty2;
+    const tx2 = -ny, ty2 = nx, vt = rvx * tx2 + rvy * ty2, ft = jn > 150 ? clamp(.32 * jn, 0, Math.abs(vt)) : 0; ball.vx -= Math.sign(vt) * ft * tx2; ball.vy -= Math.sign(vt) * ft * ty2;
     if (moving && jn > 400) AUDIO.thud(jn * 1.4); }
   function hitPlunger() {
     if (ball.x < 540 || ball.x > 570) return; const tip = PL.y0 + PL.pull; if (ball.y + P.R > tip && ball.y < tip + 10) { ball.y = tip - P.R; const rel = ball.vy - PL.pv; if (rel > 0) ball.vy = PL.pv - .05 * rel; } }
@@ -206,7 +206,7 @@
     if (RIDE) { RIDE.t += dt / 1.05; if (RIDE.t >= 1) { const p = RIDE.r.p, [ex, ey] = bez(p, 1), tx = p[3][0] - p[2][0], ty = p[3][1] - p[2][1], l = Math.hypot(tx, ty) || 1; ball.x = ex; ball.y = ey; ball.vx = tx / l * 760; ball.vy = ty / l * 760 + 120; RIDE.r.cool = .9; RIDE = null; AUDIO.snap(); } else { const [x, y] = bez(RIDE.r.p, RIDE.t); ball.x = x; ball.y = y; ball.vx = ball.vy = 0; } return; }
     for (const c of SAUCERS) if (c.held) { c.t -= dt; ball.x = c.x; ball.y = c.y; ball.vx = ball.vy = 0; if (c.t <= 0) { c.held = false; c.cool = .8; ball.vx = c.x < 279 ? 850 : -850; ball.vy = -1150; AUDIO.snap(); } return; }
     for (const c of SAUCERS) c.cool = Math.max(0, c.cool - dt); for (const r of RAMPS) r.cool = Math.max(0, r.cool - dt);
-    ball.vy += gAlong() * dt; ball.x += ball.vx * dt; ball.y += ball.vy * dt; const drag = 1 - .06 * dt; ball.vx *= drag; ball.vy *= drag;
+    ball.vy += gAlong() * dt; ball.x += ball.vx * dt; ball.y += ball.vy * dt; const drag = 1 - .06 * dt; ball.vx *= drag; ball.vy *= drag; ball.vx += (Math.random() - .5) * .9; /* a real table always has a little vibration, so a ball can never balance perfectly on a knife edge */
     for (let pass = 0; pass < 2; pass++) { for (const s of segs) hitSegment(s); for (const b of BUMPERS) hitBumper(b); for (const f of FL) hitFlipper(f); hitPlunger(); for (const p of POSTS) hitPost(p); }
     const spd = Math.hypot(ball.vx, ball.vy);
     for (const sp of SPINS) { if (Math.abs(ball.x - sp.x) < 24 && Math.abs(ball.y - sp.y) < 9) { if (!sp.inside) { sp.inside = true; sp.w = Math.min(75, sp.w + spd * .03); ball.vx *= .97; ball.vy *= .97; } } else sp.inside = false; }
@@ -236,7 +236,7 @@
       else if (ball.y > 1180 || ball.y < -60 || ball.x < -40 || ball.x > W + 40) { resetBall(); G.state = 'ready'; say('BALL RETURNED', 2); }
       if (!G.plunged && ball.x < 536) G.plunged = true;
       if (ball.x > 538 && ball.y > 1000 && spd < 80 && !RIDE) { G.state = 'ready'; G.plunged = false; PL.held = false; say('BALL BACK IN THE LANE: SHOOT AGAIN', 2.2); }
-      if (spd < 12 && G.plunged && !RIDE && !SAUCERS.some(c => c.held)) { G.stuckT += dtFrame; if (G.stuckT > 3.5) { ball.vx += rnd(-260, 260); ball.vy -= 200; G.stuckT = 0; } } else G.stuckT = 0;
+      if (spd < 12 && G.plunged && !RIDE && !SAUCERS.some(c => c.held)) { G.stuckT += dtFrame; if (G.stuckT > 2.5) { ball.vx += rnd(-350, 350); ball.vy -= 500; G.stuckT = 0; say('BALL FREED', 1.4); } } else G.stuckT = 0;
       AUDIO.tickRoll(RIDE ? 600 : spd, ball.y < 1100); ball.rot += (ball.vx * dt) / P.R;
     } else AUDIO.tickRoll(0, false);
     if (G.state === 'play' || G.state === 'ready') { G.trail.push([ball.x, ball.y]); if (G.trail.length > 60) G.trail.shift(); }
@@ -247,8 +247,8 @@
   function plungerDown() { AUDIO.init(); if (G.state === 'idle' || G.state === 'over') { newGame(); return; } if (G.state === 'ready') PL.held = true; else if (G.state === 'play' && ball.x > 538 && ball.y > 1000) { G.state = 'ready'; G.plunged = false; PL.held = true; } }
   function plungerUp() { if (PL.held) { PL.held = false; const v = PL.pull * Math.sqrt(PL.K); if (G.state === 'ready' && PL.pull > 4) { G.state = 'play'; if (T.save) G.saveT = 9; AUDIO.plunge(v); } } }
   const KEYFL = { KeyZ: 0, ArrowLeft: 0, ShiftLeft: 0, Slash: 1, ArrowRight: 1, ShiftRight: 1, KeyM: 1 };
-  addEventListener('keydown', e => { AUDIO.init(); if (e.target && e.target.matches && e.target.matches('input[type=range],select') && (e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'ArrowUp' || e.code === 'ArrowDown')) return; if (e.code in KEYFL) { setFlip(KEYFL[e.code], true); e.preventDefault(); } if (e.repeat) return;
-    if (e.code === 'Space' || e.code === 'ArrowDown') { plungerDown(); e.preventDefault(); } else if (e.code === 'KeyA') nudge(380, 0); else if (e.code === 'KeyD') nudge(-380, 0); else if (e.code === 'KeyW') nudge(0, -300); });
+  addEventListener('keydown', e => { AUDIO.init(); if (e.target && e.target.matches && e.target.matches('input[type=range],select') && (e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'ArrowUp' || e.code === 'ArrowDown')) return; if (e.code in KEYFL || e.code === 'Space' || e.code === 'ArrowDown' || e.code === 'ArrowUp') e.preventDefault(); /* keep the page from scrolling when you hold keys */ if (e.code in KEYFL) setFlip(KEYFL[e.code], true); if (e.repeat) return;
+    if (e.code === 'Space' || e.code === 'ArrowDown') { plungerDown(); } else if (e.code === 'KeyA') nudge(380, 0); else if (e.code === 'KeyD') nudge(-380, 0); else if (e.code === 'KeyW') nudge(0, -300); });
   addEventListener('keyup', e => { if (e.code in KEYFL) setFlip(KEYFL[e.code], false); if (e.code === 'Space' || e.code === 'ArrowDown') plungerUp(); });
   addEventListener('blur', () => { setFlip(0, false); setFlip(1, false); plungerUp(); });
   const ptrs = new Map(); const toTable = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
