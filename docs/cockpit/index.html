@@ -634,7 +634,7 @@
     const g = ctx.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   }
   function radar() { // the whole sphere, flattened: ahead is up, behind is down
-    const cx = W - 112, cyy = 200, R = 84, RANGE = 1400; ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(2,10,24,.88)'; ctx.beginPath(); ctx.arc(cx + 0, cyy, R + 5, 0, TAU); ctx.fill(); ctx.strokeStyle = '#2a4a92'; ctx.lineWidth = 3; ctx.stroke();
+    const cx = W / 2, cyy = H - 112, R = 80, RANGE = 1400; ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(2,10,24,.88)'; ctx.beginPath(); ctx.arc(cx + 0, cyy, R + 5, 0, TAU); ctx.fill(); ctx.strokeStyle = '#2a4a92'; ctx.lineWidth = 3; ctx.stroke();
     ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cyy, R, 0, TAU); ctx.moveTo(cx - R, cyy); ctx.lineTo(cx + R, cyy); ctx.moveTo(cx, cyy - R); ctx.lineTo(cx, cyy + R); ctx.stroke(); ctx.beginPath(); ctx.arc(cx, cyy, R * .5, 0, TAU); ctx.stroke();
     ctx.fillStyle = 'rgba(95,240,255,.12)'; ctx.beginPath(); ctx.moveTo(cx, cyy); ctx.arc(cx, cyy, R, -Math.PI / 2 - .62, -Math.PI / 2 + .62); ctx.closePath(); ctx.fill(); // the cone you can see
     for (const r of rocks) {
@@ -645,9 +645,9 @@
     for (const e of jets) { const a = Math.cos(yaw), b = Math.sin(yaw), lx = e.x * a - e.z * b, lz = e.x * b + e.z * a; let px = cx + lx / RANGE * R, pz = cyy - lz / RANGE * R; const dd = Math.hypot(px - cx, pz - cyy), out = dd > R - 6; if (out) { px = cx + (px - cx) / dd * (R - 6); pz = cyy + (pz - cyy) / dd * (R - 6); }
       const col = e.alien ? acol(e) : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d', sz = out ? 4 : 5; glow(col, 8); ctx.fillStyle = col; ctx.fillRect(px - sz, pz - sz, sz * 2, sz * 2);
       if (e === target) { ctx.shadowBlur = 0; ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, pz, 10 + Math.sin(time * 6) * 1.5, 0, TAU); ctx.stroke(); ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(cx, cyy); ctx.lineTo(px, pz); ctx.stroke(); ctx.setLineDash([]); } }
-    ctx.shadowBlur = 0; ctx.fillStyle = '#7f93c4'; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('AHEAD', cx, cyy - R - 10); ctx.fillText('BEHIND', cx, cyy + R + 20);
+    ctx.shadowBlur = 0; ctx.fillStyle = '#7f93c4'; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('AHEAD', cx, cyy - R - 10); ctx.fillText('BEHIND', cx, cyy + R + 18);
     ctx.fillStyle = '#ffd23d'; ctx.beginPath(); ctx.moveTo(cx, cyy - 8); ctx.lineTo(cx - 5, cyy + 5); ctx.lineTo(cx + 5, cyy + 5); ctx.fill(); // you
-    ctx.font = '12px "Share Tech Mono", monospace'; ctx.fillStyle = target ? '#ffe066' : '#6f85b8'; ctx.fillText(target ? 'LOCK ' + Math.round(Math.hypot(target.x, target.y, target.z)) + '  ' + (() => { const c = toCam(target.x, target.y, target.z), ang = Math.round(Math.atan2(c[0], c[2]) * 57.3); return c[2] > 0 && Math.abs(ang) < 20 ? 'AHEAD' : (ang > 0 ? 'RIGHT ' : 'LEFT ') + Math.abs(ang) + '\u00B0'; })() : 'NO LOCK  (T)', cx, cyy + R + 36);
+    ctx.font = '12px "Share Tech Mono", monospace'; ctx.fillStyle = target ? '#ffe066' : '#6f85b8'; ctx.textAlign = 'left'; ctx.fillText(target ? 'LOCK ' + Math.round(Math.hypot(target.x, target.y, target.z)) + '  ' + (() => { const c = toCam(target.x, target.y, target.z), ang = Math.round(Math.atan2(c[0], c[2]) * 57.3); return c[2] > 0 && Math.abs(ang) < 20 ? 'AHEAD' : (ang > 0 ? 'RIGHT ' : 'LEFT ') + Math.abs(ang) + '\u00B0'; })() : 'NO LOCK  (T)', cx + R + 18, cyy + 4);
   }
   function reticle() {
     ctx.shadowBlur = 0; ctx.setLineDash([6, 9]); ctx.strokeStyle = 'rgba(95,240,255,.14)'; ctx.lineWidth = 1.5; ctx.strokeRect(W / 2 - BOX.w, H / 2 - BOX.h, BOX.w * 2, BOX.h * 2); ctx.setLineDash([]);
