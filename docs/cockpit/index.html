@@ -9,8 +9,48 @@
   :root { --bg:#04060f; --panel:#0b1228; --line:#24407a; --ink:#d6e6ff; --dim:#7f93c4; --cy:#5ff0ff; --am:#ffb23d; --rd:#ff4d5e; --gr:#5dffa0;
     --ui:"Space Grotesk", system-ui, sans-serif; --mono:"Share Tech Mono", ui-monospace, "Courier New", monospace; color-scheme:dark; }
   html, body { background:var(--bg); }
-  body { margin:0; color:var(--ink); font:15px/1.5 var(--ui); padding-block:18px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
-  .wrap { max-width:980px; margin:0 auto; display:flex; flex-direction:column; gap:14px; }
+  body { margin:0; color:var(--ink); font:15px/1.5 var(--ui); padding-block:10px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+  .wrap { max-width:1800px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+  header { display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
+  .deck { display:grid; grid-template-columns:225px minmax(0,1fr) 235px; gap:10px; align-items:start; }
+  .col { display:flex; flex-direction:column; gap:10px; min-width:0; }
+  .pnl { background:linear-gradient(180deg,#0d1731,#080f22); border:1px solid var(--line); border-radius:8px; padding:10px 12px 12px; box-shadow:inset 0 0 18px rgba(40,90,200,.12), 0 0 14px rgba(40,90,200,.1); position:relative; }
+  .pnl::before,.pnl::after { content:""; position:absolute; top:6px; width:5px; height:5px; border-radius:50%; background:#1c2f5c; box-shadow:inset 0 0 2px #000; }
+  .pnl::before { left:6px; } .pnl::after { right:6px; }
+  .pnl h2 { margin:0 0 8px; font:700 11px var(--ui); letter-spacing:.2em; text-transform:uppercase; color:var(--am); text-align:center; }
+  .row { display:flex; align-items:center; gap:8px; margin:6px 0; font:12px var(--mono); color:var(--dim); }
+  .row > b { width:56px; font-weight:400; letter-spacing:.08em; }
+  .meter { flex:1; height:10px; border:1px solid #27508f; border-radius:2px; overflow:hidden; background:#050a18; }
+  .meter i { display:block; height:100%; width:50%; background:var(--gr); transition:width .15s; }
+  .val { min-width:40px; text-align:right; color:var(--ink); }
+  .lamps { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px; }
+  .lamp { font:11px var(--mono); letter-spacing:.06em; text-align:center; padding:5px 2px; border:1px solid #1d2f5a; border-radius:4px; color:#3d5288; background:#050a18; }
+  .lamp.on { color:#fff; border-color:var(--rd); background:#4a0f1a; box-shadow:0 0 10px rgba(255,77,94,.6); animation:bl .5s steps(2) infinite; }
+  .lamp.ok { color:#aaffd0; border-color:#2a7a52; background:#0b2a1c; }
+  @keyframes bl { 50% { opacity:.55; } }
+  .freq { font:700 30px var(--mono); color:var(--cy); text-shadow:0 0 12px rgba(95,240,255,.6); text-align:center; letter-spacing:.04em; background:#03070f; border:1px solid #1d2f5a; border-radius:4px; padding:2px 0; }
+  .freq.off { color:#244; text-shadow:none; }
+  .stn { text-align:center; font:600 13px var(--ui); color:var(--ink); margin-top:6px; letter-spacing:.06em; }
+  .np { text-align:center; font:12px var(--mono); color:var(--dim); min-height:32px; margin:2px 0 6px; overflow:hidden; }
+  #viz { position:static; inset:auto; cursor:default; width:100%; height:34px; display:block; background:#03070f; border:1px solid #1d2f5a; border-radius:4px; }
+  .btns { display:flex; gap:6px; margin-top:8px; }
+  .btns button, .pnl button, .upl { flex:1; font:600 12px var(--ui); color:var(--ink); background:#0b1735; border:1px solid var(--line); border-radius:4px; padding:7px 4px; cursor:pointer; text-align:center; }
+  .btns button:hover, .pnl button:hover, .upl:hover { border-color:var(--cy); }
+  #pwr.on { border-color:var(--gr); color:var(--gr); box-shadow:0 0 8px rgba(93,255,160,.35); }
+  .pnl input[type=range] { accent-color:var(--cy); width:100%; margin:6px 0 0; }
+  .tunes { margin:8px 0 0; padding:0; list-style:none; font:12px var(--mono); max-height:84px; overflow:auto; }
+  .tunes li { display:flex; justify-content:space-between; gap:6px; padding:2px 0; color:var(--dim); } .tunes li.cur { color:var(--cy); }
+  .tunes li span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .tunes li button { all:unset; cursor:pointer; color:#7a4350; padding:0 4px; }
+  .upl { display:block; margin-top:8px; box-sizing:border-box; }
+  #alog { height:210px; overflow:auto; font:12px/1.45 var(--mono); background:#03070f; border:1px solid #1d2f5a; border-radius:4px; padding:6px 8px; }
+  #alog p { margin:0 0 6px; } #alog .me { color:var(--am); } #alog .ai { color:var(--cy); } #alog .sh { color:#6e86bd; }
+  .ask { display:flex; gap:6px; margin-top:8px; } .ask input { flex:1; min-width:0; font:13px var(--mono); color:var(--ink); background:#03070f; border:1px solid var(--line); border-radius:4px; padding:6px 8px; }
+  .ask input:focus-visible, .pnl button:focus-visible, .upl:focus-visible { outline:2px solid var(--cy); outline-offset:1px; }
+  .ask button { flex:0 0 auto; padding:6px 10px; }
+  #mic.live { border-color:var(--rd); color:#fff; background:#4a0f1a; animation:bl .8s steps(2) infinite; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; } .chips button { flex:0 0 auto; padding:4px 8px; font-size:11px; }
+  .small { font:11px var(--mono); color:#5f74a6; margin-top:6px; }
+  @media (max-width:1100px) { .deck { grid-template-columns:1fr; } .col { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); } #stage { order:-1; } }
   h1 { font:700 22px/1.2 var(--ui); letter-spacing:.04em; margin:0; text-transform:uppercase; color:var(--cy); text-shadow:0 0 14px rgba(95,240,255,.45); }
   .sub { color:var(--dim); margin:2px 0 0; max-width:62ch; }
   #stage { position:relative; width:100%; aspect-ratio:16/9; background:#000; border:1px solid var(--line); border-radius:6px; overflow:hidden; box-shadow:0 0 30px rgba(60,120,255,.18); }
@@ -34,9 +74,50 @@
 <div class="wrap">
   <header>
     <h1>Cockpit Asteroids</h1>
-    <p class="sub">First-person space fighter. Hunt the orange jets that run, dodge the pink jets that hunt you, and watch for rocks. Trackpad and keys on a laptop, thumbs on an iPad.</p>
+    <p class="sub">Hunt the orange jets, dodge the pink ones, mind the rocks. <kbd>R</kbd> radio &middot; <kbd>,</kbd> <kbd>.</kbd> tune &middot; <kbd>N</kbd> next song</p>
   </header>
-  <div id="stage"><canvas id="c" width="1280" height="720" aria-label="Cockpit view game"></canvas></div>
+  <div class="deck">
+    <div class="col" id="left">
+      <section class="pnl" aria-label="Cockpit radio">
+        <h2>Radio</h2>
+        <div id="freq" class="freq off">---.-</div>
+        <div id="stn" class="stn">RADIO OFF</div>
+        <div id="np" class="np">Press POWER to switch on</div>
+        <canvas id="viz" width="240" height="34"></canvas>
+        <div class="btns"><button id="pwr" type="button" title="Radio on/off (R)">POWER</button><button id="prv" type="button" title="Previous station (,)">&#9664; TUNE</button><button id="nxt" type="button" title="Next station (.)">TUNE &#9654;</button><button id="skp" type="button" title="Next song (N)">SKIP</button></div>
+        <label class="small" for="rvol" style="display:block">VOLUME</label><input id="rvol" type="range" min="0" max="100" value="70" aria-label="Radio volume">
+        <ul id="tunes" class="tunes" aria-label="Your uploaded tunes"></ul>
+        <label class="upl" for="upl">+ UPLOAD YOUR TUNE (107.7)</label><input id="upl" type="file" accept="audio/*" multiple style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px">
+        <div class="small">Your songs live on 107.7 and stay saved in this browser.</div>
+      </section>
+      <section class="pnl" aria-label="Cockpit sounds">
+        <h2>Cockpit noise</h2>
+        <label class="row" for="sfxon"><input id="sfxon" type="checkbox" checked> Cockpit sounds</label>
+        <label class="row" for="sfxv"><b>LEVEL</b><input id="sfxv" type="range" min="0" max="100" value="60"></label>
+        <div class="small">Engine hum, vents, radar pings, lasers, alarms, shield whine.</div>
+      </section>
+    </div>
+    <div id="stage"><canvas id="c" width="1280" height="720" aria-label="Cockpit view game"></canvas></div>
+    <div class="col" id="right">
+      <section class="pnl" aria-label="Ship systems">
+        <h2>Systems</h2>
+        <div class="row"><b>HULL</b><div class="meter"><i id="mHull"></i></div><span class="val" id="vHull"></span></div>
+        <div class="row"><b>SHIELD</b><div class="meter"><i id="mShield"></i></div><span class="val" id="vShield"></span></div>
+        <div class="row"><b>THRUST</b><div class="meter"><i id="mThr" style="background:var(--cy)"></i></div><span class="val" id="vThr"></span></div>
+        <div class="row"><b>BOMBS</b><span id="vBomb" style="color:#ffd23d;letter-spacing:.2em"></span></div>
+        <div class="row"><b>SCORE</b><span class="val" id="vScore" style="text-align:left"></span><b style="width:auto">FIELD</b><span class="val" id="vWave"></span></div>
+        <div class="row"><b>HEADING</b><span class="val" id="vHdg" style="text-align:left"></span><b style="width:auto">SPEED</b><span class="val" id="vSpd"></span></div>
+        <div class="lamps"><div class="lamp" id="lInc">INCOMING</div><div class="lamp" id="lSix">HOSTILE 6</div><div class="lamp" id="lRock">ROCK CLOSE</div><div class="lamp" id="lHull">HULL LOW</div><div class="lamp" id="lShl">SHIELD UP</div><div class="lamp" id="lTgt">NO LOCK</div></div>
+      </section>
+      <section class="pnl" aria-label="ARIA ship assistant">
+        <h2>ARIA &middot; ship advisor</h2>
+        <div id="alog" role="log" aria-live="polite"></div>
+        <form class="ask" id="askf" autocomplete="off"><input id="askin" type="text" placeholder="Ask ARIA... (what now?)" aria-label="Ask ARIA"><button type="submit">SEND</button><button type="button" id="mic" title="Talk to ARIA">MIC</button></form>
+        <div class="chips"><button type="button" data-q="what should I do">What now?</button><button type="button" data-q="status">Status</button><button type="button" data-q="where are the jets">Where?</button><button type="button" data-q="next station">Radio</button></div>
+        <div class="small" id="asmall">Type, or press MIC and talk. Try "where are the jets" or "play jazz".</div>
+      </section>
+    </div>
+  </div>
   <div class="bar">
     <label for="spd">Rock speed <input id="spd" type="range" min="40" max="220" value="70"><span id="spdv">70</span></label>
     <label for="auto"><input id="auto" type="checkbox" checked> Auto-fire on target</label>
@@ -71,7 +152,7 @@
   let yaw = 0, pitch = 0, vel = [0, 0, 0], pos = [0, 0, 0], hull = 100, score = 0, wave = 0, over = false, shake = 0, flash = 0, hitT = 0, fireT = 0, time = 0;
   const mouse = { x: W / 2, y: H / 2, in: false, down: false, rdown: false }, keys = {};
   const rocks = [], shots = [], sparks = [], jets = [], ebolts = [];
-  let arrowShown = false, flipT = 0, rockT = 5, touchMode = false, throttle = 0, leverId = null, fireId = null, incoming = 0;
+  let shPrev = false, arrowShown = false, flipT = 0, rockT = 5, touchMode = false, throttle = 0, leverId = null, fireId = null, incoming = 0;
   const stick = { on: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
   const BTNS = [
     { id: 'fire', x: W * .5, y: H * .625, r: 62, col: '#ff4d5e', label: 'FIRE', hold: 1 },
@@ -101,7 +182,7 @@
     addRock(3, dir[0] * d, dir[1] * d, dir[2] * d, [-dir[0] * s + rnd(-25, 25), -dir[1] * s + rnd(-25, 25), -dir[2] * s + rnd(-25, 25)]);
   }
   function startWave() {
-    wave++; if (wave > 1) { grenades = Math.min(5, grenades + 1); say('Wave ' + wave + '. Hostile jets inbound. Grenade restocked.', 4); } const nj = Math.min(1 + wave, 6); for (let i = 0; i < nj; i++) addJet(i % 2 ? 'run' : 'attack', i < 2);
+    wave++; if (wave > 1) { AU.chime(); grenades = Math.min(5, grenades + 1); say('Wave ' + wave + '. Hostile jets inbound. Grenade restocked.', 4); } const nj = Math.min(1 + wave, 6); for (let i = 0; i < nj; i++) addJet(i % 2 ? 'run' : 'attack', i < 2);
     for (let i = rocks.length; i < Math.min(2 + wave, 7); i++) spawn(i < 1);
   }
   function addJet(kind, front) { // 'attack' jets come at you and shoot; 'run' jets flee and you hunt them
@@ -116,24 +197,24 @@
     dx += (tx - dx) * k; dy += (ty - dy) * k; dz += (tz - dz) * k; const m = Math.hypot(dx, dy, dz) || 1; e.vx = dx / m * e.sp; e.vy = dy / m * e.sp; e.vz = dz / m * e.sp;
   }
   function say(text, secs = 3.8, speak = true) {
-    msg = { t: secs, text };
+    msg = { t: secs, text }; alog('sh', text); AU.blip();
     if (speak && voiceEl.checked) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1.05; u.pitch = .85; speechSynthesis.speak(u); } catch (x) {} }
   }
   function damage(n) {
     if (shieldOn) { energy -= n * 1.6; shieldHit = .35; shake = .2; if (energy <= 0) { energy = 0; shieldLock = true; say('Shields down.', 2.5); } return; }
-    hull -= n; shake = .5; hitT = .6; flash = .5; if (hull <= 0) { hull = 0; over = true; }
+    AU.hit(); hull -= n; shake = .5; hitT = .6; flash = .5; if (hull <= 0) { hull = 0; over = true; }
   }
-  function cycleTarget() {
+  function cycleTarget() { AU.lock();
     const list = jets.slice().sort((a, b) => Math.hypot(a.x, a.y, a.z) - Math.hypot(b.x, b.y, b.z)); if (!list.length) { say('No hostile jets.', 2); return; }
     const i = list.indexOf(target); target = i < 0 ? list[0] : (i + 1 < list.length ? list[i + 1] : null); if (target) { target.prev = Math.hypot(target.x, target.y, target.z); target.close = 0; say(target.kind === 'attack' ? 'Target locked. Hunter jet.' : 'Target locked. Runner jet.', 2.5); } else say('Target released.', 2);
   }
   function grenade() {
-    if (grenades <= 0) { say('No grenades left.', 2); return; } grenades--; blasts.push({ t: .6 }); flash = .6; shake = .4; const R = 520;
+    if (grenades <= 0) { say('No grenades left.', 2); return; } grenades--; blasts.push({ t: .6 }); AU.gren(); flash = .6; shake = .4; const R = 520;
     for (let i = rocks.length - 1; i >= 0; i--) { const r = rocks[i]; if (Math.hypot(r.x, r.y, r.z) < R + r.r) { boom(r.x, r.y, r.z, 16, '#ffd27a'); score += 40; rocks.splice(i, 1); } }
     for (let i = jets.length - 1; i >= 0; i--) { const e = jets[i]; if (Math.hypot(e.x, e.y, e.z) < R) { boom(e.x, e.y, e.z, 40, '#ffd27a'); score += 300; if (target === e) target = null; jets.splice(i, 1); } }
     ebolts.length = 0; say('Grenade away. ' + grenades + ' left.', 2.5);
   }
-  function press(id) { if (id === 'flip') { if (flipT <= 0) flipT = .35; } else if (id === 'gren') grenade(); else if (id === 'tgt') cycleTarget(); else if (id === 'help') helpOpen = !helpOpen; }
+  function press(id) { if (id === 'flip') { if (flipT <= 0) { flipT = .35; AU.whoosh(); } } else if (id === 'gren') grenade(); else if (id === 'tgt') cycleTarget(); else if (id === 'help') helpOpen = !helpOpen; }
   function reset() { rocks.length = shots.length = sparks.length = jets.length = ebolts.length = 0; flipT = 0; throttle = 0; yaw = pitch = 0; vel = [0, 0, 0]; pos = [0, 0, 0]; hull = 100; score = 0; wave = 0; over = false; grenades = 3; energy = 100; shieldLock = false; target = null; helpOpen = false; warned = {}; blasts.length = 0; held.clear(); startWave(); say('Onboard computer online. Press H for help.', 6, false); }
 
   // --- 3D helpers. World: x right, y up, z forward at yaw 0.
@@ -191,6 +272,8 @@
     return [invLR.checked ? -lr : lr, invUD.checked ? -ud : ud];
   }
     const KMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down' };
+  addEventListener('keydown', e => { if (e.target && e.target.matches && e.target.matches('input[type=text],textarea')) e.stopImmediatePropagation(); }, true);
+  addEventListener('keydown', e => { if (e.repeat) return; if (e.code === 'KeyR') RAD.power(); else if (e.code === 'Comma') RAD.tune(-1); else if (e.code === 'Period') RAD.tune(1); else if (e.code === 'KeyN') RAD.skip(); });
   addEventListener('keydown', e => { if (e.key === 'Shift') keys.shift = true; if (e.code === 'KeyX') press('flip'); if (e.code === 'KeyB' && !e.repeat) press('gren'); if (e.code === 'KeyT' && !e.repeat) press('tgt'); if (e.code === 'KeyH' && !e.repeat) press('help'); if (e.code === 'Escape') helpOpen = false; if (e.code === 'Space') { keys.space = true; e.preventDefault(); } if (KMAP[e.code]) { keys[KMAP[e.code]] = true; e.preventDefault(); } });
   addEventListener('keyup', e => { if (e.key === 'Shift') keys.shift = false; if (e.code === 'Space') keys.space = false; if (KMAP[e.code]) keys[KMAP[e.code]] = false; });
   addEventListener('blur', () => { keys.shift = keys.up = keys.down = keys.space = false; mouse.down = mouse.rdown = false; });
@@ -206,9 +289,9 @@
     const px = r.x - d[0] * t, py = r.y - d[1] * t, pz = r.z - d[2] * t; return Math.hypot(px, py, pz) < r.r * 1.15 ? t : null;
   }
   function fire() {
-    const d = aimDir(); shots.push({ x: 0, y: -14, z: 0, vx: d[0] * 2100, vy: d[1] * 2100, vz: d[2] * 2100, life: 1.3 }); fireT = .12;
+    AU.laser(); const d = aimDir(); shots.push({ x: 0, y: -14, z: 0, vx: d[0] * 2100, vy: d[1] * 2100, vz: d[2] * 2100, life: 1.3 }); fireT = .12;
   }
-  function boom(x, y, z, n, col) { for (let i = 0; i < n; i++) sparks.push({ x, y, z, vx: rnd(-1, 1) * 160, vy: rnd(-1, 1) * 160, vz: rnd(-1, 1) * 160, life: rnd(.4, 1), col }); }
+  function boom(x, y, z, n, col) { AU.boom(n); for (let i = 0; i < n; i++) sparks.push({ x, y, z, vx: rnd(-1, 1) * 160, vy: rnd(-1, 1) * 160, vz: rnd(-1, 1) * 160, life: rnd(.4, 1), col }); }
   function breakRock(i) {
     const r = rocks[i]; rocks.splice(i, 1); score += [0, 150, 80, 40][r.size]; boom(r.x, r.y, r.z, 22, '#ffd27a');
     if (r.size > 1) for (let k = 0; k < 2; k++) addRock(r.size - 1, r.x, r.y, r.z, [r.vx + rnd(-70, 70), r.vy + rnd(-70, 70), r.vz + rnd(-70, 70)]);
@@ -219,7 +302,7 @@
     if (msg.t > 0) msg.t -= dt;
     // shield: hold Space / SHIELD / right-click. It soaks hits, drains energy, and blocks your guns while up.
     const want = keys.space || mouse.rdown || isHeld('shield'); if (shieldLock && energy >= 30) shieldLock = false;
-    shieldOn = want && !shieldLock && energy > 2; if (shieldHit > 0) shieldHit -= dt;
+    shieldOn = want && !shieldLock && energy > 2; if (shieldHit > 0) shieldHit -= dt; if (shieldOn !== shPrev) { AU.shield(shieldOn); shPrev = shieldOn; }
     if (shieldOn) energy = Math.max(0, energy - 16 * dt); else if (!want) energy = Math.min(100, energy + 13 * dt);
     if (tilt.on && tilt.has) { const [lr, ud] = tiltAxes(), k = v => Math.sign(v) * Math.pow(clamp((Math.abs(v) - 5) / 17, 0, 1), 1.2); yaw += k(lr) * 1.9 * dt; pitch = clamp(pitch - k(ud) * 1.3 * dt, -1.2, 1.2); }
     // turning: only when the cursor is out past the aim box
@@ -467,8 +550,180 @@
     let y = H * .225; for (const [t, d] of HELP) { ctx.fillStyle = '#ffb23d'; ctx.font = '700 15px "Space Grotesk", sans-serif'; ctx.fillText(t, W * .13, y); ctx.fillStyle = '#c9d8ff'; ctx.font = '15px "Space Grotesk", sans-serif'; y = wrap(d, W * .13, y + 22, W * .74, 20) + 12; }
     ctx.fillStyle = '#7f93c4'; ctx.font = '13px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('GAME PAUSED  -  PRESS H, ESC OR TAP ANYWHERE TO RETURN', W / 2, H * .775);
   }
+
+  // ===================== COCKPIT SOUND ENGINE =====================
+  const $ = id => document.getElementById(id);
+  let AC = null, sfxBus = null, radBus = null, an = null, noiseBuf = null;
+  function ctxAudio() {
+    if (AC) { if (AC.state === 'suspended') AC.resume(); return AC; }
+    try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (x) { return null; }
+    sfxBus = AC.createGain(); sfxBus.connect(AC.destination); radBus = AC.createGain(); an = AC.createAnalyser(); an.fftSize = 64; radBus.connect(an); an.connect(AC.destination);
+    noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    AU.start(); return AC;
+  }
+  const sfxOn = () => $('sfxon').checked, sfxLevel = () => +$('sfxv').value / 100;
+  const AU = {
+    amb: null, ventG: null, humA: null, humB: null, hf: null, alarmT: 0, pingT: 2, beepT: 6, shOsc: null, shG: null,
+    start() { // always-on ambience: engine hum + air vents
+      const t = AC.currentTime; this.humA = AC.createOscillator(); this.humB = AC.createOscillator(); this.humA.type = 'sawtooth'; this.humB.type = 'triangle'; this.humA.frequency.value = 52; this.humB.frequency.value = 78;
+      this.hf = AC.createBiquadFilter(); this.hf.type = 'lowpass'; this.hf.frequency.value = 180; this.amb = AC.createGain(); this.amb.gain.value = 0;
+      this.humA.connect(this.hf); this.humB.connect(this.hf); this.hf.connect(this.amb); this.amb.connect(sfxBus); this.humA.start(); this.humB.start();
+      const n = AC.createBufferSource(); n.buffer = noiseBuf; n.loop = true; const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = .4; this.ventG = AC.createGain(); this.ventG.gain.value = 0; n.connect(bp); bp.connect(this.ventG); this.ventG.connect(sfxBus); n.start();
+    },
+    ok() { return AC && sfxOn() && AC.state === 'running'; },
+    env(g, a, d, peak) { const t = AC.currentTime; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); },
+    tone(f0, f1, dur, type, vol, delay = 0) { if (!this.ok()) return; const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t + dur + .02); },
+    noise(dur, f0, f1, vol, type = 'lowpass') { if (!this.ok()) return; const t = AC.currentTime, s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain(); s.buffer = noiseBuf; f.type = type; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t, Math.random()); s.stop(t + dur + .02); },
+    laser() { this.tone(1500, 260, .14, 'square', .07); },
+    boom(n) { if (n <= 8) { this.tone(900, 400, .07, 'triangle', .06); return; } const big = n >= 30; this.noise(big ? .9 : .5, big ? 1200 : 900, 70, big ? .55 : .35); this.tone(big ? 90 : 120, 30, big ? .6 : .35, 'sine', big ? .5 : .3); },
+    hit() { this.noise(.35, 600, 60, .5); this.tone(110, 40, .3, 'sawtooth', .22); },
+    gren() { this.noise(.7, 300, 3000, .25, 'bandpass'); this.tone(70, 25, .9, 'sine', .5, .1); },
+    lock() { this.tone(1320, 1320, .06, 'sine', .08); this.tone(1760, 1760, .08, 'sine', .08, .09); },
+    whoosh() { this.noise(.6, 400, 2400, .3, 'bandpass'); },
+    chime() { this.tone(660, 660, .3, 'sine', .08); this.tone(880, 880, .3, 'sine', .08, .15); this.tone(1320, 1320, .5, 'sine', .07, .3); },
+    blip() { this.tone(1000, 1000, .05, 'sine', .05); this.tone(1500, 1500, .05, 'sine', .05, .07); },
+    shield(on) { if (!this.ok()) return; if (on) { this.tone(180, 520, .45, 'sine', .14); this.noise(.4, 500, 4000, .12, 'bandpass'); } else this.tone(520, 120, .4, 'sine', .1); },
+    tick(dt) {
+      if (!AC) return; const on = this.ok(), thr = clamp(Math.hypot(vel[0], vel[1], vel[2]) / 600, 0, 1), L = sfxLevel(), t = AC.currentTime;
+      this.amb.gain.setTargetAtTime(on ? (.07 + .07 * thr) * L : 0, t, .2); this.humA.frequency.setTargetAtTime(52 + 40 * thr, t, .3); this.humB.frequency.setTargetAtTime(78 + 55 * thr, t, .3); this.hf.frequency.setTargetAtTime(160 + 500 * thr, t, .3);
+      this.ventG.gain.setTargetAtTime(on ? (.012 + .035 * thr) * L : 0, t, .2); sfxBus.gain.setTargetAtTime(L * 1.6, t, .05);
+      if (!on || over || helpOpen) return;
+      this.pingT -= dt; if (this.pingT <= 0) { this.pingT = 3.2; this.tone(1900, 1900, .5, 'sine', .018); }
+      this.beepT -= dt; if (this.beepT <= 0) { this.beepT = 6 + Math.random() * 8; const k = Math.floor(Math.random() * 3); if (k === 0) { this.tone(2400, 2400, .04, 'square', .02); this.tone(2400, 2400, .04, 'square', .02, .09); } else if (k === 1) { this.tone(700, 1200, .12, 'sine', .04); } else { this.tone(1800, 1800, .03, 'square', .02); this.tone(1400, 1400, .03, 'square', .02, .06); this.tone(1100, 1100, .03, 'square', .02, .12); } }
+      this.alarmT -= dt; if (hull < 30 && hull > 0 && this.alarmT <= 0) { this.alarmT = 1.1; this.tone(880, 880, .22, 'square', .07); this.tone(660, 660, .22, 'square', .07, .25); }
+      else if (incoming && this.alarmT <= 0) { this.alarmT = .45; this.tone(1600, 1600, .08, 'square', .06); }
+    }
+  };
+
+  // ===================== RADIO =====================
+  const A = 'audio/';
+  const STN = [
+    { f: '88.1', name: 'NOVA WAVE', who: 'DJ Nova', trk: [['neon_drift.mp3', 'Neon Drift']], id: 'dj_nova_id.mp3', out: 'dj_nova_out.mp3' },
+    { f: '94.5', name: 'DEEP SPACE JAZZ', who: 'Smoky Vega', trk: [['midnight_orbit.mp3', 'Midnight Orbit']], id: 'dj_jazz_id.mp3', out: 'dj_jazz_out.mp3' },
+    { f: '101.3', name: 'ASTEROID ROCK', who: 'Rocky Belt', trk: [['rock_the_belt.mp3', 'Rock the Belt']], id: 'dj_rock_id.mp3', out: 'dj_rock_out.mp3' },
+    { f: '107.7', name: "CAPTAIN'S MIX", who: 'You', mine: true }
+  ];
+  // uploaded tunes live in IndexedDB so they survive a reload
+  const DB = { db: null, open() { return new Promise(res => { if (this.db) return res(this.db); try { const q = indexedDB.open('cockpit-radio', 1); q.onupgradeneeded = () => q.result.createObjectStore('tunes', { keyPath: 'id', autoIncrement: true }); q.onsuccess = () => { this.db = q.result; res(this.db); }; q.onerror = () => res(null); } catch (x) { res(null); } }); },
+    async all() { const d = await this.open(); if (!d) return []; return new Promise(res => { const r = d.transaction('tunes').objectStore('tunes').getAll(); r.onsuccess = () => res(r.result); r.onerror = () => res([]); }); },
+    async add(rec) { const d = await this.open(); if (!d) return; return new Promise(res => { const r = d.transaction('tunes', 'readwrite').objectStore('tunes').add(rec); r.onsuccess = r.onerror = () => res(); }); },
+    async del(id) { const d = await this.open(); if (!d) return; return new Promise(res => { const r = d.transaction('tunes', 'readwrite').objectStore('tunes').delete(id); r.onsuccess = r.onerror = () => res(); }); } };
+  const RAD = {
+    on: false, si: 0, mus: null, dj: null, musG: null, djG: null, tunes: [], ti: 0, token: 0, vol: .7, tuneUrl: null, pend: null, ducking: false,
+    init() {
+      try { const sv = JSON.parse(localStorage.getItem('ck_radio') || '{}'); if (typeof sv.vol === 'number') this.vol = sv.vol; if (typeof sv.si === 'number') this.si = clamp(sv.si, 0, STN.length - 1); } catch (x) {}
+      $('rvol').value = Math.round(this.vol * 100); this.refreshTunes(); this.show();
+    },
+    save() { try { localStorage.setItem('ck_radio', JSON.stringify({ vol: this.vol, si: this.si })); } catch (x) {} },
+    wire() { if (this.mus) return true; if (!ctxAudio()) return false;
+      this.mus = new Audio(); this.dj = new Audio(); for (const e of [this.mus, this.dj]) e.preload = 'auto';
+      this.musG = AC.createGain(); this.djG = AC.createGain(); AC.createMediaElementSource(this.mus).connect(this.musG); AC.createMediaElementSource(this.dj).connect(this.djG); this.musG.connect(radBus); this.djG.connect(radBus);
+      this.mus.addEventListener('ended', () => this.nextTrack(this.token)); this.mus.addEventListener('error', () => { if (this.on) setTimeout(() => this.nextTrack(this.token), 1500); });
+      this.dj.addEventListener('ended', () => { this.duck(false); }); this.setVol(); return true; },
+    setVol() { if (!AC || !radBus) return; radBus.gain.setTargetAtTime(this.vol * 1.1, AC.currentTime, .05); this.duck(this.ducking); },
+    duck(d) { this.ducking = d; if (!this.musG) return; this.musG.gain.setTargetAtTime(d || speaking ? .3 : 1, AC.currentTime, .15); },
+    async power() { if (!this.wire()) return; this.on = !this.on; this.token++; if (this.on) { this.tuneIn(true); } else { this.mus.pause(); this.dj.pause(); this.duck(false); } this.show(); },
+    tune(d) { if (!this.wire()) return; this.si = (this.si + d + STN.length) % STN.length; this.save(); if (!this.on) { this.on = true; } this.tuneIn(false); this.show(); },
+    setStation(i) { if (!this.wire()) return; this.si = i; this.save(); this.on = true; this.tuneIn(false); this.show(); },
+    tuneIn() { const tk = ++this.token; this.dj.pause(); this.mus.pause(); this.duck(false); AU.noise && ctxAudio(); this.staticBurst(.45); const st = STN[this.si]; this.ti = 0;
+      setTimeout(async () => { if (tk !== this.token) return; if (st.mine) { await this.refreshTunes(); if (!this.tunes.length) { this.show('NO TUNES YET - UPLOAD ONE'); this.staticHiss(true); return; } this.staticHiss(false); this.playMine(tk); } else { this.staticHiss(false); this.playDJ(st.id, () => {}); this.playTrack(st, tk, false); } }, 480); this.show(); },
+    staticBurst(d) { if (!AC) return; const s = AC.createBufferSource(), g = AC.createGain(), f = AC.createBiquadFilter(); s.buffer = noiseBuf; f.type = 'bandpass'; f.frequency.value = 2200; f.Q.value = .6; g.gain.setValueAtTime(.35 * this.vol, AC.currentTime); g.gain.exponentialRampToValueAtTime(.001, AC.currentTime + d); s.connect(f); f.connect(g); g.connect(radBus); s.start(); s.stop(AC.currentTime + d + .05); },
+    hiss: null, staticHiss(on) { if (this.hiss) { try { this.hiss.stop(); } catch (x) {} this.hiss = null; } if (!on || !AC) return; const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = noiseBuf; s.loop = true; g.gain.value = .12; s.connect(g); g.connect(radBus); s.start(); this.hiss = s; },
+    playDJ(file, done) { if (!this.on || !this.dj) return; this.dj.src = A + file; this.duck(true); this.dj.play().catch(() => { this.duck(false); }); },
+    playTrack(st, tk, mid) { if (tk !== this.token) return; const [f, title] = st.trk[0]; this.mus.src = A + f; this.cur = title;
+      this.mus.addEventListener('loadedmetadata', function once() { RAD.mus.removeEventListener('loadedmetadata', once); if (mid && isFinite(RAD.mus.duration)) RAD.mus.currentTime = Math.random() * RAD.mus.duration * .5; });
+      this.mus.play().catch(() => {}); this.show(); },
+    async playMine(tk) { if (tk !== this.token) return; const t = this.tunes[this.ti % this.tunes.length]; if (!t) return; if (this.tuneUrl) URL.revokeObjectURL(this.tuneUrl); this.tuneUrl = URL.createObjectURL(t.blob); this.mus.src = this.tuneUrl; this.cur = t.name; this.mus.play().catch(() => {}); this.show(); this.refreshList(); },
+    nextTrack(tk) { if (!this.on || tk !== this.token) return; const st = STN[this.si]; if (st.mine) { if (!this.tunes.length) return; this.ti = (this.ti + 1) % this.tunes.length; this.playMine(tk); return; }
+      if (Math.random() < .6) this.playDJ(st.out, () => {}); this.playTrack(st, tk, false); },
+    skip() { if (!this.on || !this.mus) return; const st = STN[this.si]; if (st.mine) { if (this.tunes.length) { this.ti = (this.ti + 1) % this.tunes.length; this.playMine(this.token); } } else { this.mus.currentTime = Math.max(0, (this.mus.duration || 60) - .1); } },
+    async refreshTunes() { this.tunes = await DB.all(); this.refreshList(); },
+    refreshList() { const ul = $('tunes'); ul.innerHTML = ''; this.tunes.forEach((t, i) => { const li = document.createElement('li'); if (STN[this.si].mine && i === this.ti % Math.max(1, this.tunes.length) && this.on) li.className = 'cur'; const sp = document.createElement('span'); sp.textContent = t.name; sp.title = t.name; const b = document.createElement('button'); b.textContent = 'x'; b.title = 'Remove ' + t.name; b.addEventListener('click', async () => { await DB.del(t.id); await this.refreshTunes(); if (STN[this.si].mine && this.on) this.tuneIn(); }); li.append(sp, b); ul.append(li); }); },
+    async addFiles(files) { let n = 0; for (const f of files) { if (!/^audio\//.test(f.type) && !/\.(mp3|m4a|wav|ogg|flac|aac)$/i.test(f.name)) continue; await DB.add({ name: f.name.replace(/\.[^.]+$/, ''), blob: f, at: Date.now() }); n++; } await this.refreshTunes(); if (n) { alog('sh', n + ' tune' + (n > 1 ? 's' : '') + ' loaded on 107.7 CAPTAIN\'S MIX.'); this.si = 3; this.save(); if (!this.wire()) return; this.on = true; this.ti = this.tunes.length - n; this.tuneIn(); } },
+    show(note) { const st = STN[this.si]; $('freq').textContent = this.on ? st.f : '---.-'; $('freq').classList.toggle('off', !this.on); $('stn').textContent = this.on ? st.name : 'RADIO OFF'; $('pwr').classList.toggle('on', this.on);
+      $('np').textContent = note || (this.on ? (this.cur ? '♪ ' + this.cur : 'tuning...') + (st.who ? '  ·  ' + st.who : '') : 'Press POWER to switch on'); }
+  };
+  $('pwr').addEventListener('click', () => RAD.power()); $('prv').addEventListener('click', () => RAD.tune(-1)); $('nxt').addEventListener('click', () => RAD.tune(1)); $('skp').addEventListener('click', () => RAD.skip());
+  $('rvol').addEventListener('input', e => { RAD.vol = +e.target.value / 100; RAD.setVol(); RAD.save(); });
+  $('upl').addEventListener('change', e => { ctxAudio(); RAD.addFiles([...e.target.files]); e.target.value = ''; });
+  $('sfxon').addEventListener('change', () => ctxAudio()); addEventListener('pointerdown', () => ctxAudio(), { once: true }); addEventListener('keydown', () => ctxAudio(), { once: true });
+  const vz = $('viz'), vx = vz.getContext('2d'), vbuf = new Uint8Array(32);
+  function viz() { vx.clearRect(0, 0, 240, 34); if (!an || !RAD.on) return; an.getByteFrequencyData(vbuf); for (let i = 0; i < 24; i++) { const v = vbuf[i] / 255, h = Math.max(2, v * 32); vx.fillStyle = `hsl(${180 + i * 4},90%,${45 + v * 25}%)`; vx.fillRect(i * 10 + 1, 34 - h, 8, h); } }
+
+  // ===================== SIDE PANELS =====================
+  const pc = {}; const setT = (id, v) => { if (pc[id] !== v) { pc[id] = v; $(id).textContent = v; } }, setW = (id, p, col) => { const k = id + p + (col || ''); if (pc[id + 'w'] !== k) { pc[id + 'w'] = k; $(id).style.width = p + '%'; if (col) $(id).style.background = col; } };
+  const lamp = (id, on, ok) => { const k = on ? 1 : ok ? 2 : 0; if (pc[id] !== k) { pc[id] = k; $(id).className = 'lamp' + (on ? ' on' : ok ? ' ok' : ''); } };
+  let pTim = 0;
+  function panel(dt) { pTim -= dt; if (pTim > 0) return; pTim = .08; const sp = Math.round(Math.hypot(vel[0], vel[1], vel[2]));
+    setW('mHull', Math.round(hull), hull > 50 ? '#5dffa0' : hull > 25 ? '#ffb23d' : '#ff4d5e'); setT('vHull', Math.round(hull) + '%'); setW('mShield', Math.round(energy), shieldLock ? '#ff4d5e' : '#5dffa0'); setT('vShield', Math.round(energy) + '%');
+    setW('mThr', Math.round(clamp(sp / 6, 0, 100))); setT('vThr', Math.round(throttle * 100) + '%'); setT('vBomb', '●'.repeat(grenades) + '○'.repeat(Math.max(0, 5 - grenades))); setT('vScore', String(score).padStart(6, '0')); setT('vWave', String(Math.max(1, wave)));
+    setT('vHdg', String(Math.round(((yaw % TAU) + TAU) % TAU / TAU * 360)).padStart(3, '0')); setT('vSpd', String(sp));
+    const rc = rocks.some(r => Math.hypot(r.x, r.y, r.z) < 330);
+    lamp('lInc', !!incoming); lamp('lSix', sixT > .6); lamp('lRock', rc); lamp('lHull', hull < 30 && hull > 0); lamp('lShl', false, shieldOn); lamp('lTgt', false, !!target); setT('lTgt', target ? (target.kind === 'attack' ? 'LOCK: HUNTER' : 'LOCK: RUNNER') : 'NO LOCK'); }
+
+  // ===================== ARIA: ship advisor =====================
+  let speaking = false;
+  function alog(cls, text) { const el = $('alog'); if (!el) return; const p = document.createElement('p'); p.className = cls; p.textContent = (cls === 'me' ? '> ' : cls === 'ai' ? 'ARIA: ' : '') + text; el.append(p); while (el.children.length > 60) el.firstChild.remove(); el.scrollTop = el.scrollHeight; }
+  function ariaSpeak(text) { alog('ai', text); if (!voiceEl.checked) return; try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1.02; u.pitch = 1.25; u.onstart = () => { speaking = true; RAD.duck(RAD.ducking); }; u.onend = u.onerror = () => { speaking = false; RAD.duck(RAD.ducking); }; speechSynthesis.speak(u); } catch (x) {} }
+  const bearing = e => { const [cx, cy2, cz] = toCam(e.x, e.y, e.z), d = Math.round(Math.hypot(e.x, e.y, e.z)); let w; if (cz < 0 && Math.abs(cx) < Math.abs(cz) * .8 && Math.abs(cy2) < Math.abs(cz) * .8) w = 'directly behind you'; else { const lr = Math.abs(cx) < Math.abs(cz) * .2 && cz > 0 ? '' : cx > 0 ? 'right' : 'left', ud = Math.abs(cy2) < Math.abs(cz) * .2 && cz > 0 ? '' : cy2 > 0 ? 'up' : 'down'; w = (cz < 0 ? 'behind, ' : 'ahead, ') + ([lr, ud].filter(Boolean).join(' and ') || 'dead centre'); } return w + ', ' + d + ' units'; };
+  const nearest = list => list.slice().sort((a, b) => Math.hypot(a.x, a.y, a.z) - Math.hypot(b.x, b.y, b.z))[0];
+  function advise() {
+    const rn = nearest(rocks), jn = nearest(jets), parts = [];
+    if (over) return 'The ship is lost, Captain. Press Restart and we will go again.';
+    if (hull < 30) parts.push('Hull is critical. Hold space to raise shields and stay behind them until the field is quiet.');
+    if (incoming) parts.push('Incoming fire. Raise shields now, or jink with the 180 turn.');
+    else if (sixT > .6) parts.push('A hostile is on your six. Press X to spin around and face it.');
+    const rc = rocks.filter(r => Math.hypot(r.x, r.y, r.z) < 330);
+    if (rc.length > 1) parts.push(rc.length + ' rocks are close. A grenade on B clears them all.');
+    else if (rc.length === 1) parts.push('A rock is close, ' + bearing(rc[0]) + '. Shoot it or raise shields.');
+    if (!parts.length) {
+      if (jn && !target) parts.push('Press T to lock the nearest jet. It is ' + bearing(jn) + '.');
+      else if (jn) { parts.push((target.kind === 'attack' ? 'Hunter locked. Keep your nose on it and fire; it takes two hits.' : 'Runner locked. Chase it down and lead the shot with the bracket.') + ' It is ' + bearing(target) + '.'); }
+      else if (rn) parts.push('No jets left. Clear rocks for points. Nearest is ' + bearing(rn) + '.'); else parts.push('Sky is clear. Hold position, the next wave is coming.');
+    }
+    if (grenades === 0 && jets.length > 2) parts.push('You are out of grenades, so shoot carefully.'); else if (energy < 25 && !shieldOn) parts.push('Shield energy is low. Let it recharge.');
+    return parts.slice(0, 3).join(' ');
+  }
+  function status() { return 'Hull ' + Math.round(hull) + ' percent, shield ' + Math.round(energy) + ', ' + grenades + ' grenades. ' + jets.length + ' jets and ' + rocks.length + ' rocks on scope. Score ' + score + '.'; }
+  function aria(q) {
+    q = q.toLowerCase().replace(/[^a-z0-9. ]/g, ' ').replace(/\s+/g, ' ').trim(); if (!q) return; alog('me', q);
+    const has = (...w) => w.some(x => q.includes(x)); let a;
+    if (has('radio', 'station', 'channel', 'music', 'tune', 'song', 'play', 'volume', 'louder', 'quieter', 'turn it up', 'turn it down', 'skip', 'next song', 'stop the')) {
+      if (has('off', 'stop', 'mute', 'silence', 'shut')) { if (RAD.on) RAD.power(); a = 'Radio off.'; }
+      else if (has('jazz', '94')) { RAD.setStation(1); a = 'Deep Space Jazz, 94.5.'; } else if (has('rock', 'asteroid', '101')) { RAD.setStation(2); a = 'Asteroid Rock, 101.3.'; } else if (has('nova', 'wave', '88', 'pop', 'synth')) { RAD.setStation(0); a = 'Nova Wave, 88.1.'; }
+      else if (has('captain', 'mine', 'mix', 'my tune', 'my music', '107')) { RAD.setStation(3); a = RAD.tunes.length ? "Your mix, 107.7." : "Your mix, 107.7. It's empty. Use Upload your tune on the left."; }
+      else if (has('skip', 'next song', 'another song', 'next track')) { RAD.skip(); a = 'Skipping.'; }
+      else if (has('louder', 'up', 'increase')) { RAD.vol = Math.min(1, RAD.vol + .2); $('rvol').value = Math.round(RAD.vol * 100); RAD.setVol(); a = 'Volume up.'; } else if (has('quieter', 'down', 'lower', 'decrease')) { RAD.vol = Math.max(0, RAD.vol - .2); $('rvol').value = Math.round(RAD.vol * 100); RAD.setVol(); a = 'Volume down.'; }
+      else if (has('next', 'change', 'another', 'different')) { RAD.tune(1); a = STN[RAD.si].name + ', ' + STN[RAD.si].f + '.'; } else if (has('previous', 'back')) { RAD.tune(-1); a = STN[RAD.si].name + ', ' + STN[RAD.si].f + '.'; }
+      else { if (!RAD.on) RAD.power(); a = 'Radio on. ' + STN[RAD.si].name + '.'; }
+    }
+    else if (has('where') && has('jet', 'enemy', 'hostile', 'bandit', 'target')) { a = jets.length ? 'Nearest jet: ' + bearing(nearest(jets)) + '. ' + jets.length + ' on scope.' : 'No jets on scope.'; }
+    else if (has('where') && has('rock', 'asteroid')) { a = rocks.length ? 'Nearest rock: ' + bearing(nearest(rocks)) + '.' : 'No rocks on scope.'; }
+    else if (has('status', 'how am i', 'damage', 'health', 'report')) a = status();
+    else if (has('shield')) a = 'Hold space or the right mouse button to raise shields. They soak hits but drain energy and your guns stay offline while they are up. Energy is ' + Math.round(energy) + ' percent.';
+    else if (has('grenade', 'bomb')) a = 'Press B. It destroys every rock and jet within close range and wipes enemy fire. You have ' + grenades + '.';
+    else if (has('aim', 'shoot', 'fire')) a = 'Keep the cursor in the dashed box to aim, then click or hold shift. With auto-fire on, the guns open up when the crosshair is on a rock.';
+    else if (has('turn', 'steer', 'move', 'control', 'fly')) a = 'Push the cursor past the dashed box to turn; the further out, the faster. Up arrow thrusts, down arrow brakes. Press X for a fast 180.';
+    else if (has('target', 'lock')) a = 'Press T to cycle your lock through the jets, nearest first. The bracket shows where to lead your shot.';
+    else if (has('who are you', 'your name', 'aria')) a = 'I am ARIA, your ship advisor. I read the scope and tell you what to do, and I run the radio too.';
+    else if (has('thank', 'good job', 'nice')) a = 'Always, Captain.'; else if (has('hello', 'hi ', 'hey') || q === 'hi') a = 'Aria here, Captain. Ask me what to do, or ask for some music.';
+    else a = advise();
+    ariaSpeak(a);
+  }
+  $('askf').addEventListener('submit', e => { e.preventDefault(); const v = $('askin').value; $('askin').value = ''; ctxAudio(); aria(v); });
+  document.querySelectorAll('.chips button').forEach(b => b.addEventListener('click', () => { ctxAudio(); aria(b.dataset.q); }));
+  { const SR = window.SpeechRecognition || window.webkitSpeechRecognition, mic = $('mic');
+    if (!SR) { mic.style.display = 'none'; $('asmall').textContent = 'Voice input needs Chrome or Edge. Typing works everywhere.'; }
+    else { let rec = null, live = false; mic.addEventListener('click', () => { ctxAudio(); if (live) { try { rec.stop(); } catch (x) {} return; }
+      rec = new SR(); rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1; rec.onstart = () => { live = true; mic.classList.add('live'); mic.textContent = 'LISTENING'; try { speechSynthesis.cancel(); } catch (x) {} };
+      rec.onresult = ev => { const t = ev.results[0][0].transcript; aria(t); }; rec.onerror = ev => { if (ev.error === 'not-allowed') alog('sh', 'Microphone blocked. Allow it in the browser address bar to talk to ARIA.'); };
+      rec.onend = () => { live = false; mic.classList.remove('live'); mic.textContent = 'MIC'; }; try { rec.start(); } catch (x) {} }); } }
+  RAD.init();
+  window.G = Object.assign(window.G || {}, { RAD, aria, AU, advise });
   let last = performance.now();
-  function loop(t) { if (arrowShown && !warned.arrows && time > 4) { warned.arrows = 1; say('Arrows at the screen edge point to things you cannot see. Turn toward them.', 6); } const dt = Math.min(.05, (t - last) / 1000); last = t; update(dt); draw(); requestAnimationFrame(loop); }
+  function loop(t) { if (arrowShown && !warned.arrows && time > 4) { warned.arrows = 1; say('Arrows at the screen edge point to things you cannot see. Turn toward them.', 6); } const dt = Math.min(.05, (t - last) / 1000); last = t; update(dt); draw(); AU.tick(dt); panel(dt); viz(); requestAnimationFrame(loop); }
   reset(); requestAnimationFrame(loop);
 })();
 </script>
