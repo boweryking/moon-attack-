@@ -42,7 +42,7 @@
   .tunes li { display:flex; justify-content:space-between; gap:6px; padding:2px 0; color:var(--dim); } .tunes li.cur { color:var(--cy); }
   .tunes li span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .tunes li button { all:unset; cursor:pointer; color:#7a4350; padding:0 4px; }
   .upl { display:block; margin-top:8px; box-sizing:border-box; }
-  #alog { height:210px; overflow:auto; font:12px/1.45 var(--mono); background:#03070f; border:1px solid #1d2f5a; border-radius:4px; padding:6px 8px; }
+  #alog { height:170px; overflow:auto; font:12px/1.45 var(--mono); background:#03070f; border:1px solid #1d2f5a; border-radius:4px; padding:6px 8px; }
   #alog p { margin:0 0 6px; } #alog .me { color:var(--am); } #alog .ai { color:var(--cy); } #alog .sh { color:#6e86bd; } #alog .dr { color:#d19bff; }
   .ask { display:flex; gap:6px; margin-top:8px; } .ask input { flex:1; min-width:0; font:13px var(--mono); color:var(--ink); background:#03070f; border:1px solid var(--line); border-radius:4px; padding:6px 8px; }
   .ask input:focus-visible, .pnl button:focus-visible, .upl:focus-visible { outline:2px solid var(--cy); outline-offset:1px; }
@@ -50,6 +50,9 @@
   #mic.live { border-color:var(--rd); color:#fff; background:#4a0f1a; animation:bl .8s steps(2) infinite; }
   .chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; } .chips button { flex:0 0 auto; padding:4px 8px; font-size:11px; }
   .small { font:11px var(--mono); color:#5f74a6; margin-top:6px; }
+  .route { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; } .route span { font:10px var(--mono); padding:2px 4px; border:1px solid #1d2f5a; border-radius:3px; color:#3d5288; }
+  .route .done { color:#aaffd0; border-color:#2a7a52; } .route .cur { color:#fff; border-color:var(--cy); box-shadow:0 0 8px rgba(95,240,255,.5); }
+  #nvObj { color:var(--ink); font:12px var(--mono); }
   @media (max-width:1100px) { .deck { grid-template-columns:1fr; } .col { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); } #stage { order:-1; } }
   h1 { font:700 22px/1.2 var(--ui); letter-spacing:.04em; margin:0; text-transform:uppercase; color:var(--cy); text-shadow:0 0 14px rgba(95,240,255,.45); }
   .sub { color:var(--dim); margin:2px 0 0; max-width:62ch; }
@@ -99,13 +102,21 @@
     </div>
     <div id="stage"><canvas id="c" width="1280" height="720" aria-label="Cockpit view game"></canvas></div>
     <div class="col" id="right">
+      <section class="pnl" aria-label="Navigation">
+        <h2>Navigation</h2>
+        <div class="row"><b>SECTOR</b><span class="val" id="nvLoc" style="text-align:left;color:var(--cy)"></span></div>
+        <div class="row"><b>GOAL</b><span id="nvObj"></span></div>
+        <div class="row"><b>NEXT</b><span class="val" id="nvNext" style="text-align:left"></span></div>
+        <div class="meter"><i id="mNav" style="background:var(--am)"></i></div>
+        <div class="route" id="route"></div>
+      </section>
       <section class="pnl" aria-label="Ship systems">
         <h2>Systems</h2>
         <div class="row"><b>HULL</b><div class="meter"><i id="mHull"></i></div><span class="val" id="vHull"></span></div>
         <div class="row"><b>SHIELD</b><div class="meter"><i id="mShield"></i></div><span class="val" id="vShield"></span></div>
         <div class="row"><b>THRUST</b><div class="meter"><i id="mThr" style="background:var(--cy)"></i></div><span class="val" id="vThr"></span></div>
         <div class="row"><b>BOMBS</b><span id="vBomb" style="color:#ffd23d;letter-spacing:.2em"></span></div>
-        <div class="row"><b>SCORE</b><span class="val" id="vScore" style="text-align:left"></span><b style="width:auto">FIELD</b><span class="val" id="vWave"></span></div>
+        <div class="row"><b>SCORE</b><span class="val" id="vScore" style="text-align:left"></span><b style="width:auto">AREA</b><span class="val" id="vWave"></span></div>
         <div class="row"><b>HEADING</b><span class="val" id="vHdg" style="text-align:left"></span><b style="width:auto">SPEED</b><span class="val" id="vSpd"></span></div>
         <div class="lamps"><div class="lamp" id="lInc">INCOMING</div><div class="lamp" id="lSix">HOSTILE 6</div><div class="lamp" id="lRock">ROCK CLOSE</div><div class="lamp" id="lHull">HULL LOW</div><div class="lamp" id="lShl">SHIELD UP</div><div class="lamp" id="lTgt">NO LOCK</div></div>
       </section>
@@ -163,6 +174,25 @@
     { id: 'help', x: W * .945, y: H * .085, r: 26, col: '#d6e6ff', label: '?' }];
   const held = new Map(), isHeld = id => { for (const v of held.values()) if (v === id) return true; return false; };
   let grenades = 3, energy = 100, shieldOn = false, shieldLock = false, shieldHit = 0, target = null, helpOpen = false, msg = { t: 0, text: '' }, sixT = 0, callT = 0, rockCallT = 0, warned = {}, blasts = [];
+  // ===================== THE JOURNEY: Earth -> Moon -> Mars ... out to Pluto, then in past Venus to Mercury =====================
+  const ROUTE = [
+    { n: 'EARTH', t: 'earth', waves: 1, leg: 30, belt: .15, al: 0 }, { n: 'MOON', t: 'moon', waves: 3, leg: 60, belt: .85, al: .2 }, { n: 'MARS', t: 'mars', waves: 3, leg: 75, belt: 1, al: .35 },
+    { n: 'JUPITER', t: 'jup', waves: 3, leg: 70, belt: .4, al: .4 }, { n: 'SATURN', t: 'ring', waves: 3, leg: 70, belt: .4, al: .5 }, { n: 'URANUS', t: 'uran', waves: 3, leg: 70, belt: .35, al: .55 },
+    { n: 'NEPTUNE', t: 'nep', waves: 3, leg: 70, belt: .35, al: .6 }, { n: 'PLUTO', t: 'plu', waves: 4, leg: 80, belt: .5, al: .7 }, { n: 'VENUS', t: 'ven', waves: 4, leg: 80, belt: .3, al: .7 }, { n: 'MERCURY', t: 'mer', waves: 5, leg: 0, belt: 0, al: .8 }];
+  const FACTS = {
+    EARTH: ['Earth is home. Seventy percent of the surface is ocean, and it is the only planet we know with life.', 'Earth spins once a day and circles the Sun once a year, at about thirty kilometres a second.'],
+    MOON: ['The Moon is about a quarter the width of Earth. It is slowly drifting away, about four centimetres a year.', 'The Moon always shows us the same face. Its far side was first photographed in nineteen fifty nine.'],
+    MARS: ['Mars is the red planet. Olympus Mons, its biggest volcano, is about three times taller than Everest.', 'A day on Mars is about twenty four and a half hours. It has two tiny moons, Phobos and Deimos.'],
+    JUPITER: ['Jupiter is the biggest planet. More than a thousand Earths would fit inside it.', 'Its Great Red Spot is a storm bigger than Earth that has raged for hundreds of years.'],
+    SATURN: ['Saturn is the ring planet. Its rings are mostly ice, and are thin enough to be only metres thick in places.', 'Saturn is so light for its size that it would float in a big enough bathtub.'],
+    URANUS: ['Uranus rolls around the Sun on its side, tilted nearly ninety degrees.', 'Uranus is an ice giant, and its blue green colour comes from methane in the air.'],
+    NEPTUNE: ['Neptune has the fastest winds in the solar system, over two thousand kilometres an hour.', 'Neptune takes one hundred sixty four Earth years to go around the Sun once.'],
+    PLUTO: ['Pluto is a dwarf planet with a big heart shaped plain of frozen nitrogen.', 'Pluto and its moon Charon are locked face to face, so each sees only one side of the other.'],
+    VENUS: ['Venus is the hottest planet, hot enough to melt lead, because of its thick carbon dioxide air.', 'A day on Venus is longer than its year, and it spins backwards.'],
+    MERCURY: ['Mercury is the closest planet to the Sun and the smallest. Its surface swings from burning hot to freezing cold.', 'A year on Mercury is only eighty eight Earth days.']
+  };
+  const NEBP = [['60,120,255', '40,200,200', '120,160,255', '80,100,220'], ['120,60,200', '40,160,200', '220,70,150', '90,80,220'], ['230,100,60', '200,60,90', '240,160,80', '150,60,60'], ['220,170,90', '230,120,60', '120,90,50', '200,150,100'], ['90,200,170', '60,150,200', '140,230,200', '60,110,170'], ['70,120,230', '40,60,180', '110,70,210', '50,150,220'], ['200,120,220', '120,90,200', '230,150,200', '90,70,170'], ['150,170,200', '90,110,150', '200,210,230', '70,90,130'], ['240,200,90', '230,140,50', '255,230,150', '190,120,60'], ['255,160,60', '240,90,40', '255,210,120', '200,70,30']];
+  const J = { i: 0, phase: 'fight', cleared: 0, need: 1, waveLive: false, t: 0, dur: 0, warp: 0, flashW: 0, fired: {}, done: false, raids: 0 };
   const tilt = { on: false, has: false, b: 0, g: 0, b0: 0, g0: 0, cal: false };
   const voiceEl = document.getElementById('voice'), tiltMsg = document.getElementById('tiltMsg');
   const LEVER = { x: W * .945, y0: H * .2, y1: H * .74 };
@@ -181,16 +211,18 @@
     let dir = [r * Math.cos(t), u, r * Math.sin(t)]; if (front) { const q = Math.hypot(rnd(-.45, .45), rnd(-.3, .3), 1); dir = toWorldDir(rnd(-.45, .45) / q, rnd(-.3, .3) / q, 1 / q); }
     addRock(3, dir[0] * d, dir[1] * d, dir[2] * d, [-dir[0] * s + rnd(-25, 25), -dir[1] * s + rnd(-25, 25), -dir[2] * s + rnd(-25, 25)]);
   }
-  function startWave() {
-    wave++; if (wave > 1) { AU.chime(); DR.say('happy', true); grenades = Math.min(5, grenades + 1); say('Wave ' + wave + '. Hostile jets inbound. Grenade restocked.', 4); } const nj = Math.min(1 + wave, 6); for (let i = 0; i < nj; i++) addJet(i % 2 ? 'run' : 'attack', i < 2);
-    for (let i = rocks.length; i < Math.min(2 + wave, 7); i++) spawn(i < 1);
+  function startWave(quiet) {
+    wave++; J.waveLive = true; const k = J.cleared;
+    if (!quiet && wave > 1) { AU.chime(); DR.say('happy', true); grenades = Math.min(5, grenades + 1); say(J.done ? 'Wave ' + wave + '. More hostiles inbound.' : 'Wave ' + (k + 1) + ' of ' + J.need + ' at ' + ROUTE[J.i].n + '. Grenade restocked.', 4); }
+    const nj = Math.min(1 + Math.ceil(k + 1 + J.i * .6), 6), al = ROUTE[J.i].al; for (let i = 0; i < nj; i++) addJet(i % 2 ? 'run' : 'attack', i < 2, i % 2 === 0 && Math.random() < al);
+    for (let i = rocks.length; i < Math.min(2 + k + J.i, 7); i++) spawn(i < 1);
   }
-  function addJet(kind, front) { // 'attack' jets come at you and shoot; 'run' jets flee and you hunt them
+  function addJet(kind, front, alien) { // 'attack' jets come at you and shoot; 'run' jets flee and you hunt them
     const d = rnd(900, 1300); let dir;
     if (front) { const q = Math.hypot(rnd(-.5, .5), rnd(-.3, .3), 1); dir = toWorldDir(rnd(-.5, .5) / q, rnd(-.3, .3) / q, 1 / q); }
     else { const u = rnd(-.5, .5), t = rnd(0, TAU), r = Math.sqrt(1 - u * u); dir = [r * Math.cos(t), u, r * Math.sin(t)]; }
-    const sp = (kind === 'run' ? 150 : 175) + wave * 8, h = kind === 'run' ? dir : dir.map(v => -v);
-    jets.push({ x: dir[0] * d, y: dir[1] * d, z: dir[2] * d, vx: h[0] * sp, vy: h[1] * sp, vz: h[2] * sp, sp, kind, hp: 2, evade: 0, fireT: rnd(1.5, 3), hit: 0, jink: rnd(0, TAU) });
+    const sp = (kind === 'run' ? 150 : alien ? 195 : 175) + Math.min(wave, 12) * 8, h = kind === 'run' ? dir : dir.map(v => -v);
+    jets.push({ x: dir[0] * d, y: dir[1] * d, z: dir[2] * d, vx: h[0] * sp, vy: h[1] * sp, vz: h[2] * sp, sp, kind, alien: !!alien, hp: alien ? 3 : 2, evade: 0, fireT: rnd(1.5, 3), hit: 0, jink: rnd(0, TAU) });
   }
   function steer(e, tx, ty, tz, turn, dt) {
     const l = Math.hypot(tx, ty, tz) || 1; tx /= l; ty /= l; tz /= l; const vl = Math.hypot(e.vx, e.vy, e.vz) || 1; let dx = e.vx / vl, dy = e.vy / vl, dz = e.vz / vl; const k = Math.min(1, turn * dt);
@@ -206,7 +238,7 @@
   }
   function cycleTarget() { AU.lock(); DR.say('curious');
     const list = jets.slice().sort((a, b) => Math.hypot(a.x, a.y, a.z) - Math.hypot(b.x, b.y, b.z)); if (!list.length) { say('No hostile jets.', 2); return; }
-    const i = list.indexOf(target); target = i < 0 ? list[0] : (i + 1 < list.length ? list[i + 1] : null); if (target) { target.prev = Math.hypot(target.x, target.y, target.z); target.close = 0; say(target.kind === 'attack' ? 'Target locked. Hunter jet.' : 'Target locked. Runner jet.', 2.5); } else say('Target released.', 2);
+    const i = list.indexOf(target); target = i < 0 ? list[0] : (i + 1 < list.length ? list[i + 1] : null); if (target) { target.prev = Math.hypot(target.x, target.y, target.z); target.close = 0; say(target.alien ? 'Target locked. Alien raider.' : target.kind === 'attack' ? 'Target locked. Hunter jet.' : 'Target locked. Runner jet.', 2.5); } else say('Target released.', 2);
   }
   function grenade() {
     if (grenades <= 0) { say('No grenades left.', 2); return; } grenades--; blasts.push({ t: .6 }); AU.gren(); flash = .6; shake = .4; const R = 520;
@@ -215,7 +247,7 @@
     ebolts.length = 0; say('Grenade away. ' + grenades + ' left.', 2.5);
   }
   function press(id) { if (id === 'flip') { if (flipT <= 0) { flipT = .35; AU.whoosh(); } } else if (id === 'gren') grenade(); else if (id === 'tgt') cycleTarget(); else if (id === 'help') helpOpen = !helpOpen; }
-  function reset() { rocks.length = shots.length = sparks.length = jets.length = ebolts.length = 0; flipT = 0; throttle = 0; yaw = pitch = 0; vel = [0, 0, 0]; pos = [0, 0, 0]; hull = 100; score = 0; wave = 0; over = false; grenades = 3; energy = 100; shieldLock = false; target = null; helpOpen = false; warned = {}; blasts.length = 0; held.clear(); startWave(); say('Onboard computer online. Press H for help.', 6, false); }
+  function reset() { rocks.length = shots.length = sparks.length = jets.length = ebolts.length = 0; flipT = 0; throttle = 0; yaw = pitch = 0; vel = [0, 0, 0]; pos = [0, 0, 0]; hull = 100; score = 0; wave = 0; over = false; grenades = 3; energy = 100; shieldLock = false; target = null; helpOpen = false; warned = {}; blasts.length = 0; held.clear(); resetJ(); startWave(); say('Onboard computer online. Mission: fly from Earth past the Moon and Mars, and on to Pluto. Press H for help.', 7, false); }
 
   // --- 3D helpers. World: x right, y up, z forward at yaw 0.
   const cy = () => Math.cos(yaw), sy = () => Math.sin(yaw), cp = () => Math.cos(pitch), sp = () => Math.sin(pitch);
@@ -297,6 +329,46 @@
     if (r.size > 1) for (let k = 0; k < 2; k++) addRock(r.size - 1, r.x, r.y, r.z, [r.vx + rnd(-70, 70), r.vy + rnd(-70, 70), r.vz + rnd(-70, 70)]);
   }
 
+  function fmtT(sec) { sec = Math.max(0, Math.ceil(sec)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
+  function transitInfo() { if (J.phase !== 'transit') return 'We are at ' + ROUTE[J.i].n + '. Clear ' + (J.need - J.cleared) + ' more wave' + (J.need - J.cleared === 1 ? '' : 's') + ' to move on.'; const r = Math.max(0, Math.ceil(J.dur - J.t)); return (r >= 60 ? Math.floor(r / 60) + ' minute' + (r >= 120 ? 's ' : ' ') + (r % 60 ? 'and ' + r % 60 + ' seconds' : '') : r + ' seconds') + ' to ' + ROUTE[J.i + 1].n + '.'; }
+  function buildLM() {
+    const i = J.i, R = ROUTE[i], N = ROUTE[i + 1], L = [{ n: 'NEBULA', az: rnd(-2.5, 2.5), el: .08, r: .5, t: 'neb', pal: NEBP[i % NEBP.length] }, { n: 'SUN', az: 2.3, el: .2, r: R.t === 'mer' ? .26 : R.t === 'ven' ? .17 : Math.max(.03, .12 - i * .011), t: 'sun' }];
+    if (J.phase === 'fight') {
+      L.push({ n: R.n, az: .55, el: .1, r: R.t === 'earth' ? .34 : R.t === 'moon' ? .27 : .3, t: R.t });
+      const ex = { EARTH: [['MOON', -.8, .2, .06, 'moon'], ['STATION', -1.5, -.1, .05, 'stn']], MOON: [['EARTH', -.9, .2, .13, 'earth'], ['STATION', -1.8, -.1, .04, 'stn']], MARS: [['PHOBOS', -.7, .25, .035, 'moon'], ['STATION', -1.6, -.12, .04, 'stn']], JUPITER: [['EUROPA', -.8, .22, .05, 'moon2'], ['IO', -1.5, -.1, .04, 'moon']], SATURN: [['TITAN', -.8, .2, .06, 'moon2']], URANUS: [['MIRANDA', -.8, .2, .04, 'moon']], NEPTUNE: [['TRITON', -.8, .22, .05, 'moon2']], PLUTO: [['CHARON', -.7, .22, .09, 'moon']], VENUS: [], MERCURY: [] }[R.n] || [];
+      for (const [n, az, el, r, t] of ex) L.push({ n, az, el, r, t });
+    } else { L.push({ n: R.n, az: 3.1, el: .1, r: .2, t: R.t, orig: true }); L.push({ n: N.n, az: .2, el: .06, r: .02, t: N.t, dest: true }); }
+    LM = L.map(o => ({ ...o, d: dirOf(o.az, o.el) }));
+  }
+  function resetJ() { Object.assign(J, { i: 0, phase: 'fight', cleared: 0, need: ROUTE[0].waves, waveLive: false, t: 0, dur: 0, warp: 0, flashW: 0, fired: {}, done: false, raids: 0 }); buildLM(); }
+  function beginTransit() {
+    const R = ROUTE[J.i], N = ROUTE[J.i + 1]; J.waveLive = false;
+    if (!N) { J.done = true; say('Journey complete, Captain. You have flown the whole solar system. Fight on as long as you like.', 8); alog('sh', 'JOURNEY COMPLETE. Endless mode.'); DR.say('happy', true); AU.chime(); return; }
+    J.phase = 'transit'; J.t = 0; J.dur = R.leg; J.fired = {}; J.raids = 0; jets.length = 0; ebolts.length = 0; target = null; J.flashW = .5; AU.chime(); buildLM();
+    if (R.belt > .5) for (let k = 0; k < 4; k++) spawn(k < 3);
+  }
+  function arrive() {
+    J.i++; J.phase = 'fight'; J.cleared = 0; J.need = ROUTE[J.i].waves; rocks.length = jets.length = ebolts.length = 0; target = null; J.flashW = 1; J.warp = 0; hull = Math.min(100, hull + 25); energy = 100; grenades = Math.min(5, grenades + 1);
+    buildLM(); startWave(true); AU.chime(); say('Arrived at ' + ROUTE[J.i].n + '. Supplies loaded: hull plus twenty five and one grenade. Hostiles on scope.', 6); DR.say('arrive', true);
+  }
+  function journey(dt) {
+    J.warp = Math.max(0, J.warp - dt * .6); if (J.flashW > 0) J.flashW = Math.max(0, J.flashW - dt * 1.2);
+    for (const L of LM) { if (L.dest) L.r = .02 + .24 * Math.pow(J.t / J.dur, 1.6); else if (L.orig) L.r = Math.max(.02, .2 * (1 - J.t / J.dur * 1.4)); }
+    if (J.phase === 'fight') {
+      if (!jets.length) { if (J.waveLive) { J.waveLive = false; J.cleared++; } if (!J.done && J.cleared >= J.need) beginTransit(); else startWave(); }
+      return;
+    }
+    J.t += dt; const R = ROUTE[J.i], N = ROUTE[J.i + 1], rem = J.dur - J.t, once = (k, fn) => { if (!J.fired[k]) { J.fired[k] = 1; fn(); } };
+    if (J.t < 3) J.warp = Math.max(J.warp, 1 - J.t / 3); if (rem < 6) J.warp = Math.max(J.warp, 1 - rem / 6);
+    once('go', () => { say('Sector clear. Course plotted for ' + N.n + '. Estimated flight time ' + (R.leg >= 60 ? Math.round(R.leg / 60 * 10) / 10 + ' minutes' : R.leg + ' seconds') + '. ' + (R.belt > .7 ? 'Asteroid belt ahead. Stay sharp.' : 'Watch for debris.'), 7); DR.say('hyper', true); });
+    if (J.t > 9) once('belt', () => { if (R.belt > .5) DR.say('belt', true); else DR.say('ack', true); });
+    const nr = R.al <= 0 ? 0 : R.al < .3 ? 1 : 2; for (let k = 0; k < nr; k++) if (J.t > R.leg * (.3 + k * .3)) once('raid' + k, () => { const n = Math.min(5, 2 + Math.floor(J.i / 2) + k); say('Warning. Unknown vessels on intercept. Those are not Earth designs.', 5); DR.say('alien', true); for (let q = 0; q < n; q++) addJet('attack', q < 2, true); });
+    if (R.leg > 40 && rem < R.leg - 20 && rem < 45) once('m45', () => say(Math.round(rem) + ' seconds to ' + N.n + '. Check your information computer. ARIA can tell you about ' + N.n + '.', 5));
+    if (rem < 30 && R.leg > 30) once('m30', () => say('Thirty seconds to ' + N.n + '. The radio is available if you want some music.', 5));
+    if (rem < 22 && R.leg > 40) once('fact', () => ariaSpeak('Fun fact about ' + N.n + '. ' + FACTS[N.n][Math.floor(Math.random() * 2)]));
+    if (rem < 10) once('m10', () => { say('Ten seconds. Preparing to drop out of hyperspace.', 4); DR.say('hyper', true); });
+    if (rem <= 0) arrive();
+  }
   function update(dt) {
     time += dt; if (over || helpOpen) return;
     if (msg.t > 0) msg.t -= dt;
@@ -353,9 +425,9 @@
       const e = jets[i], d = Math.hypot(e.x, e.y, e.z) || 1, to = [-e.x / d, -e.y / d, -e.z / d]; e.jink += dt * 1.7; if (e.hit > 0) e.hit -= dt;
       if (e.kind === 'attack') {
         if (e.evade > 0) { e.evade -= dt; steer(e, -to[0] + Math.sin(e.jink) * .8, -to[1] + Math.cos(e.jink * 1.3) * .6, -to[2], 1.6, dt); }
-        else { steer(e, to[0], to[1], to[2], 1.2, dt); if (d < 170) e.evade = 2.4; }
+        else { steer(e, to[0] + (e.alien ? Math.sin(e.jink * 1.6) * .35 : 0), to[1] + (e.alien ? Math.cos(e.jink * 1.1) * .3 : 0), to[2], 1.2, dt); if (d < 170) e.evade = 2.4; }
         e.fireT -= dt; const facing = (e.vx * to[0] + e.vy * to[1] + e.vz * to[2]) / e.sp;
-        if (e.evade <= 0 && e.fireT <= 0 && d < 950 && d > 140 && facing > .92) { ebolts.push({ x: e.x, y: e.y, z: e.z, vx: to[0] * 700 + rnd(-30, 30), vy: to[1] * 700 + rnd(-30, 30), vz: to[2] * 700 + rnd(-30, 30), life: 3 }); e.fireT = rnd(1.1, 2.2); }
+        if (e.evade <= 0 && e.fireT <= 0 && d < 950 && d > 140 && facing > .92) { ebolts.push({ x: e.x, y: e.y, z: e.z, vx: to[0] * 700 + rnd(-30, 30), vy: to[1] * 700 + rnd(-30, 30), vz: to[2] * 700 + rnd(-30, 30), life: 3, alien: e.alien }); e.fireT = e.alien ? rnd(.8, 1.7) : rnd(1.1, 2.2); }
       } else if (d > 1700) steer(e, to[0], to[1], to[2], .8, dt);
       else steer(e, -to[0] + Math.sin(e.jink) * .7, -to[1] + Math.cos(e.jink * 1.3) * .5, -to[2], 1.0, dt);
       e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
@@ -364,7 +436,7 @@
     incoming = 0;
     for (let i = ebolts.length - 1; i >= 0; i--) {
       const b = ebolts[i]; b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; const d = Math.hypot(b.x, b.y, b.z);
-      if (d < 34) { damage(7); boom(b.x, b.y, b.z, 10, '#ff9a3d'); ebolts.splice(i, 1); continue; }
+      if (d < 34) { damage(b.alien ? 9 : 7); boom(b.x, b.y, b.z, 10, b.alien ? '#9dff3a' : '#ff9a3d'); ebolts.splice(i, 1); continue; }
       if (d < 600) incoming = 1; if (b.life <= 0) ebolts.splice(i, 1);
     }
     for (let i = sparks.length - 1; i >= 0; i--) { const p = sparks[i]; p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; if (p.life <= 0) sparks.splice(i, 1); }
@@ -376,8 +448,9 @@
     if (hull < 30 && !warned.hull) { warned.hull = 1; DR.say('alarm', true); say('Hull critical. Raise shields.', 4); }
     if (!shieldOn && rockCallT <= 0) for (const r of rocks) if (Math.hypot(r.x, r.y, r.z) < 330) { say('Rock close. Raise shields or throw a grenade.', 3.5); rockCallT = 14; break; }
     for (const bl of blasts) bl.t -= dt; blasts = blasts.filter(bl => bl.t > 0);
-    rockT -= dt; if (rockT <= 0) { if (rocks.length < 4 + wave) spawn(false); rockT = 7; }
-    if (!jets.length) startWave();
+    const inT = J.phase === 'transit', belt = inT ? ROUTE[J.i].belt : 0;
+    rockT -= dt; if (rockT <= 0) { const cap = inT ? Math.round(3 + 10 * belt) : Math.min(4 + wave, 9); if (rocks.length < cap) spawn(false); rockT = inT ? Math.max(.8, 4.5 - 3.5 * belt) : 7; }
+    journey(dt);
     shake = Math.max(0, shake - dt); flash = Math.max(0, flash - dt * 1.5); hitT = Math.max(0, hitT - dt);
   }
 
@@ -388,17 +461,42 @@
   // --- scenery: far-off landmarks fixed on the sky sphere (they only rotate, so they show you which way you are turning)
   const gridEl = document.getElementById('gridc');
   const dirOf = (az, el) => [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
-  const LM = [
+  let LM = [
     { n: 'NEBULA', az: 0, el: .08, r: .5, t: 'neb' }, { n: 'MOON', az: .42, el: .13, r: .055, t: 'moon' }, { n: 'SUN', az: 1.15, el: .22, r: .1, t: 'sun' },
     { n: 'RINGWORLD', az: 2.35, el: .26, r: .2, t: 'ring' }, { n: 'STATION', az: 3.55, el: -.08, r: .05, t: 'stn' }, { n: 'GAS GIANT', az: -2.15, el: .18, r: .23, t: 'gas' }, { n: 'ICE MOON', az: -1.0, el: -.2, r: .09, t: 'moon2' }].map(o => ({ ...o, d: dirOf(o.az, o.el) }));
   const wrapA = a => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };
   function ball(x, y, R, c0, c1, c2) { const g = ctx.createRadialGradient(x - R * .38, y - R * .38, R * .1, x, y, R); g.addColorStop(0, c0); g.addColorStop(.55, c1); g.addColorStop(1, c2); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.fill(); }
+  function clipC(x, y, R) { ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.clip(); }
+  function blobs(x, y, R, list, col) { ctx.save(); clipC(x, y, R); ctx.fillStyle = col; for (const [dx, dy, rx, ry, rot] of list) { ctx.beginPath(); ctx.ellipse(x + dx * R, y + dy * R, rx * R, ry * R, rot, 0, TAU); ctx.fill(); } ctx.restore(); }
+  function bandsC(x, y, R, c1, c2, n) { ctx.save(); clipC(x, y, R); for (let k = -n; k <= n; k++) { ctx.fillStyle = k % 2 ? c1 : c2; ctx.fillRect(x - R, y + k * R / n * .95 - R * .05, R * 2, R * .11); } ctx.restore(); }
+  function night(x, y, R) { ctx.fillStyle = 'rgba(2,3,10,.42)'; ctx.beginPath(); ctx.arc(x + R * .45, y + R * .2, R * 1.02, 0, TAU); ctx.arc(x, y, R, 0, TAU, true); ctx.fill(); }
+  function drawBody(t, x, y, R) {
+    if (t === 'earth') { ball(x, y, R, '#a8dcff', '#2c74c8', '#07224d'); blobs(x, y, R, [[-.25, -.1, .3, .22, .3], [.2, .2, .22, .3, -.4], [.35, -.38, .15, .1, 0], [-.4, .45, .18, .1, .5]], 'rgba(70,170,90,.85)'); bandsC(x, y, R, 'rgba(255,255,255,.09)', 'rgba(255,255,255,0)', 4); ctx.strokeStyle = 'rgba(140,200,255,.35)'; ctx.lineWidth = Math.max(2, R * .05); ctx.beginPath(); ctx.arc(x, y, R * 1.02, 0, TAU); ctx.stroke(); night(x, y, R); }
+    else if (t === 'mars') { ball(x, y, R, '#ffd0a8', '#c8582c', '#4a1a0c'); blobs(x, y, R, [[-.2, .1, .3, .14, .2], [.3, -.15, .2, .12, -.3], [.1, .4, .25, .1, 0]], 'rgba(90,30,15,.45)'); blobs(x, y, R, [[0, -.95, .45, .2, 0], [0, .97, .3, .12, 0]], 'rgba(255,255,255,.8)'); night(x, y, R); }
+    else if (t === 'jup') { ball(x, y, R, '#fff0d0', '#d29a5c', '#4a2a14'); bandsC(x, y, R, 'rgba(160,90,50,.35)', 'rgba(255,235,200,.3)', 6); blobs(x, y, R, [[.3, .35, .2, .11, 0]], 'rgba(200,70,40,.75)'); night(x, y, R); ball(x + R * 1.55, y - R * .35, R * .06, '#fff', '#ddc', '#665'); ball(x - R * 1.4, y + R * .5, R * .05, '#ffe0a0', '#c08040', '#503020'); }
+    else if (t === 'uran') { ball(x, y, R, '#e8ffff', '#70d4dc', '#1a4a58'); bandsC(x, y, R, 'rgba(255,255,255,.1)', 'rgba(0,80,100,.1)', 3); night(x, y, R); ctx.save(); ctx.translate(x, y); ctx.rotate(1.3); ctx.strokeStyle = 'rgba(200,240,250,.5)'; ctx.lineWidth = Math.max(1.5, R * .04); ctx.beginPath(); ctx.ellipse(0, 0, R * 1.7, R * .22, 0, 0, TAU); ctx.stroke(); ctx.restore(); }
+    else if (t === 'nep') { ball(x, y, R, '#a8c4ff', '#3454d8', '#0a1250'); bandsC(x, y, R, 'rgba(255,255,255,.1)', 'rgba(0,10,80,.18)', 5); blobs(x, y, R, [[-.2, .2, .18, .09, 0]], 'rgba(10,20,90,.6)'); night(x, y, R); }
+    else if (t === 'plu') { ball(x, y, R, '#fff3e6', '#c9a98a', '#4a3a30'); blobs(x, y, R, [[-.12, -.05, .22, .2, .3], [.12, -.05, .2, .22, -.3], [0, .12, .2, .2, 0]], 'rgba(255,248,240,.75)'); blobs(x, y, R, [[-.5, .4, .25, .15, 0], [.4, .5, .2, .12, 0]], 'rgba(90,60,40,.5)'); night(x, y, R); }
+    else if (t === 'ven') { ball(x, y, R, '#fff6c8', '#e2b262', '#6a4a20'); bandsC(x, y, R, 'rgba(180,110,40,.25)', 'rgba(255,245,200,.25)', 7); night(x, y, R); }
+    else if (t === 'mer') { ball(x, y, R, '#e2e2e2', '#8c8782', '#2a2826'); blobs(x, y, R, [[.2, .1, .15, .15, 0], [-.3, .3, .2, .2, 0], [.3, -.4, .12, .12, 0], [-.35, -.25, .1, .1, 0], [.05, .5, .1, .1, 0]], 'rgba(0,0,0,.22)'); night(x, y, R); }
+  }
+  function warpFx() {
+    const w = J.warp; if (w <= .01 && J.flashW <= .01) return; ctx.save(); ctx.shadowBlur = 0;
+    if (w > .01) { ctx.lineWidth = 1.5; for (let k = 0; k < 120; k++) { const a = k * 2.399 + (k % 7) * .1, ph = (time * 1.6 + k * .173) % 1, r0 = 40 + ph * ph * W * .7, len = (40 + ((k * 53) % 100) * 3) * w * (.3 + ph), c = Math.cos(a), sn = Math.sin(a); ctx.strokeStyle = `rgba(${170 + k % 80},215,255,${(.08 + .55 * ph) * w})`; ctx.beginPath(); ctx.moveTo(W / 2 + c * r0, H / 2 + sn * r0 * .6); ctx.lineTo(W / 2 + c * (r0 + len), H / 2 + sn * (r0 + len) * .6); ctx.stroke(); }
+      const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, H * .75); g.addColorStop(0, `rgba(120,180,255,${.3 * w})`); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      ctx.textAlign = 'center'; ctx.font = '700 22px "Share Tech Mono", monospace'; ctx.fillStyle = `rgba(200,230,255,${Math.min(1, w * 1.4)})`; ctx.fillText('H Y P E R S P A C E', W / 2, H * .3); }
+    if (J.flashW > .01) { ctx.fillStyle = `rgba(255,255,255,${J.flashW})`; ctx.fillRect(0, 0, W, H); } ctx.restore();
+  }
+  function navHud() {
+    ctx.save(); ctx.shadowBlur = 0; ctx.textAlign = 'center'; ctx.font = '700 14px "Share Tech Mono", monospace'; ctx.fillStyle = J.phase === 'transit' ? '#ffd23d' : '#7fa4e0';
+    const txt = J.phase === 'transit' ? 'ETA ' + fmtT(J.dur - J.t) + '  \u25B6  ' + ROUTE[J.i + 1].n : (J.done ? 'JOURNEY COMPLETE' : ROUTE[J.i].n + '   WAVE ' + Math.min(J.need, J.cleared + 1) + '/' + J.need); ctx.fillText(txt, W / 2, H * .045 + 52); ctx.restore();
+  }
   function drawScenery() {
     ctx.shadowBlur = 0;
     for (const L of LM) {
       const c = toCam(L.d[0], L.d[1], L.d[2]); if (c[2] <= .03) continue; const p = proj(c), R = Math.min(900, L.r * F / c[2]); if (p[0] < -R * 2.6 || p[0] > W + R * 2.6 || p[1] < -R * 2.6 || p[1] > H + R * 2.6) continue; const x = p[0], y = p[1];
       ctx.save();
-      if (L.t === 'neb') { for (const [dx, dy, k, col] of [[0, 0, 1, '120,60,200'], [.5, -.2, .8, '40,160,200'], [-.55, .25, .75, '220,70,150'], [.1, .5, .6, '90,80,220']]) { const g = ctx.createRadialGradient(x + dx * R, y + dy * R, 0, x + dx * R, y + dy * R, R * k); g.addColorStop(0, `rgba(${col},.30)`); g.addColorStop(.6, `rgba(${col},.10)`); g.addColorStop(1, `rgba(${col},0)`); ctx.fillStyle = g; ctx.fillRect(x + dx * R - R * k, y + dy * R - R * k, R * k * 2, R * k * 2); } }
+      if (L.t === 'neb') { for (const [dx, dy, k, col] of [[0, 0, 1, (L.pal || NEBP[1])[0]], [.5, -.2, .8, (L.pal || NEBP[1])[1]], [-.55, .25, .75, (L.pal || NEBP[1])[2]], [.1, .5, .6, (L.pal || NEBP[1])[3]]]) { const g = ctx.createRadialGradient(x + dx * R, y + dy * R, 0, x + dx * R, y + dy * R, R * k); g.addColorStop(0, `rgba(${col},.30)`); g.addColorStop(.6, `rgba(${col},.10)`); g.addColorStop(1, `rgba(${col},0)`); ctx.fillStyle = g; ctx.fillRect(x + dx * R - R * k, y + dy * R - R * k, R * k * 2, R * k * 2); } }
       else if (L.t === 'sun') { const g = ctx.createRadialGradient(x, y, 0, x, y, R * 4); g.addColorStop(0, 'rgba(255,250,210,1)'); g.addColorStop(.25, 'rgba(255,210,90,.55)'); g.addColorStop(1, 'rgba(255,140,40,0)'); ctx.fillStyle = g; ctx.fillRect(x - R * 4, y - R * 4, R * 8, R * 8); ball(x, y, R, '#fffbe0', '#ffe27a', '#ffb020'); ctx.strokeStyle = 'rgba(255,230,140,.25)'; ctx.lineWidth = 2; for (let k = 0; k < 8; k++) { const a = k * TAU / 8 + time * .05; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * R * 1.3, y + Math.sin(a) * R * 1.3); ctx.lineTo(x + Math.cos(a) * R * 3, y + Math.sin(a) * R * 3); ctx.stroke(); } }
       else if (L.t === 'moon' || L.t === 'moon2') { ball(x, y, R, L.t === 'moon' ? '#e8e8f0' : '#cfeaff', L.t === 'moon' ? '#9a9aa8' : '#7fb0d8', L.t === 'moon' ? '#3a3a48' : '#243a5a'); ctx.fillStyle = 'rgba(0,0,0,.16)'; for (const [dx, dy, k] of [[.2, .1, .25], [-.3, .35, .18], [.15, -.4, .15], [-.1, -.1, .12]]) { ctx.beginPath(); ctx.arc(x + dx * R, y + dy * R, k * R, 0, TAU); ctx.fill(); } ctx.fillStyle = 'rgba(2,3,10,.4)'; ctx.beginPath(); ctx.arc(x + R * .45, y + R * .2, R * 1.02, 0, TAU); ctx.arc(x, y, R, 0, TAU, true); ctx.fill(); }
       else if (L.t === 'ring') { const tilt = -.35; ctx.save(); ctx.translate(x, y); ctx.rotate(tilt); ctx.lineWidth = Math.max(2, R * .12); for (const [k, col] of [[2.1, 'rgba(210,170,120,.55)'], [1.8, 'rgba(240,210,160,.7)'], [1.55, 'rgba(180,140,100,.5)']]) { ctx.strokeStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, R * k, R * k * .26, 0, Math.PI, TAU); ctx.stroke(); } ctx.restore();
@@ -406,6 +504,7 @@
         ctx.save(); ctx.translate(x, y); ctx.rotate(tilt); ctx.lineWidth = Math.max(2, R * .12); for (const [k, col] of [[2.1, 'rgba(210,170,120,.55)'], [1.8, 'rgba(240,210,160,.7)'], [1.55, 'rgba(180,140,100,.5)']]) { ctx.strokeStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, R * k, R * k * .26, 0, 0, Math.PI); ctx.stroke(); } ctx.restore(); }
       else if (L.t === 'gas') { ball(x, y, R, '#bdeaff', '#3a86b8', '#0c2a4a'); ctx.save(); ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.clip(); for (let k = -5; k <= 5; k++) { ctx.fillStyle = `rgba(${k % 2 ? '20,80,140' : '200,240,255'},.2)`; ctx.fillRect(x - R, y + k * R * .17, R * 2, R * .1); } ctx.fillStyle = 'rgba(255,120,90,.55)'; ctx.beginPath(); ctx.ellipse(x + R * .25, y + R * .3, R * .22, R * .12, 0, 0, TAU); ctx.fill(); ctx.restore(); ball(x + R * 1.5, y - R * .5, R * .1, '#fff', '#bbb', '#666'); ball(x - R * 1.35, y + R * .6, R * .07, '#ffd0a0', '#b87a50', '#503020'); }
       else if (L.t === 'stn') { ctx.strokeStyle = '#9fb4e6'; ctx.lineWidth = Math.max(1.5, R * .15); ctx.beginPath(); ctx.ellipse(x, y, R * 2.2, R * .9, .3, 0, TAU); ctx.stroke(); ctx.fillStyle = '#c9d8ff'; ctx.beginPath(); ctx.arc(x, y, R * .55, 0, TAU); ctx.fill(); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - R * 2, y - R * .6); ctx.lineTo(x + R * 2, y + R * .6); ctx.moveTo(x + R * 2, y - R * .5); ctx.lineTo(x - R * 2, y + R * .5); ctx.stroke(); for (let k = 0; k < 10; k++) { const a = k * TAU / 10 + time * .3; ctx.fillStyle = Math.sin(time * 3 + k) > 0 ? '#ffe9a0' : '#5a6a90'; ctx.fillRect(x + Math.cos(a) * R * 2.2 * Math.cos(.3) - Math.sin(a) * R * .9 * Math.sin(.3) - 1, y + Math.cos(a) * R * 2.2 * Math.sin(.3) + Math.sin(a) * R * .9 * Math.cos(.3) - 1, 2.5, 2.5); } }
+      else drawBody(L.t, x, y, R);
       ctx.restore();
       if (p[0] > 60 && p[0] < W - 60 && p[1] > 60 && p[1] < H - 60 && L.t !== 'neb') { ctx.fillStyle = 'rgba(190,215,255,.55)'; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText(L.n, x, y + R * (L.t === 'ring' ? 1.0 : 1.0) + 18 + (L.t === 'sun' ? R * 1.3 : 0)); }
     }
@@ -425,12 +524,14 @@
   }
   function glow(col, b) { ctx.strokeStyle = col; ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = b; }
   const JET = { pts: [[0, 0, 3.2], [-2.4, 0, -1.4], [2.4, 0, -1.4], [0, .5, -1.6], [0, 1.5, -2.0], [0, -.5, -1.2], [-1.2, 0, -.2], [1.2, 0, -.2]], edges: [[0, 1], [0, 2], [1, 3], [2, 3], [3, 4], [0, 3], [0, 5], [1, 5], [2, 5], [1, 6], [2, 7], [0, 6], [0, 7]] };
+  const ALN = { pts: [[0, 0, 2.8], [0, 1, 0], [0, -1, 0], [-1, 0, .3], [1, 0, .3], [0, 0, -1.7], [-2.2, .9, -.3], [-3.4, 1.9, -1.4], [-3.9, 3, -2.9], [2.2, .9, -.3], [3.4, 1.9, -1.4], [3.9, 3, -2.9], [-2, -.9, .2], [-3, -1.7, -.9], [2, -.9, .2], [3, -1.7, -.9]],
+    edges: [[0, 1], [0, 2], [0, 3], [0, 4], [1, 3], [3, 2], [2, 4], [4, 1], [5, 1], [5, 2], [5, 3], [5, 4], [3, 6], [6, 7], [7, 8], [4, 9], [9, 10], [10, 11], [6, 1], [9, 1], [3, 12], [12, 13], [4, 14], [14, 15], [8, 5], [11, 5]] };
   function drawJet(e) {
     const vl = Math.hypot(e.vx, e.vy, e.vz) || 1, f = [e.vx / vl, e.vy / vl, e.vz / vl]; let r = [f[2], 0, -f[0]], rl = Math.hypot(r[0], r[1], r[2]); if (rl < 1e-3) { r = [1, 0, 0]; rl = 1; } r = r.map(v => v / rl);
-    const u = [f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2], f[0] * r[1] - f[1] * r[0]], S = 20;
-    const pp = JET.pts.map(p => { const c = toCam(e.x + (r[0] * p[0] + u[0] * p[1] + f[0] * p[2]) * S, e.y + (r[1] * p[0] + u[1] * p[1] + f[1] * p[2]) * S, e.z + (r[2] * p[0] + u[2] * p[1] + f[2] * p[2]) * S); return c[2] > 20 ? proj(c) : null; });
-    const col = e.hit > 0 ? '#ffffff' : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d'; glow(col, 12); ctx.lineWidth = 2; ctx.beginPath();
-    for (const [i, j] of JET.edges) if (pp[i] && pp[j]) { ctx.moveTo(pp[i][0], pp[i][1]); ctx.lineTo(pp[j][0], pp[j][1]); } ctx.stroke();
+    const u = [f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2], f[0] * r[1] - f[1] * r[0]], S = e.alien ? 27 : 20, G = e.alien ? ALN : JET, ca = e.alien ? Math.cos(time * 1.1 + e.jink) : 1, sa = e.alien ? Math.sin(time * 1.1 + e.jink) : 0;
+    const pp = G.pts.map(p => { const q0 = p[0] * ca - p[1] * sa, q1 = p[0] * sa + p[1] * ca, c = toCam(e.x + (r[0] * q0 + u[0] * q1 + f[0] * p[2]) * S, e.y + (r[1] * q0 + u[1] * q1 + f[1] * p[2]) * S, e.z + (r[2] * q0 + u[2] * q1 + f[2] * p[2]) * S); return c[2] > 20 ? proj(c) : null; });
+    const col = e.hit > 0 ? '#ffffff' : e.alien ? '#9dff3a' : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d'; glow(col, 12); ctx.lineWidth = 2; ctx.beginPath();
+    for (const [i, j] of G.edges) if (pp[i] && pp[j]) { ctx.moveTo(pp[i][0], pp[i][1]); ctx.lineTo(pp[j][0], pp[j][1]); } ctx.stroke(); if (e.alien && pp[0]) { ctx.fillStyle = '#eaffc8'; ctx.beginPath(); ctx.arc(pp[0][0], pp[0][1], 3 + Math.sin(time * 6) * 1.2, 0, TAU); ctx.fill(); }
   }
   function drawRock(r) {
     const cr = Math.cos(r.rx), sr = Math.sin(r.rx), cq = Math.cos(r.ry), sq = Math.sin(r.ry), pp = [], ok = [];
@@ -457,7 +558,7 @@
     if (target) { const dist = Math.hypot(target.x, target.y, target.z), lt = dist / 2100, c = toCam(target.x, target.y, target.z), cl = toCam(target.x + target.vx * lt, target.y + target.vy * lt, target.z + target.vz * lt);
       if (c[2] > 20) { const p = proj(c), q = proj(cl); glow('#ffe066', 12); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(p[0], p[1] - 46); ctx.lineTo(p[0] + 46, p[1]); ctx.lineTo(p[0], p[1] + 46); ctx.lineTo(p[0] - 46, p[1]); ctx.closePath(); ctx.stroke();
         glow('#5ff0ff', 10); ctx.beginPath(); ctx.arc(q[0], q[1], 11, 0, TAU); ctx.stroke(); ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); ctx.setLineDash([]); } }
-    for (const b of ebolts) { const c = toCam(b.x, b.y, b.z), c2 = toCam(b.x - b.vx * .05, b.y - b.vy * .05, b.z - b.vz * .05); if (c[2] < 20 || c2[2] < 20) continue; const a = proj(c), q = proj(c2); glow('#ffa23d', 16); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); }
+    for (const b of ebolts) { const c = toCam(b.x, b.y, b.z), c2 = toCam(b.x - b.vx * .05, b.y - b.vy * .05, b.z - b.vz * .05); if (c[2] < 20 || c2[2] < 20) continue; const a = proj(c), q = proj(c2); glow(b.alien ? '#7dff3a' : '#ffa23d', 16); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); }
     // shots
     for (const s of shots) { const c = toCam(s.x, s.y, s.z), c2 = toCam(s.x - s.vx * .035, s.y - s.vy * .035, s.z - s.vz * .035); if (c[2] < 20 || c2[2] < 20) continue; const a = proj(c), b = proj(c2); glow('#ff5a6e', 14); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
     for (const p of sparks) { const c = toCam(p.x, p.y, p.z); if (c[2] < 20) continue; const q = proj(c); glow(p.col, 8); ctx.globalAlpha = clamp(p.life, 0, 1); ctx.fillRect(q[0], q[1], 3, 3); ctx.globalAlpha = 1; }
@@ -471,8 +572,8 @@
     }
     for (const e of jets) { // jets out of sight: a steady chevron points the way
       const c = toCam(e.x, e.y, e.z), p = c[2] > 20 ? proj(c) : null; if (p && p[0] > 30 && p[0] < W - 30 && p[1] > 30 && p[1] < H - 30) continue;
-      const ang = Math.atan2(-c[1], c[0]), ex = W / 2 + Math.cos(ang) * (W * .39), ey = H / 2 + Math.sin(ang) * (H * .36), col = e === target ? '#ffe066' : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d';
-      arrowShown = true; ctx.save(); ctx.shadowBlur = 0; ctx.fillStyle = col; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText((e.kind === 'attack' ? 'HUNTER ' : 'RUNNER ') + Math.round(Math.hypot(e.x, e.y, e.z)), ex - Math.cos(ang) * 44, ey - Math.sin(ang) * 44 + 4); ctx.restore();
+      const ang = Math.atan2(-c[1], c[0]), ex = W / 2 + Math.cos(ang) * (W * .39), ey = H / 2 + Math.sin(ang) * (H * .36), col = e === target ? '#ffe066' : e.alien ? '#9dff3a' : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d';
+      arrowShown = true; ctx.save(); ctx.shadowBlur = 0; ctx.fillStyle = col; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText((e.alien ? 'ALIEN ' : e.kind === 'attack' ? 'HUNTER ' : 'RUNNER ') + Math.round(Math.hypot(e.x, e.y, e.z)), ex - Math.cos(ang) * 44, ey - Math.sin(ang) * 44 + 4); ctx.restore();
       glow(col, 10); ctx.lineWidth = e === target ? 5 : 3; ctx.beginPath(); ctx.moveTo(ex + Math.cos(ang + 2.4) * 15, ey + Math.sin(ang + 2.4) * 15); ctx.lineTo(ex + Math.cos(ang) * 12, ey + Math.sin(ang) * 12); ctx.lineTo(ex + Math.cos(ang - 2.4) * 15, ey + Math.sin(ang - 2.4) * 15); ctx.stroke();
     }
     ctx.restore(); ctx.shadowBlur = 0;
@@ -482,7 +583,7 @@
       ctx.strokeStyle = `rgba(120,255,190,${.25 + (shieldHit > 0 ? .5 : 0)})`; ctx.lineWidth = 2; for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.arc(W / 2, H / 2, H * (.62 + .03 * Math.abs(i)), 0, TAU); ctx.stroke(); } }
     // red hit wash
     if (flash > 0) { ctx.fillStyle = `rgba(255,60,70,${flash * .35})`; ctx.fillRect(0, 0, W, H); }
-    cockpit(); radar(); reticle(); hud(); compass(); touchUI(); computer();
+    cockpit(); radar(); reticle(); hud(); compass(); navHud(); warpFx(); touchUI(); computer();
     if (over) { ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H); glow('#ff4d5e', 20); ctx.textAlign = 'center'; ctx.font = '700 54px "Space Grotesk", sans-serif'; ctx.fillText('HULL BREACH', W / 2, H / 2 - 6); glow('#d6e6ff', 6); ctx.font = '22px "Share Tech Mono", monospace'; ctx.fillText('SCORE ' + score + '   -   CLICK TO FLY AGAIN', W / 2, H / 2 + 40); }
   }
   function cockpit() { // canopy struts and the dashboard, drawn over the view
@@ -502,7 +603,7 @@
       const px = cx + lx / RANGE * R, pz = cyy - lz / RANGE * R, behind = lz < 0, near = d < 650;
       if (Math.hypot(px - cx, pz - cyy) > R - 2) continue; glow(behind && near ? '#ff4d5e' : behind ? '#ffb23d' : '#5ff0ff', 8); ctx.globalAlpha = behind && near ? .6 + .4 * Math.sin(time * 9) : 1; ctx.beginPath(); ctx.arc(px, pz, 2 + r.size, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
     }
-    for (const e of jets) { const a = Math.cos(yaw), b = Math.sin(yaw), lx = e.x * a - e.z * b, lz = e.x * b + e.z * a, px = cx + lx / RANGE * R, pz = cyy - lz / RANGE * R; if (Math.hypot(px - cx, pz - cyy) > R - 2) continue; glow(e.kind === 'attack' ? '#ff5cf0' : '#ffa84d', 8); ctx.fillRect(px - 4, pz - 4, 8, 8); }
+    for (const e of jets) { const a = Math.cos(yaw), b = Math.sin(yaw), lx = e.x * a - e.z * b, lz = e.x * b + e.z * a, px = cx + lx / RANGE * R, pz = cyy - lz / RANGE * R; if (Math.hypot(px - cx, pz - cyy) > R - 2) continue; glow(e.alien ? '#9dff3a' : e.kind === 'attack' ? '#ff5cf0' : '#ffa84d', 8); ctx.fillRect(px - 4, pz - 4, 8, 8); }
     ctx.shadowBlur = 0; ctx.fillStyle = '#7f93c4'; ctx.font = '11px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillText('AHEAD', cx, cyy - R - 6); ctx.fillText('BEHIND', cx, cyy + R + 14);
   }
   function reticle() {
@@ -513,12 +614,12 @@
     if (lock) { const c = toCam(lock.x, lock.y, lock.z); if (c[2] > 20) { const p = proj(c), s = lock.r / c[2] * F * 1.15 + 6; ctx.strokeStyle = '#ff5a6e'; ctx.beginPath(); for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { ctx.moveTo(p[0] + sx * s, p[1] + sy * (s - 10)); ctx.lineTo(p[0] + sx * s, p[1] + sy * s); ctx.lineTo(p[0] + sx * (s - 10), p[1] + sy * s); } ctx.stroke(); ctx.font = '12px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillStyle = '#ff5a6e'; ctx.fillText((lock.jet ? 'JET ' : 'RNG ') + Math.round(Math.hypot(lock.x, lock.y, lock.z)), p[0] + s + 6, p[1] + 4); } }
   }
   function hud() {
-    ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.font = '700 18px "Share Tech Mono", monospace'; glow('#5ff0ff', 6); ctx.fillText('SCORE ' + String(score).padStart(6, '0'), 70, H * .07); ctx.fillText('FIELD ' + Math.max(1, wave), 70, H * .07 + 24);
+    ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.font = '700 18px "Share Tech Mono", monospace'; glow('#5ff0ff', 6); ctx.fillText('SCORE ' + String(score).padStart(6, '0'), 70, H * .07); ctx.fillText('AREA ' + ROUTE[J.i].n, 70, H * .07 + 24);
     ctx.textAlign = 'right'; ctx.fillText('JETS ' + jets.length + '   ROCKS ' + rocks.length, W - 110, H * .07); ctx.fillText('SPEED ' + Math.round(Math.hypot(vel[0], vel[1], vel[2])), W - 110, H * .07 + 24);
     ctx.shadowBlur = 0; const bw = W * .2, bx = W * .06, by = H - 42;
     ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillText('SHIELD', bx + bw + 16, by - 8); ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.strokeRect(bx + bw + 16, by, W * .12, 14); ctx.fillStyle = shieldLock ? '#ff4d5e' : '#5dffa0'; ctx.fillRect(bx + bw + 18, by + 2, (W * .12 - 4) * energy / 100, 10);
     ctx.fillStyle = '#ffd23d'; ctx.fillText('BOMBS ' + '\u25CF'.repeat(grenades) + '\u25CB'.repeat(Math.max(0, 5 - grenades)), bx, by - 28);
-    if (target) { const d = Math.round(Math.hypot(target.x, target.y, target.z)); ctx.fillStyle = '#ffe066'; ctx.fillText('TARGET  ' + (target.kind === 'attack' ? 'HUNTER' : 'RUNNER') + '   RNG ' + d + '   CLOSING ' + Math.round(target.close || 0), bx, by - 46); } ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillText('HULL', bx, by - 8);
+    if (target) { const d = Math.round(Math.hypot(target.x, target.y, target.z)); ctx.fillStyle = '#ffe066'; ctx.fillText('TARGET  ' + (target.alien ? 'ALIEN' : target.kind === 'attack' ? 'HUNTER' : 'RUNNER') + '   RNG ' + d + '   CLOSING ' + Math.round(target.close || 0), bx, by - 46); } ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; ctx.textAlign = 'left'; ctx.fillText('HULL', bx, by - 8);
     ctx.strokeStyle = '#27508f'; ctx.lineWidth = 1.5; ctx.strokeRect(bx, by, bw, 14); ctx.fillStyle = hull > 50 ? '#5dffa0' : hull > 25 ? '#ffb23d' : '#ff4d5e'; ctx.fillRect(bx + 2, by + 2, (bw - 4) * hull / 100, 10);
     const h = (Math.round(((yaw % TAU) + TAU) % TAU / TAU * 360)); ctx.fillStyle = '#7f93c4'; ctx.textAlign = 'right'; if (incoming && Math.floor(time * 6) % 2) { glow('#ffa23d', 12); ctx.textAlign = 'center'; ctx.font = '700 22px "Share Tech Mono", monospace'; ctx.fillText('INCOMING FIRE', W / 2, H * .17); ctx.textAlign = 'right'; ctx.shadowBlur = 0; }
     ctx.fillStyle = '#7f93c4'; ctx.font = '12px "Share Tech Mono", monospace'; if (!touchMode) { ctx.textAlign = 'right'; ctx.fillText('SPACE shield  B bomb  T target  X turn  H help', W - W * .06, by - 8); } ctx.fillText('HDG ' + String(h).padStart(3, '0') + '   PITCH ' + Math.round(pitch * 57.3), W - W * .06, by + 12);
@@ -600,18 +701,23 @@
 
   // ===================== BLIP: the astromech droid =====================
   const DRL = {
-    happy: ['Woohoo! New wave, boss. We got this!', 'Beep boop! I knew you could do it!', 'Bloop-bloop! Grenade restocked, I checked!'],
-    alarm: ['EEEEE! Hull critical! Shields, shields!', 'Incoming!! Do something, boss!', 'Bweeee! We are taking damage!'],
-    curious: ['Bweep? Is that the one we are chasing?', 'Boop? Locked on, I think?', 'Wheeoo? Which one is that?'],
-    sad: ['Wooooo... that did not go well.', 'Aww. Shields are gone...', 'Bwoop. I am scared.'],
-    proud: ['Hee hee! Got him! Nice shooting!', 'Bip-bip-bip! Another one bites the dust!', 'Boop! You are the best pilot!'],
-    ack: ['Bip-bip, copy that.', 'Beep! On it.', 'Bleep. Roger roger.']
+    happy: ['Woohoo! New sector, boss. We got this!', 'Beep boop! I knew you could do it!', 'Supplies restocked. Good job, Captain!'],
+    alarm: ['Hull critical! Shields, shields!', 'Incoming! Do something, boss!', 'We are taking damage! Help!'],
+    curious: ['Is that the one we are chasing?', 'Locked on, I think?', 'Which one is that?'],
+    sad: ['That did not go well.', 'Aww. Shields are gone.', 'I am scared, boss.'],
+    proud: ['Got him! Nice shooting!', 'Another one bites the dust!', 'You are the best pilot!'],
+    ack: ['Copy that.', 'On it, boss.', 'Roger roger.'],
+    alien: ['Aliens! Those are not ours!', 'Unknown ships! They look scary!', 'Alien raiders on the scope!'],
+    hyper: ['Hyperspace! Hold on to something!', 'Wheee! We are going really fast!'],
+    belt: ['So many rocks. Please be careful.', 'Asteroids everywhere, boss!'],
+    arrive: ['We made it! Beep boop!', 'Look at that view!']
   };
-  const DR = { buf: {}, cd: 0, loaded: false,
-    load() { if (this.loaded || !AC) return; this.loaded = true; for (const k in DRL) fetch(A + 'droid_' + k + '.mp3').then(r => r.arrayBuffer()).then(b => AC.decodeAudioData(b)).then(d => { this.buf[k] = d; }).catch(() => {}); },
-    say(kind, force) { const now = time; if (!AU.ok() || !this.buf[kind]) return; if (!force && (now < this.cd || Math.random() > .65)) return; if (force && now < this.cd - 4) return; this.cd = now + (force ? 6 : 9);
-      const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = this.buf[kind]; s.playbackRate.value = .96 + Math.random() * .12; g.gain.value = 1.25; s.connect(g); g.connect(sfxBus); s.start();
-      const L = DRL[kind]; alog('dr', 'BLIP: ' + L[Math.floor(Math.random() * L.length)]); }
+  const DRC = { happy: 'h', alarm: 'a', curious: 'c', sad: 's', proud: 'p', ack: 'k', alien: 'l', hyper: 'y', belt: 'b', arrive: 'r' };
+  const DR = { buf: {}, cd: 0, loaded: false, busy: 0,
+    load() { if (this.loaded || !AC) return; this.loaded = true; for (const k in DRL) DRL[k].forEach((_, n) => fetch(A + 'droid_' + DRC[k] + (n + 1) + '.mp3').then(r => r.arrayBuffer()).then(b => AC.decodeAudioData(b)).then(d => { this.buf[k + n] = d; }).catch(() => {})); },
+    say(kind, force) { const now = time; if (!AU.ok()) return; if (now < this.busy) return; if (!force && (now < this.cd || Math.random() > .65)) return; if (force && now < this.cd - 5) return;
+      const n = Math.floor(Math.random() * DRL[kind].length), b = this.buf[kind + n]; if (!b) return; this.cd = now + (force ? 6 : 10); this.busy = now + b.duration + .3;
+      const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = b; g.gain.value = 1.4; s.connect(g); g.connect(sfxBus); s.start(); alog('dr', 'BLIP: ' + DRL[kind][n]); }
   };
 
   // ===================== RADIO =====================
@@ -675,10 +781,13 @@
   let pTim = 0;
   function panel(dt) { pTim -= dt; if (pTim > 0) return; pTim = .08; const sp = Math.round(Math.hypot(vel[0], vel[1], vel[2]));
     setW('mHull', Math.round(hull), hull > 50 ? '#5dffa0' : hull > 25 ? '#ffb23d' : '#ff4d5e'); setT('vHull', Math.round(hull) + '%'); setW('mShield', Math.round(energy), shieldLock ? '#ff4d5e' : '#5dffa0'); setT('vShield', Math.round(energy) + '%');
-    setW('mThr', Math.round(clamp(sp / 6, 0, 100))); setT('vThr', Math.round(throttle * 100) + '%'); setT('vBomb', '●'.repeat(grenades) + '○'.repeat(Math.max(0, 5 - grenades))); setT('vScore', String(score).padStart(6, '0')); setT('vWave', String(Math.max(1, wave)));
+    setW('mThr', Math.round(clamp(sp / 6, 0, 100))); setT('vThr', Math.round(throttle * 100) + '%'); setT('vBomb', '●'.repeat(grenades) + '○'.repeat(Math.max(0, 5 - grenades))); setT('vScore', String(score).padStart(6, '0')); setT('vWave', ROUTE[J.i].n.slice(0, 7));
     setT('vHdg', String(Math.round(((yaw % TAU) + TAU) % TAU / TAU * 360)).padStart(3, '0')); setT('vSpd', String(sp));
     const rc = rocks.some(r => Math.hypot(r.x, r.y, r.z) < 330);
-    lamp('lInc', !!incoming); lamp('lSix', sixT > .6); lamp('lRock', rc); lamp('lHull', hull < 30 && hull > 0); lamp('lShl', false, shieldOn); lamp('lTgt', false, !!target); setT('lTgt', target ? (target.kind === 'attack' ? 'LOCK: HUNTER' : 'LOCK: RUNNER') : 'NO LOCK'); }
+    setT('nvLoc', J.phase === 'transit' ? 'HYPERSPACE' : ROUTE[J.i].n); setT('nvObj', J.phase === 'transit' ? 'Survive the trip. ETA ' + fmtT(J.dur - J.t) : J.done ? 'Journey complete' : 'Destroy hostiles: wave ' + Math.min(J.need, J.cleared + 1) + ' of ' + J.need);
+    setT('nvNext', ROUTE[J.i + 1] ? (J.phase === 'transit' ? ROUTE[J.i + 1].n : ROUTE[J.i + 1].n + ' (after ' + J.need + ' waves)') : '-'); setW('mNav', Math.round(J.phase === 'transit' ? J.t / J.dur * 100 : (J.cleared + (J.waveLive ? .4 : 0)) / J.need * 100));
+    if (pc.route !== J.i + J.phase + J.done) { pc.route = J.i + J.phase + J.done; $('route').innerHTML = ROUTE.map((q, k) => '<span class="' + (k < J.i || (J.done && k === J.i) ? 'done' : k === J.i ? 'cur' : '') + '" title="' + q.n + '">' + q.n.slice(0, 3) + '</span>').join(''); }
+    lamp('lInc', !!incoming); lamp('lSix', sixT > .6); lamp('lRock', rc); lamp('lHull', hull < 30 && hull > 0); lamp('lShl', false, shieldOn); lamp('lTgt', false, !!target); setT('lTgt', target ? (target.alien ? 'LOCK: ALIEN' : target.kind === 'attack' ? 'LOCK: HUNTER' : 'LOCK: RUNNER') : 'NO LOCK'); }
 
   // ===================== ARIA: ship advisor =====================
   let speaking = false;
@@ -696,8 +805,8 @@
     if (rc.length > 1) parts.push(rc.length + ' rocks are close. A grenade on B clears them all.');
     else if (rc.length === 1) parts.push('A rock is close, ' + bearing(rc[0]) + '. Shoot it or raise shields.');
     if (!parts.length) {
-      if (jn && !target) parts.push('Press T to lock the nearest jet. It is ' + bearing(jn) + '.');
-      else if (jn) { parts.push((target.kind === 'attack' ? 'Hunter locked. Keep your nose on it and fire; it takes two hits.' : 'Runner locked. Chase it down and lead the shot with the bracket.') + ' It is ' + bearing(target) + '.'); }
+      if (J.phase === 'transit' && !jn) parts.push(transitInfo() + ' Skies are clear of hostiles. Ask me about ' + ROUTE[J.i + 1].n + ', or tune the radio.'); else if (jn && !target) parts.push('Press T to lock the nearest jet. It is ' + bearing(jn) + '.');
+      else if (jn) { parts.push((target.alien ? 'Alien locked. It weaves, so lead your shot; it takes three hits.' : target.kind === 'attack' ? 'Hunter locked. Keep your nose on it and fire; it takes two hits.' : 'Runner locked. Chase it down and lead the shot with the bracket.') + ' It is ' + bearing(target) + '.'); }
       else if (rn) parts.push('No jets left. Clear rocks for points. Nearest is ' + bearing(rn) + '.'); else parts.push('Sky is clear. Hold position, the next wave is coming.');
     }
     if (grenades === 0 && jets.length > 2) parts.push('You are out of grenades, so shoot carefully.'); else if (energy < 25 && !shieldOn) parts.push('Shield energy is low. Let it recharge.');
@@ -716,7 +825,11 @@
       else if (has('next', 'change', 'another', 'different')) { RAD.tune(1); a = STN[RAD.si].name + ', ' + STN[RAD.si].f + '.'; } else if (has('previous', 'back')) { RAD.tune(-1); a = STN[RAD.si].name + ', ' + STN[RAD.si].f + '.'; }
       else { if (!RAD.on) RAD.power(); a = 'Radio on. ' + STN[RAD.si].name + '.'; }
     }
-    else if (has('blip', 'droid', 'robot', 'r2', 'astromech')) { DR.cd = 0; DR.say('ack', true); a = 'That is BLIP, our astromech. He chirps when the fighting gets good or bad. I translate for him in the log.'; }
+    else if (has('blip', 'droid', 'robot', 'r2', 'astromech')) { DR.cd = 0; DR.busy = 0; DR.say('ack', true); a = 'That is BLIP, our little ship droid. He has opinions about everything, and he says them out loud.'; }
+    else if (ROUTE.some(r => q.includes(r.n.toLowerCase())) || has('planet', 'fun fact', 'tell me something')) { const R = ROUTE.find(r => q.includes(r.n.toLowerCase())) || (J.phase === 'transit' ? ROUTE[J.i + 1] : ROUTE[J.i]), f = FACTS[R.n]; a = f[Math.floor(Math.random() * f.length)]; }
+    else if (has('eta', 'how long', 'how far', 'when do we', 'arrive', 'time left')) a = transitInfo();
+    else if (has('mission', 'objective', 'goal', 'route', 'journey', 'where are we', 'where am i', 'what is next', 'whats next')) a = (J.phase === 'transit' ? 'We are in hyperspace between ' + ROUTE[J.i].n + ' and ' + ROUTE[J.i + 1].n + '. ' : 'We are at ' + ROUTE[J.i].n + '. ') + transitInfo() + (ROUTE[J.i + 1] ? ' Then on to ' + ROUTE[J.i + 1].n + '. The full route is Earth, Moon, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, then back past Venus to Mercury.' : '');
+    else if (has('alien', 'enemy ship', 'green ship', 'invader')) a = 'The green ships are aliens, not Earth designs. They weave, fire green plasma that hits harder, and take three hits. Lock them with T and lead your shots.';
     else if (has('where') && has('jet', 'enemy', 'hostile', 'bandit', 'target')) { a = jets.length ? 'Nearest jet: ' + bearing(nearest(jets)) + '. ' + jets.length + ' on scope.' : 'No jets on scope.'; }
     else if (has('where') && has('rock', 'asteroid')) { a = rocks.length ? 'Nearest rock: ' + bearing(nearest(rocks)) + '.' : 'No rocks on scope.'; }
     else if (has('status', 'how am i', 'damage', 'health', 'report')) a = status();
@@ -739,7 +852,7 @@
       rec.onresult = ev => { const t = ev.results[0][0].transcript; aria(t); }; rec.onerror = ev => { if (ev.error === 'not-allowed') alog('sh', 'Microphone blocked. Allow it in the browser address bar to talk to ARIA.'); };
       rec.onend = () => { live = false; mic.classList.remove('live'); mic.textContent = 'MIC'; }; try { rec.start(); } catch (x) {} }); } }
   RAD.init();
-  window.G = Object.assign(window.G || {}, { RAD, aria, AU, advise });
+  window.G = Object.assign(window.G || {}, { RAD, aria, AU, advise, J, ROUTE, beginTransit, arrive, addJet, jets, rocks, DR, buildLM, setYaw: v => { yaw = v; } });
   let last = performance.now();
   function loop(t) { if (arrowShown && !warned.arrows && time > 4) { warned.arrows = 1; say('Arrows at the screen edge point to things you cannot see. Turn toward them.', 6); } const dt = Math.min(.05, (t - last) / 1000); last = t; update(dt); draw(); AU.tick(dt); panel(dt); viz(); requestAnimationFrame(loop); }
   reset(); requestAnimationFrame(loop);
