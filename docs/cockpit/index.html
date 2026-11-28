@@ -43,7 +43,7 @@
   .tunes li span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .tunes li button { all:unset; cursor:pointer; color:#7a4350; padding:0 4px; }
   .upl { display:block; margin-top:8px; box-sizing:border-box; }
   #alog { height:210px; overflow:auto; font:12px/1.45 var(--mono); background:#03070f; border:1px solid #1d2f5a; border-radius:4px; padding:6px 8px; }
-  #alog p { margin:0 0 6px; } #alog .me { color:var(--am); } #alog .ai { color:var(--cy); } #alog .sh { color:#6e86bd; }
+  #alog p { margin:0 0 6px; } #alog .me { color:var(--am); } #alog .ai { color:var(--cy); } #alog .sh { color:#6e86bd; } #alog .dr { color:#d19bff; }
   .ask { display:flex; gap:6px; margin-top:8px; } .ask input { flex:1; min-width:0; font:13px var(--mono); color:var(--ink); background:#03070f; border:1px solid var(--line); border-radius:4px; padding:6px 8px; }
   .ask input:focus-visible, .pnl button:focus-visible, .upl:focus-visible { outline:2px solid var(--cy); outline-offset:1px; }
   .ask button { flex:0 0 auto; padding:6px 10px; }
@@ -182,7 +182,7 @@
     addRock(3, dir[0] * d, dir[1] * d, dir[2] * d, [-dir[0] * s + rnd(-25, 25), -dir[1] * s + rnd(-25, 25), -dir[2] * s + rnd(-25, 25)]);
   }
   function startWave() {
-    wave++; if (wave > 1) { AU.chime(); grenades = Math.min(5, grenades + 1); say('Wave ' + wave + '. Hostile jets inbound. Grenade restocked.', 4); } const nj = Math.min(1 + wave, 6); for (let i = 0; i < nj; i++) addJet(i % 2 ? 'run' : 'attack', i < 2);
+    wave++; if (wave > 1) { AU.chime(); DR.say('happy', true); grenades = Math.min(5, grenades + 1); say('Wave ' + wave + '. Hostile jets inbound. Grenade restocked.', 4); } const nj = Math.min(1 + wave, 6); for (let i = 0; i < nj; i++) addJet(i % 2 ? 'run' : 'attack', i < 2);
     for (let i = rocks.length; i < Math.min(2 + wave, 7); i++) spawn(i < 1);
   }
   function addJet(kind, front) { // 'attack' jets come at you and shoot; 'run' jets flee and you hunt them
@@ -201,10 +201,10 @@
     if (speak && voiceEl.checked) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1.05; u.pitch = .85; speechSynthesis.speak(u); } catch (x) {} }
   }
   function damage(n) {
-    if (shieldOn) { energy -= n * 1.6; shieldHit = .35; shake = .2; if (energy <= 0) { energy = 0; shieldLock = true; say('Shields down.', 2.5); } return; }
-    AU.hit(); hull -= n; shake = .5; hitT = .6; flash = .5; if (hull <= 0) { hull = 0; over = true; }
+    if (shieldOn) { energy -= n * 1.6; shieldHit = .35; shake = .2; if (energy <= 0) { energy = 0; shieldLock = true; say('Shields down.', 2.5); DR.say('sad', true); } return; }
+    AU.hit(); hull -= n; shake = .5; hitT = .6; flash = .5; if (hull <= 0) { hull = 0; over = true; DR.say('sad', true); }
   }
-  function cycleTarget() { AU.lock();
+  function cycleTarget() { AU.lock(); DR.say('curious');
     const list = jets.slice().sort((a, b) => Math.hypot(a.x, a.y, a.z) - Math.hypot(b.x, b.y, b.z)); if (!list.length) { say('No hostile jets.', 2); return; }
     const i = list.indexOf(target); target = i < 0 ? list[0] : (i + 1 < list.length ? list[i + 1] : null); if (target) { target.prev = Math.hypot(target.x, target.y, target.z); target.close = 0; say(target.kind === 'attack' ? 'Target locked. Hunter jet.' : 'Target locked. Runner jet.', 2.5); } else say('Target released.', 2);
   }
@@ -338,7 +338,7 @@
       const s = shots[i]; s.life -= dt; const nx = s.x + s.vx * dt, ny = s.y + s.vy * dt, nz = s.z + s.vz * dt; let gone = s.life <= 0;
       for (let j = rocks.length - 1; j >= 0 && !gone; j--) { const r = rocks[j], mx = (s.x + nx) / 2, my = (s.y + ny) / 2, mz = (s.z + nz) / 2; if (Math.hypot(r.x - mx, r.y - my, r.z - mz) < r.r + 24) { breakRock(j); gone = true; } }
       for (let j = jets.length - 1; j >= 0 && !gone; j--) { const e = jets[j], mx = (s.x + nx) / 2, my = (s.y + ny) / 2, mz = (s.z + nz) / 2;
-        if (Math.hypot(e.x - mx, e.y - my, e.z - mz) < 38) { e.hp--; e.hit = .15; gone = true; boom(e.x, e.y, e.z, 8, '#ff9cf6'); if (e.hp <= 0) { boom(e.x, e.y, e.z, 40, '#ffd27a'); jets.splice(j, 1); score += 300; shake = .15; } } }
+        if (Math.hypot(e.x - mx, e.y - my, e.z - mz) < 38) { e.hp--; e.hit = .15; gone = true; boom(e.x, e.y, e.z, 8, '#ff9cf6'); if (e.hp <= 0) { boom(e.x, e.y, e.z, 40, '#ffd27a'); jets.splice(j, 1); score += 300; shake = .15; DR.say('proud'); } } }
       s.x = nx; s.y = ny; s.z = nz; if (gone) shots.splice(i, 1);
     }
     // rocks
@@ -373,7 +373,7 @@
     let six = false; for (const e of jets) if (e.kind === 'attack') { const c = toCam(e.x, e.y, e.z); if (c[2] < 0 && Math.hypot(e.x, e.y, e.z) < 650) six = true; }
     sixT = six ? sixT + dt : 0; callT -= dt; rockCallT -= dt;
     if (sixT > 1.2 && callT <= 0) { say('Hostile on your six. Press X, or the 180 button, to turn around.', 4.5); callT = 10; }
-    if (hull < 30 && !warned.hull) { warned.hull = 1; say('Hull critical. Raise shields.', 4); }
+    if (hull < 30 && !warned.hull) { warned.hull = 1; DR.say('alarm', true); say('Hull critical. Raise shields.', 4); }
     if (!shieldOn && rockCallT <= 0) for (const r of rocks) if (Math.hypot(r.x, r.y, r.z) < 330) { say('Rock close. Raise shields or throw a grenade.', 3.5); rockCallT = 14; break; }
     for (const bl of blasts) bl.t -= dt; blasts = blasts.filter(bl => bl.t > 0);
     rockT -= dt; if (rockT <= 0) { if (rocks.length < 4 + wave) spawn(false); rockT = 7; }
@@ -559,7 +559,7 @@
     try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (x) { return null; }
     sfxBus = AC.createGain(); sfxBus.connect(AC.destination); radBus = AC.createGain(); an = AC.createAnalyser(); an.fftSize = 64; radBus.connect(an); an.connect(AC.destination);
     noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    AU.start(); return AC;
+    AU.start(); DR.load(); return AC;
   }
   const sfxOn = () => $('sfxon').checked, sfxLevel = () => +$('sfxv').value / 100;
   const AU = {
@@ -593,8 +593,25 @@
       this.pingT -= dt; if (this.pingT <= 0) { this.pingT = 3.2; this.tone(1900, 1900, .5, 'sine', .018); }
       this.beepT -= dt; if (this.beepT <= 0) { this.beepT = 6 + Math.random() * 8; const k = Math.floor(Math.random() * 3); if (k === 0) { this.tone(2400, 2400, .04, 'square', .02); this.tone(2400, 2400, .04, 'square', .02, .09); } else if (k === 1) { this.tone(700, 1200, .12, 'sine', .04); } else { this.tone(1800, 1800, .03, 'square', .02); this.tone(1400, 1400, .03, 'square', .02, .06); this.tone(1100, 1100, .03, 'square', .02, .12); } }
       this.alarmT -= dt; if (hull < 30 && hull > 0 && this.alarmT <= 0) { this.alarmT = 1.1; this.tone(880, 880, .22, 'square', .07); this.tone(660, 660, .22, 'square', .07, .25); }
-      else if (incoming && this.alarmT <= 0) { this.alarmT = .45; this.tone(1600, 1600, .08, 'square', .06); }
+      else if (incoming && this.alarmT <= 0) { DR.say('alarm'); this.alarmT = .45; this.tone(1600, 1600, .08, 'square', .06); }
     }
+  };
+
+
+  // ===================== BLIP: the astromech droid =====================
+  const DRL = {
+    happy: ['Woohoo! New wave, boss. We got this!', 'Beep boop! I knew you could do it!', 'Bloop-bloop! Grenade restocked, I checked!'],
+    alarm: ['EEEEE! Hull critical! Shields, shields!', 'Incoming!! Do something, boss!', 'Bweeee! We are taking damage!'],
+    curious: ['Bweep? Is that the one we are chasing?', 'Boop? Locked on, I think?', 'Wheeoo? Which one is that?'],
+    sad: ['Wooooo... that did not go well.', 'Aww. Shields are gone...', 'Bwoop. I am scared.'],
+    proud: ['Hee hee! Got him! Nice shooting!', 'Bip-bip-bip! Another one bites the dust!', 'Boop! You are the best pilot!'],
+    ack: ['Bip-bip, copy that.', 'Beep! On it.', 'Bleep. Roger roger.']
+  };
+  const DR = { buf: {}, cd: 0, loaded: false,
+    load() { if (this.loaded || !AC) return; this.loaded = true; for (const k in DRL) fetch(A + 'droid_' + k + '.mp3').then(r => r.arrayBuffer()).then(b => AC.decodeAudioData(b)).then(d => { this.buf[k] = d; }).catch(() => {}); },
+    say(kind, force) { const now = time; if (!AU.ok() || !this.buf[kind]) return; if (!force && (now < this.cd || Math.random() > .65)) return; if (force && now < this.cd - 4) return; this.cd = now + (force ? 6 : 9);
+      const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = this.buf[kind]; s.playbackRate.value = .96 + Math.random() * .12; g.gain.value = 1.25; s.connect(g); g.connect(sfxBus); s.start();
+      const L = DRL[kind]; alog('dr', 'BLIP: ' + L[Math.floor(Math.random() * L.length)]); }
   };
 
   // ===================== RADIO =====================
@@ -602,7 +619,7 @@
   const STN = [
     { f: '88.1', name: 'NOVA WAVE', who: 'DJ Nova', trk: [['neon_drift.mp3', 'Neon Drift']], id: 'dj_nova_id.mp3', out: 'dj_nova_out.mp3' },
     { f: '94.5', name: 'DEEP SPACE JAZZ', who: 'Smoky Vega', trk: [['midnight_orbit.mp3', 'Midnight Orbit']], id: 'dj_jazz_id.mp3', out: 'dj_jazz_out.mp3' },
-    { f: '101.3', name: 'ASTEROID ROCK', who: 'Rocky Belt', trk: [['rock_the_belt.mp3', 'Rock the Belt']], id: 'dj_rock_id.mp3', out: 'dj_rock_out.mp3' },
+    { f: '101.3', name: 'ASTEROID ROCK', who: 'Rocky Belt', trk: [['fighter_pilot_drive.mp3', 'Fighter Pilot Drive'], ['rock_the_belt.mp3', 'Rock the Belt']], id: 'dj_rock_id.mp3', out: 'dj_rock_out.mp3' },
     { f: '107.7', name: "CAPTAIN'S MIX", who: 'You', mine: true }
   ];
   // uploaded tunes live in IndexedDB so they survive a reload
@@ -627,12 +644,12 @@
     async power() { if (!this.wire()) return; this.on = !this.on; this.token++; if (this.on) { this.tuneIn(true); } else { this.mus.pause(); this.dj.pause(); this.duck(false); } this.show(); },
     tune(d) { if (!this.wire()) return; this.si = (this.si + d + STN.length) % STN.length; this.save(); if (!this.on) { this.on = true; } this.tuneIn(false); this.show(); },
     setStation(i) { if (!this.wire()) return; this.si = i; this.save(); this.on = true; this.tuneIn(false); this.show(); },
-    tuneIn() { const tk = ++this.token; this.dj.pause(); this.mus.pause(); this.duck(false); AU.noise && ctxAudio(); this.staticBurst(.45); const st = STN[this.si]; this.ti = 0;
+    tuneIn() { const tk = ++this.token; this.dj.pause(); this.mus.pause(); this.duck(false); AU.noise && ctxAudio(); this.staticBurst(.45); const st = STN[this.si]; this.ti = 0; st.k = 0;
       setTimeout(async () => { if (tk !== this.token) return; if (st.mine) { await this.refreshTunes(); if (!this.tunes.length) { this.show('NO TUNES YET - UPLOAD ONE'); this.staticHiss(true); return; } this.staticHiss(false); this.playMine(tk); } else { this.staticHiss(false); this.playDJ(st.id, () => {}); this.playTrack(st, tk, false); } }, 480); this.show(); },
     staticBurst(d) { if (!AC) return; const s = AC.createBufferSource(), g = AC.createGain(), f = AC.createBiquadFilter(); s.buffer = noiseBuf; f.type = 'bandpass'; f.frequency.value = 2200; f.Q.value = .6; g.gain.setValueAtTime(.35 * this.vol, AC.currentTime); g.gain.exponentialRampToValueAtTime(.001, AC.currentTime + d); s.connect(f); f.connect(g); g.connect(radBus); s.start(); s.stop(AC.currentTime + d + .05); },
     hiss: null, staticHiss(on) { if (this.hiss) { try { this.hiss.stop(); } catch (x) {} this.hiss = null; } if (!on || !AC) return; const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = noiseBuf; s.loop = true; g.gain.value = .12; s.connect(g); g.connect(radBus); s.start(); this.hiss = s; },
     playDJ(file, done) { if (!this.on || !this.dj) return; this.dj.src = A + file; this.duck(true); this.dj.play().catch(() => { this.duck(false); }); },
-    playTrack(st, tk, mid) { if (tk !== this.token) return; const [f, title] = st.trk[0]; this.mus.src = A + f; this.cur = title;
+    playTrack(st, tk, mid) { if (tk !== this.token) return; const [f, title] = st.trk[(st.k = (st.k || 0) % st.trk.length) + 0]; st.k++; this.mus.src = A + f; this.cur = title;
       this.mus.addEventListener('loadedmetadata', function once() { RAD.mus.removeEventListener('loadedmetadata', once); if (mid && isFinite(RAD.mus.duration)) RAD.mus.currentTime = Math.random() * RAD.mus.duration * .5; });
       this.mus.play().catch(() => {}); this.show(); },
     async playMine(tk) { if (tk !== this.token) return; const t = this.tunes[this.ti % this.tunes.length]; if (!t) return; if (this.tuneUrl) URL.revokeObjectURL(this.tuneUrl); this.tuneUrl = URL.createObjectURL(t.blob); this.mus.src = this.tuneUrl; this.cur = t.name; this.mus.play().catch(() => {}); this.show(); this.refreshList(); },
@@ -699,6 +716,7 @@
       else if (has('next', 'change', 'another', 'different')) { RAD.tune(1); a = STN[RAD.si].name + ', ' + STN[RAD.si].f + '.'; } else if (has('previous', 'back')) { RAD.tune(-1); a = STN[RAD.si].name + ', ' + STN[RAD.si].f + '.'; }
       else { if (!RAD.on) RAD.power(); a = 'Radio on. ' + STN[RAD.si].name + '.'; }
     }
+    else if (has('blip', 'droid', 'robot', 'r2', 'astromech')) { DR.cd = 0; DR.say('ack', true); a = 'That is BLIP, our astromech. He chirps when the fighting gets good or bad. I translate for him in the log.'; }
     else if (has('where') && has('jet', 'enemy', 'hostile', 'bandit', 'target')) { a = jets.length ? 'Nearest jet: ' + bearing(nearest(jets)) + '. ' + jets.length + ' on scope.' : 'No jets on scope.'; }
     else if (has('where') && has('rock', 'asteroid')) { a = rocks.length ? 'Nearest rock: ' + bearing(nearest(rocks)) + '.' : 'No rocks on scope.'; }
     else if (has('status', 'how am i', 'damage', 'health', 'report')) a = status();
